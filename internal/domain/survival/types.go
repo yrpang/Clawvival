@@ -17,6 +17,7 @@ type AgentStateAggregate struct {
 	AgentID    string
 	Vitals     Vitals
 	Position   Position
+	Home       Position
 	Inventory  map[string]int
 	Dead       bool
 	DeathCause DeathCause
