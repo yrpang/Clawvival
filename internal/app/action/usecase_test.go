@@ -149,3 +149,52 @@ func (r *stubEventRepo) Append(_ context.Context, _ string, events []survival.Do
 	r.events = append(r.events, events...)
 	return nil
 }
+
+func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
+	cases := []Request{
+		{AgentID: "agent-1", IdempotencyKey: "k1", Intent: survival.ActionIntent{Type: survival.ActionMove}, DeltaMinutes: 30},
+		{AgentID: "agent-1", IdempotencyKey: "k2", Intent: survival.ActionIntent{Type: survival.ActionCombat}, DeltaMinutes: 30},
+		{AgentID: "agent-1", IdempotencyKey: "k3", Intent: survival.ActionIntent{Type: survival.ActionBuild}, DeltaMinutes: 30},
+		{AgentID: "agent-1", IdempotencyKey: "k4", Intent: survival.ActionIntent{Type: survival.ActionFarm}, DeltaMinutes: 30},
+		{AgentID: "agent-1", IdempotencyKey: "k5", Intent: survival.ActionIntent{Type: survival.ActionCraft}, DeltaMinutes: 30},
+	}
+
+	uc := UseCase{}
+	for _, req := range cases {
+		_, err := uc.Execute(context.Background(), req)
+		if err == nil {
+			t.Fatalf("expected invalid request for intent=%s", req.Intent.Type)
+		}
+		if !errors.Is(err, ErrInvalidRequest) {
+			t.Fatalf("expected ErrInvalidRequest for intent=%s, got %v", req.Intent.Type, err)
+		}
+	}
+}
+
+func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-expanded",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
+		DeltaMinutes:   30,
+	})
+	if err != nil {
+		t.Fatalf("expected valid expanded action, got %v", err)
+	}
+}

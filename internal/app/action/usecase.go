@@ -30,7 +30,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	req.AgentID = strings.TrimSpace(req.AgentID)
 	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
 	req.Intent.Type = survival.ActionType(strings.TrimSpace(string(req.Intent.Type)))
-	if req.AgentID == "" || req.IdempotencyKey == "" || req.DeltaMinutes <= 0 || !isSupportedActionType(req.Intent.Type) {
+	if req.AgentID == "" || req.IdempotencyKey == "" || req.DeltaMinutes <= 0 || !isSupportedActionType(req.Intent.Type) || !hasValidActionParams(req.Intent) {
 		return Response{}, ErrInvalidRequest
 	}
 
@@ -131,7 +131,26 @@ func isSupportedActionType(t survival.ActionType) bool {
 	switch t {
 	case survival.ActionGather, survival.ActionRest, survival.ActionMove:
 		return true
+	case survival.ActionCombat, survival.ActionBuild, survival.ActionFarm, survival.ActionRetreat, survival.ActionCraft:
+		return true
 	default:
 		return false
+	}
+}
+
+func hasValidActionParams(intent survival.ActionIntent) bool {
+	switch intent.Type {
+	case survival.ActionMove:
+		return intent.Params["dx"] != 0 || intent.Params["dy"] != 0
+	case survival.ActionCombat:
+		return intent.Params["target_level"] > 0
+	case survival.ActionBuild:
+		return intent.Params["kind"] > 0
+	case survival.ActionFarm:
+		return intent.Params["seed"] > 0
+	case survival.ActionCraft:
+		return intent.Params["recipe"] > 0
+	default:
+		return true
 	}
 }
