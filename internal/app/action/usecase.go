@@ -20,6 +20,7 @@ type UseCase struct {
 	ActionRepo ports.ActionExecutionRepository
 	EventRepo  ports.EventRepository
 	World      ports.WorldProvider
+	Metrics    ports.ActionMetrics
 	Settle     survival.SettlementService
 	Now        func() time.Time
 }
@@ -109,7 +110,17 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		return nil
 	})
 	if err != nil {
+		if u.Metrics != nil {
+			if errors.Is(err, ports.ErrConflict) {
+				u.Metrics.RecordConflict()
+			} else {
+				u.Metrics.RecordFailure()
+			}
+		}
 		return Response{}, err
+	}
+	if u.Metrics != nil {
+		u.Metrics.RecordSuccess(out.ResultCode)
 	}
 
 	return out, nil

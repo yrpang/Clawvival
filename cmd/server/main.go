@@ -10,6 +10,7 @@ import (
 	"time"
 
 	httpadapter "clawverse/internal/adapter/http"
+	metricsinmem "clawverse/internal/adapter/metrics/inmemory"
 	gormrepo "clawverse/internal/adapter/repo/gorm"
 	staticskills "clawverse/internal/adapter/skills/static"
 	worldruntime "clawverse/internal/adapter/world/runtime"
@@ -27,6 +28,7 @@ func main() {
 	stateRepo, actionRepo, eventRepo, txManager := mustBuildRepos()
 	worldProvider := buildWorldProviderFromEnv()
 	skillsProvider := staticskills.Provider{Root: "./skills"}
+	kpiRecorder := metricsinmem.NewRecorder()
 
 	h := httpadapter.Handler{
 		ObserveUC: observe.UseCase{StateRepo: stateRepo, World: worldProvider},
@@ -36,11 +38,13 @@ func main() {
 			ActionRepo: actionRepo,
 			EventRepo:  eventRepo,
 			World:      worldProvider,
+			Metrics:    kpiRecorder,
 			Settle:     survival.SettlementService{},
 			Now:        time.Now,
 		},
 		StatusUC: status.UseCase{StateRepo: stateRepo},
 		SkillsUC: skills.UseCase{Provider: skillsProvider},
+		KPI:      kpiRecorder,
 	}
 
 	s := server.Default(server.WithHostPorts(":8080"))

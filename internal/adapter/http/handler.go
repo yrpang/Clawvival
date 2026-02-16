@@ -26,6 +26,7 @@ type Handler struct {
 	ActionUC  action.UseCase
 	StatusUC  status.UseCase
 	SkillsUC  skills.UseCase
+	KPI       kpiSnapshotProvider
 }
 
 func (h Handler) RegisterRoutes(s *server.Hertz) {
@@ -36,6 +37,7 @@ func (h Handler) RegisterRoutes(s *server.Hertz) {
 
 	s.GET("/skills/index.json", h.skillsIndex)
 	s.GET("/skills/*filepath", h.skillsFile)
+	s.GET("/ops/kpi", h.kpi)
 }
 
 type observeRequest struct {
@@ -156,6 +158,18 @@ func (h Handler) skillsFile(c context.Context, ctx *app.RequestContext) {
 		return
 	}
 	ctx.Data(http.StatusOK, "text/plain; charset=utf-8", b)
+}
+
+type kpiSnapshotProvider interface {
+	SnapshotAny() any
+}
+
+func (h Handler) kpi(_ context.Context, ctx *app.RequestContext) {
+	if h.KPI == nil {
+		writeErrorBody(ctx, consts.StatusNotFound, "not_configured", "kpi provider not configured")
+		return
+	}
+	ctx.JSON(consts.StatusOK, h.KPI.SnapshotAny())
 }
 
 func decodeJSON(ctx *app.RequestContext, out any) error {
