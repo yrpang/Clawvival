@@ -1,0 +1,17 @@
+package action
+
+import "clawverse/internal/domain/survival"
+
+type Request struct {
+	AgentID        string
+	IdempotencyKey string
+	Intent         survival.ActionIntent
+	DeltaMinutes   int
+	StrategyHash   string
+}
+
+type Response struct {
+	UpdatedState survival.AgentStateAggregate
+	Events       []survival.DomainEvent
+	ResultCode   survival.ResultCode
+}

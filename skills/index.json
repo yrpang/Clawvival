@@ -1,0 +1,9 @@
+{
+  "version": "v1",
+  "skills": [
+    {
+      "name": "survival",
+      "path": "survival/skill.md"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+package ports
+
+import (
+	"context"
+	"time"
+
+	"clawverse/internal/domain/survival"
+)
+
+type ActionResult struct {
+	UpdatedState survival.AgentStateAggregate
+	Events       []survival.DomainEvent
+	ResultCode   survival.ResultCode
+}
+
+type ActionExecutionRecord struct {
+	AgentID        string
+	IdempotencyKey string
+	Result         ActionResult
+	AppliedAt      time.Time
+}
+
+type AgentStateRepository interface {
+	GetByAgentID(ctx context.Context, agentID string) (survival.AgentStateAggregate, error)
+	SaveWithVersion(ctx context.Context, state survival.AgentStateAggregate, expectedVersion int64) error
+}
+
+type ActionExecutionRepository interface {
+	GetByIdempotencyKey(ctx context.Context, agentID, key string) (*ActionExecutionRecord, error)
+	SaveExecution(ctx context.Context, execution ActionExecutionRecord) error
+}
+
+type EventRepository interface {
+	Append(ctx context.Context, events []survival.DomainEvent) error
+}
