@@ -62,7 +62,7 @@ type actionIntent struct {
 func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
 	var body observeRequest
 	if err := decodeJSON(ctx, &body); err != nil {
-		ctx.JSON(consts.StatusBadRequest, map[string]any{"error": "invalid json"})
+		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
 func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 	var body actionRequest
 	if err := decodeJSON(ctx, &body); err != nil {
-		ctx.JSON(consts.StatusBadRequest, map[string]any{"error": "invalid json"})
+		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 func (h Handler) status(c context.Context, ctx *app.RequestContext) {
 	var body statusRequest
 	if err := decodeJSON(ctx, &body); err != nil {
-		ctx.JSON(consts.StatusBadRequest, map[string]any{"error": "invalid json"})
+		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h Handler) skillsIndex(c context.Context, ctx *app.RequestContext) {
 func (h Handler) skillsFile(c context.Context, ctx *app.RequestContext) {
 	path := strings.TrimPrefix(string(ctx.Param("filepath")), "/")
 	if path == "" {
-		ctx.JSON(consts.StatusBadRequest, map[string]any{"error": "invalid filepath"})
+		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_filepath", "invalid filepath")
 		return
 	}
 
@@ -161,12 +161,21 @@ func writeError(ctx *app.RequestContext, err error) {
 		errors.Is(err, observe.ErrInvalidRequest),
 		errors.Is(err, status.ErrInvalidRequest),
 		errors.Is(err, survival.ErrInvalidDelta):
-		ctx.JSON(consts.StatusBadRequest, map[string]any{"error": err.Error()})
+		writeErrorBody(ctx, consts.StatusBadRequest, "bad_request", err.Error())
 	case errors.Is(err, ports.ErrNotFound):
-		ctx.JSON(consts.StatusNotFound, map[string]any{"error": err.Error()})
+		writeErrorBody(ctx, consts.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, ports.ErrConflict):
-		ctx.JSON(consts.StatusConflict, map[string]any{"error": err.Error()})
+		writeErrorBody(ctx, consts.StatusConflict, "conflict", err.Error())
 	default:
-		ctx.JSON(consts.StatusInternalServerError, map[string]any{"error": "internal error"})
+		writeErrorBody(ctx, consts.StatusInternalServerError, "internal_error", "internal error")
 	}
+}
+
+func writeErrorBody(ctx *app.RequestContext, status int, code, message string) {
+	ctx.JSON(status, map[string]any{
+		"error": map[string]string{
+			"code":    code,
+			"message": message,
+		},
+	})
 }

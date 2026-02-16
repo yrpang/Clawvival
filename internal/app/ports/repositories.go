@@ -16,6 +16,8 @@ type ActionResult struct {
 type ActionExecutionRecord struct {
 	AgentID        string
 	IdempotencyKey string
+	IntentType     string
+	DT             int
 	Result         ActionResult
 	AppliedAt      time.Time
 }
@@ -31,5 +33,5 @@ type ActionExecutionRepository interface {
 }
 
 type EventRepository interface {
-	Append(ctx context.Context, events []survival.DomainEvent) error
+	Append(ctx context.Context, agentID string, events []survival.DomainEvent) error
 }

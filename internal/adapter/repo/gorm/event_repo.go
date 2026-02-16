@@ -18,7 +18,7 @@ func NewEventRepo(db *gorm.DB) EventRepo {
 	return EventRepo{db: db}
 }
 
-func (r EventRepo) Append(ctx context.Context, events []survival.DomainEvent) error {
+func (r EventRepo) Append(ctx context.Context, agentID string, events []survival.DomainEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -26,6 +26,7 @@ func (r EventRepo) Append(ctx context.Context, events []survival.DomainEvent) er
 	for _, e := range events {
 		b, _ := json.Marshal(e.Payload)
 		rows = append(rows, model.DomainEvent{
+			AgentID:    agentID,
 			Type:       e.Type,
 			OccurredAt: e.OccurredAt,
 			Payload:    b,
