@@ -10,7 +10,7 @@ var ErrInvalidDelta = errors.New("invalid delta minutes")
 
 type SettlementService struct{}
 
-func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, delta HeartbeatDelta, now time.Time, _ WorldSnapshot) (SettlementResult, error) {
+func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, delta HeartbeatDelta, now time.Time, snapshot WorldSnapshot) (SettlementResult, error) {
 	if delta.Minutes <= 0 {
 		return SettlementResult{}, ErrInvalidDelta
 	}
@@ -25,6 +25,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 	case ActionGather:
 		next.Vitals.Energy -= scaledInt(18, delta.Minutes)
 		next.Vitals.Hunger -= scaledInt(3, delta.Minutes)
+		ApplyGather(&next, snapshot)
 	case ActionRest:
 		next.Vitals.Energy += scaledInt(10, delta.Minutes)
 	case ActionMove:
@@ -35,13 +36,18 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		next.Vitals.Hunger -= scaledInt(2, delta.Minutes)
 	case ActionBuild:
 		next.Vitals.Energy -= scaledInt(14, delta.Minutes)
+		_, _ = Build(&next, BuildKind(intent.Params["kind"]), next.Position.X, next.Position.Y)
 	case ActionFarm:
 		next.Vitals.Energy -= scaledInt(10, delta.Minutes)
 		next.Vitals.Hunger -= scaledInt(1, delta.Minutes)
+		if intent.Params["seed"] > 0 {
+			_, _ = PlantSeed(&next)
+		}
 	case ActionRetreat:
 		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
 	case ActionCraft:
 		next.Vitals.Energy -= scaledInt(12, delta.Minutes)
+		_ = Craft(&next, RecipeID(intent.Params["recipe"]))
 	}
 
 	hpLossFromHunger := scaledFloat(0.08*float64(absMinZero(next.Vitals.Hunger)), delta.Minutes)
