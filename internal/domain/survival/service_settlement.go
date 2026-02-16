@@ -45,6 +45,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		}
 	case ActionRetreat:
 		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
+		next.Position = moveToward(next.Position, next.Home)
 	case ActionCraft:
 		next.Vitals.Energy -= scaledInt(12, delta.Minutes)
 		_ = Craft(&next, RecipeID(intent.Params["recipe"]))
@@ -54,6 +55,13 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 	hpLossFromEnergy := scaledFloat(0.05*float64(absMinZero(next.Vitals.Energy)), delta.Minutes)
 	hpCap := float64(scaledInt(12, delta.Minutes))
 	hpLoss := int(math.Round(minFloat(hpLossFromHunger+hpLossFromEnergy, hpCap)))
+	if intent.Type == ActionCombat {
+		if snapshot.TimeOfDay == "night" {
+			hpLoss += scaledInt(snapshot.ThreatLevel, delta.Minutes)
+		} else {
+			hpLoss += scaledInt(maxInt(1, snapshot.ThreatLevel/2), delta.Minutes)
+		}
+	}
 
 	next.Vitals.HP -= hpLoss
 	next.Version++
@@ -74,10 +82,12 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 
 	resultCode := ResultOK
 	if next.Vitals.HP <= 0 {
+		next.MarkDead(deriveDeathCause(next, intent))
 		events = append(events, DomainEvent{Type: "game_over", OccurredAt: now})
 		resultCode = ResultGameOver
 	} else if next.Vitals.HP <= 20 {
 		events = append(events, DomainEvent{Type: "critical_hp", OccurredAt: now})
+		events = append(events, DomainEvent{Type: "force_retreat", OccurredAt: now})
 	}
 
 	return SettlementResult{
@@ -107,4 +117,39 @@ func minFloat(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func moveToward(from, to Position) Position {
+	next := from
+	if from.X < to.X {
+		next.X++
+	} else if from.X > to.X {
+		next.X--
+	}
+	if from.Y < to.Y {
+		next.Y++
+	} else if from.Y > to.Y {
+		next.Y--
+	}
+	return next
+}
+
+func deriveDeathCause(state AgentStateAggregate, intent ActionIntent) DeathCause {
+	switch {
+	case state.Vitals.Hunger < 0:
+		return DeathCauseStarvation
+	case state.Vitals.Energy < 0:
+		return DeathCauseExhaustion
+	case intent.Type == ActionCombat:
+		return DeathCauseCombat
+	default:
+		return DeathCauseUnknown
+	}
 }
