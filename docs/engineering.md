@@ -21,7 +21,6 @@
 - skills 安装完成后，Agent 在本地运行时注册心跳机制（Heartbeat）。
 - 后续由心跳定时触发主循环。
 - 心跳注册属于 Agent/OpenClaw 本地调度行为，不是游戏服务端 API。
-- skills URL 建议启用来源校验（域名白名单或签名校验）。
 
 ### 时间与结算
 
@@ -67,30 +66,125 @@ Skills 静态资源读取接口（只读）：
 - 可选观测：如需追踪策略版本，仅允许在动作请求中携带只读元信息（如 `strategy_hash`），服务端不落策略正文。
 - Skills 接口仅用于分发静态文件与版本索引，不参与动作结算与策略存储。
 
-## 架构约束（DDD-lite）
+## 数据与迁移（Schema First）
 
-- `domain`：业务规则与状态演算
-- `app`：用例编排、幂等、事务边界
-- `adapter`：HTTP、存储、外部集成
-- 依赖方向：`adapter -> app -> domain`
+定位：
+- `Schema First` 是实现前置约束，先于仓储与用例代码落地。
 
-边界上下文：
-- `identity`：身份映射与鉴权
-- `survival`：`HP/Hunger/Energy` 与动作结算
-- `intent`：动作语义与参数校验
-- `world`：环境事件与区域演化
-- `skills`：静态技能资源分发与版本索引管理（不含策略存储）
-- `notification`：摘要与告警
+规则：
+- DDL 是事实来源（single source of truth）。
+- 开发顺序固定：`Schema -> Migration -> Model/Repo -> UseCase/API`。
+- 生产环境禁用自动迁移（`AutoMigrate`）。
+
+迁移执行清单：
+1. 新增或变更字段必须先提交 SQL migration。
+2. 每个 migration 必须可回滚（提供 down 或等价回退方案）。
+3. 迁移命名按递增版本（如 `0003_xxx.sql`）。
+4. 迁移前后需做兼容性检查（旧数据可读、核心接口不破坏）。
+5. 迁移上线前完成演练（含失败回滚演练）。
+
+当前状态：
+- 迁移目录 `db/schema/` 尚未创建。
+- 建议下一步先建立 `db/schema/` 并提交首批 migration。
+
+## 架构约束（DDD-lite，MVP）
+
+分层约束：
+- `domain`：仅放业务规则、聚合、不变量，不依赖框架与存储实现。
+- `app`：仅做用例编排、幂等、事务边界，不承载业务规则细节。
+- `adapter`：仅做 HTTP/DB/外部集成适配，不写业务决策逻辑。
+- 依赖方向固定：`adapter -> app -> domain`。
+
+边界上下文（MVP 三域）：
+- `survival`：核心生存规则与动作结算（唯一业务规则源）。
+- `world`：只读环境快照提供者，不做结算。
+- `platform`：鉴权上下文、skills 静态分发、指标与通知等平台能力。
+
+写入边界：
+- `ActionUseCase` 是唯一写入口。
+- `ObserveUseCase`、`StatusUseCase`、`SkillsReadUseCase` 仅允许只读。
+
+### 命名说明（domain / app / adapter）
+
+- 这是 DDD 在工程落地里非常常见的一组命名，但不是唯一标准写法。
+- 你也会看到其他团队使用：`application` 代替 `app`，`infrastructure` 或 `interfaces` 代替 `adapter`。
+- 关键不是名字本身，而是边界职责不混淆。
+
+层级注释：
+- `domain`：业务真相层。放“规则与约束”（例如 `HP/Hunger/Energy` 结算、死亡判定、聚合不变量）。
+- `app`：用例编排层。放“一次请求怎么完成”（幂等、事务、调用顺序、返回 DTO）。
+- `adapter`：外部适配层。放“如何接入外部世界”（HTTP Handler、Repo 实现、Metrics/通知网关）。
+
+判断口诀：
+- 去掉数据库和接口还能成立的，放 `domain`。
+- 需要组织流程和事务边界的，放 `app`。
+- 依赖框架、协议、驱动、第三方 SDK 的，放 `adapter`。
 
 ## DDD 设计（可落地版）
 
+### DDD 模型架构图
+
+```mermaid
+flowchart LR
+  subgraph AD["adapter（外部接入）"]
+    H["HTTP Handlers"]
+    RE["Repo Implementations (GORM)"]
+    MA["Metrics/Notify Adapters"]
+  end
+
+  subgraph AP["app（用例编排）"]
+    O["ObserveUseCase (read)"]
+    A["ActionUseCase (write)"]
+    S["StatusUseCase (read)"]
+    K["SkillsReadUseCase (read)"]
+    RP["Repository Ports (interfaces)"]
+    MP["Metrics Ports (interfaces)"]
+  end
+
+  subgraph DM["domain（业务规则）"]
+    SV["survival\nAggregates + Rules + Events"]
+    WD["world\nRead-only Snapshot"]
+    PF["platform\nIdentityContext + SkillsIndex + NotificationPolicy"]
+  end
+
+  H --> O
+  H --> A
+  H --> S
+  H --> K
+
+  O --> WD
+  O --> SV
+  A --> SV
+  A --> WD
+  S --> SV
+  K --> PF
+
+  O --> RP
+  A --> RP
+  S --> RP
+  K --> RP
+  A --> MP
+
+  RE -.implements.-> RP
+  MA -.implements.-> MP
+```
+
+说明：
+- 依赖方向固定为 `adapter -> app -> domain`。
+- `ActionUseCase` 是唯一写入口；其余用例只读。
+- `world` 仅供快照读取，规则结算集中在 `survival`。
+- 图中虚线表示“实现接口（implements）”关系。
+
 ### 上下文关系（Context Map）
 
-- `identity` -> `survival`：提供 `agent_id` 与鉴权上下文（上游）。
+- `platform` -> `survival`：提供 `agent_id` 与鉴权上下文（上游）。
 - `world` -> `survival`：提供环境快照（地形、资源、威胁、时间）。
-- `intent` -> `survival`：提供动作语义校验结果。
-- `survival` -> `notification`：发布事件用于告警与摘要。
-- `skills` 独立：仅提供静态资源，不进入动作结算链路。
+- `survival` -> `platform`：发布事件用于指标、告警与摘要。
+- `platform` 提供 skills 静态资源分发，但不进入动作结算。
+
+边界约束：
+- `world` 仅提供只读快照，不做业务结算。
+- 所有业务结算统一由 `survival` 执行，避免双规则源。
 
 ### 聚合与值对象（Survival 核心）
 
@@ -153,12 +247,40 @@ Skills 静态资源读取接口（只读）：
 - `Append(events...)`
 - `ListByAgentID(agentID, cursor, limit)`
 
+事务抽象端口：
+- `TxManager`
+- `RunInTx(ctx, fn)`：在同一事务上下文执行 `fn`，失败整体回滚
+
 ### 事务与一致性边界
 
 - `ActionUseCase` 是唯一写事务入口。
+- `ObserveUseCase`、`StatusUseCase`、`SkillsReadUseCase` 均为只读用例，不得写入业务状态。
 - 单事务提交：`agent_state + action_execution + domain_events`。
 - 并发控制：`agent_id` 维度串行锁 + `version` 乐观锁。
 - 指标上报建议异步（可 outbox），不阻塞主交易。
+
+`ActionUseCase` 事务流程（示意）：
+1. `TxManager.RunInTx(ctx, fn)`
+2. 在 `fn` 内按顺序执行：
+   - 查重：`GetByIdempotencyKey(agentID, key)`
+   - 载入状态：`GetByAgentID(agentID)`
+   - 规则结算：`SettlementService`
+   - 落状态：`SaveWithVersion(state, expectedVersion)`
+   - 落动作：`SaveExecution(execution)`
+   - 落事件：`Append(events...)`
+3. 任一步失败，整笔回滚；成功后再异步发送指标/通知。
+
+### Action 最小契约（冻结）
+
+请求（`POST /api/agent/action`）：
+- 必填：`idempotency_key`, `intent`, `dt`
+- 鉴权提供：`agent_id`（由身份上下文注入，不依赖客户端明文字段）
+- 可选观测：`strategy_hash`（只读元信息）
+
+响应：
+- `updated_state`：最新 `HP/Hunger/Energy` 与位置等快照
+- `events`：本次结算产生的领域事件列表
+- `result_code`：动作结果码（成功/失败/拒绝）
 
 ### 建议目录骨架（Go）
 
@@ -166,41 +288,43 @@ Skills 静态资源读取接口（只读）：
 internal/
   domain/
     survival/
-      aggregate_agent_state.go
-      aggregate_action_execution.go
-      value_objects.go
-      service_settlement.go
-      service_rules.go
-      events.go
+      aggregate_agent_state.go          # AgentState 聚合根与不变量
+      aggregate_action_execution.go     # 幂等执行聚合（idempotency_key）
+      value_objects.go                  # Vitals/Position/ActionIntent 等值对象
+      service_settlement.go             # 结算核心服务（状态推进）
+      service_rules.go                  # 死亡/濒死/消耗恢复规则
+      events.go                         # 领域事件定义
     world/
-      snapshot.go
-    identity/
-      identity.go
+      snapshot.go                       # 世界快照模型（只读）
+    platform/
+      identity_context.go               # 鉴权上下文模型
+      skills_index.go                   # skills 索引领域模型（静态）
+      notification_policy.go            # 通知策略模型
   app/
     observe/
-      usecase.go
-      dto.go
+      usecase.go                        # Observe 用例编排（只读）
+      dto.go                            # Observe 请求/响应 DTO
     action/
-      usecase.go
-      dto.go
+      usecase.go                        # Action 用例编排（唯一写入口）
+      dto.go                            # Action 请求/响应 DTO（含 idempotency_key）
     status/
-      usecase.go
-      dto.go
+      usecase.go                        # Status 用例编排（只读）
+      dto.go                            # Status 请求/响应 DTO
     skills/
-      usecase.go
+      usecase.go                        # skills 静态资源读取用例（只读）
   adapter/
     http/
-      handler_agent_observe.go
-      handler_agent_action.go
-      handler_agent_status.go
-      handler_skills.go
+      handler_agent_observe.go          # /api/agent/observe
+      handler_agent_action.go           # /api/agent/action
+      handler_agent_status.go           # /api/agent/status
+      handler_skills.go                 # /skills/index.json 与 /skills/*filepath
     repo/
       gorm/
-        agent_state_repo.go
-        action_execution_repo.go
-        event_repo.go
+        agent_state_repo.go             # AgentStateRepository 实现
+        action_execution_repo.go        # ActionExecutionRepository 实现
+        event_repo.go                   # EventRepository 实现
     metrics/
-      emitter.go
+      emitter.go                        # 指标与事件上报适配
 ```
 
 ### 实施顺序（DDD 最小路径）
@@ -209,16 +333,38 @@ internal/
 2. 再落 `app/action`（幂等 + 事务边界）并打通 `POST /api/agent/action`。
 3. 补 `observe/status` 只读链路与 `skills` 静态读取，最后接指标上报。
 
-## 数据与迁移（Schema First）
-
-- DDL 是事实来源
-- 开发顺序：`Schema -> Migration -> Model/Repo -> UseCase/API`
-- 生产禁用自动迁移
-- 已有迁移：
-- `db/schema/0001_init.sql`
-- `db/schema/0002_bot_state_hunger_energy.sql`
-
 ## 系统图表（Mermaid）
+
+### 0) 运行时关键路径图（MVP）
+
+```mermaid
+flowchart LR
+  A["Agent (local runtime)"]
+  ST["Local Strategy Store"]
+  HS["Heartbeat Scheduler (local)"]
+  SK["Skills Static API\nGET /skills/index.json\nGET /skills/*"]
+  API["Agent API\nPOST /api/agent/observe|action|status"]
+  APP["App UseCases\nobserve/action/status"]
+  DOM["Survival Domain\nrules + settlement"]
+  WLD["World Snapshot\n(read-only)"]
+  DB["State/Action/Event Store"]
+  KPI["Metrics/KPI"]
+
+  HS --> A
+  A --> ST
+  A --> SK
+  A --> API
+  API --> APP --> DOM
+  WLD --> DOM
+  DOM --> DB
+  DOM --> KPI
+```
+
+说明：
+- 这张图只表达运行时关键路径，便于实现与排障。
+- 策略存储与读取全部在 Agent 本地，不进入游戏服务端数据模型。
+- `world` 只提供快照，结算只在 `survival` 域执行。
+- `ActionUseCase` 是唯一写入口，指标由同一结算链路产出。
 
 ### 1) 用例图（Use Case）
 
