@@ -492,11 +492,20 @@ sequenceDiagram
 - P1：稳定与可观测（KPI 日级可追溯、调参可验证、连续达标）
 - P2：内容扩展（不破坏 P0/P1 指标前提下扩展区域与生态）
 
-## 当前执行清单（精简）
+## 当前执行清单（MVP）
 
+已完成：
 - [x] 单一 Agent API 路径确定（`/api/agent/*`）
 - [x] 融合状态模型确定（`HP/Hunger/Energy`）
 - [x] 世界观与范围文档收敛到 `word.md`
-- [ ] 落地持久化仓储与事务一致性
-- [ ] 建立 KPI 计算任务与看板
-- [ ] 完成 P0 回归测试（主循环、死亡/濒死、昼夜切换）
+- [x] Schema First 落地（`db/schema/` + 手动迁移脚本）
+- [x] PostgreSQL + GORM 仓储与事务抽象（`TxManager`）
+- [x] Action 写链路幂等与事务提交（state/action/events 同交易）
+- [x] 动作落库完整性（`intent_type`、`dt`、`domain_events.agent_id`）
+- [x] Action 最小契约加固（必填校验、允许动作类型、统一错误结构）
+
+下一步 TODO（按优先级）：
+- [ ] 身份边界收口：以 `X-Agent-ID` 为主，逐步移除 body `agent_id`
+- [ ] World Provider 最小可配置化：支持昼夜与威胁动态，不再固定 mock 常量
+- [ ] 完成 P0 回归测试：主循环、死亡/濒死、幂等重复请求、昼夜切换
+- [ ] 建立 KPI 计算任务与看板（先从 action 成功率/冲突率/生存时长开始）
