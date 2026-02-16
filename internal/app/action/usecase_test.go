@@ -5,25 +5,28 @@ import (
 	"testing"
 	"time"
 
-	"clawverse/internal/adapter/repo/memory"
 	worldmock "clawverse/internal/adapter/world/mock"
+	"clawverse/internal/app/ports"
 	"clawverse/internal/domain/survival"
 	"clawverse/internal/domain/world"
 )
 
 func TestUseCase_Idempotency(t *testing.T) {
-	store := memory.NewStore()
-	store.SeedState(survival.AgentStateAggregate{
-		AgentID: "agent-1",
-		Vitals:  survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
-		Version: 1,
-	})
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID: "agent-1",
+			Vitals:  survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Version: 1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
 
 	uc := UseCase{
-		TxManager:  memory.NewTxManager(store),
-		StateRepo:  memory.NewAgentStateRepo(store),
-		ActionRepo: memory.NewActionExecutionRepo(store),
-		EventRepo:  memory.NewEventRepo(store),
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
 		World: worldmock.Provider{Snapshot: world.Snapshot{
 			TimeOfDay:      "day",
 			ThreatLevel:    1,
@@ -52,4 +55,65 @@ func TestUseCase_Idempotency(t *testing.T) {
 	if first.UpdatedState.Version != second.UpdatedState.Version {
 		t.Fatalf("idempotency broken: version mismatch first=%d second=%d", first.UpdatedState.Version, second.UpdatedState.Version)
 	}
+}
+
+type stubTxManager struct{}
+
+func (stubTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
+type stubStateRepo struct {
+	byAgent map[string]survival.AgentStateAggregate
+}
+
+func (r *stubStateRepo) GetByAgentID(_ context.Context, agentID string) (survival.AgentStateAggregate, error) {
+	state, ok := r.byAgent[agentID]
+	if !ok {
+		return survival.AgentStateAggregate{}, ports.ErrNotFound
+	}
+	return state, nil
+}
+
+func (r *stubStateRepo) SaveWithVersion(_ context.Context, state survival.AgentStateAggregate, expectedVersion int64) error {
+	current, ok := r.byAgent[state.AgentID]
+	if !ok {
+		if expectedVersion != 0 {
+			return ports.ErrConflict
+		}
+		r.byAgent[state.AgentID] = state
+		return nil
+	}
+	if current.Version != expectedVersion {
+		return ports.ErrConflict
+	}
+	r.byAgent[state.AgentID] = state
+	return nil
+}
+
+type stubActionRepo struct {
+	byKey map[string]ports.ActionExecutionRecord
+}
+
+func (r *stubActionRepo) GetByIdempotencyKey(_ context.Context, agentID, key string) (*ports.ActionExecutionRecord, error) {
+	record, ok := r.byKey[agentID+"|"+key]
+	if !ok {
+		return nil, ports.ErrNotFound
+	}
+	copy := record
+	return &copy, nil
+}
+
+func (r *stubActionRepo) SaveExecution(_ context.Context, execution ports.ActionExecutionRecord) error {
+	r.byKey[execution.AgentID+"|"+execution.IdempotencyKey] = execution
+	return nil
+}
+
+type stubEventRepo struct {
+	events []survival.DomainEvent
+}
+
+func (r *stubEventRepo) Append(_ context.Context, events []survival.DomainEvent) error {
+	r.events = append(r.events, events...)
+	return nil
 }

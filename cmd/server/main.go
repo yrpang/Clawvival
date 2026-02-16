@@ -9,7 +9,6 @@ import (
 
 	httpadapter "clawverse/internal/adapter/http"
 	gormrepo "clawverse/internal/adapter/repo/gorm"
-	"clawverse/internal/adapter/repo/memory"
 	staticskills "clawverse/internal/adapter/skills/static"
 	worldmock "clawverse/internal/adapter/world/mock"
 	"clawverse/internal/app/action"
@@ -55,23 +54,9 @@ func main() {
 }
 
 func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.TxManager) {
-	driver := os.Getenv("CLAWVERSE_REPO")
-	if driver == "" || driver == "memory" {
-		store := memory.NewStore()
-		store.SeedState(survival.AgentStateAggregate{
-			AgentID: "demo-agent",
-			Vitals:  survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
-			Version: 1,
-		})
-		return memory.NewAgentStateRepo(store), memory.NewActionExecutionRepo(store), memory.NewEventRepo(store), memory.NewTxManager(store)
-	}
-	if driver != "gorm" {
-		log.Fatalf("invalid CLAWVERSE_REPO=%q, expected memory|gorm", driver)
-	}
-
 	dsn := os.Getenv("CLAWVERSE_DB_DSN")
 	if dsn == "" {
-		log.Fatal("CLAWVERSE_DB_DSN is required when CLAWVERSE_REPO=gorm")
+		log.Fatal("CLAWVERSE_DB_DSN is required")
 	}
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {

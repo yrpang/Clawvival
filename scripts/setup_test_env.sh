@@ -19,8 +19,6 @@ export POSTGRES_USER="${POSTGRES_USER:-clawverse}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-clawverse}"
 export POSTGRES_DB="${POSTGRES_DB:-clawverse}"
 
-# Main program runtime env (default to gorm as requested)
-export CLAWVERSE_REPO="${CLAWVERSE_REPO:-gorm}"
 export CLAWVERSE_DB_DSN="${CLAWVERSE_DB_DSN:-host=127.0.0.1 port=${POSTGRES_PORT} user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} sslmode=disable}"
 
 if [[ "${1:-}" == "--prepare" ]]; then
@@ -31,7 +29,6 @@ if [[ "${1:-}" == "--prepare" ]]; then
 fi
 
 echo "[clawverse] env ready"
-echo "  CLAWVERSE_REPO=$CLAWVERSE_REPO"
 echo "  CLAWVERSE_DB_DSN=$CLAWVERSE_DB_DSN"
 echo "  docker container=$CONTAINER_NAME (port=$POSTGRES_PORT)"
 echo ""
