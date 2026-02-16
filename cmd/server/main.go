@@ -5,30 +5,27 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	httpadapter "clawverse/internal/adapter/http"
 	gormrepo "clawverse/internal/adapter/repo/gorm"
 	staticskills "clawverse/internal/adapter/skills/static"
-	worldmock "clawverse/internal/adapter/world/mock"
+	worldruntime "clawverse/internal/adapter/world/runtime"
 	"clawverse/internal/app/action"
 	"clawverse/internal/app/observe"
 	"clawverse/internal/app/ports"
 	"clawverse/internal/app/skills"
 	"clawverse/internal/app/status"
 	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
 
 func main() {
 	stateRepo, actionRepo, eventRepo, txManager := mustBuildRepos()
-	worldProvider := worldmock.Provider{Snapshot: world.Snapshot{
-		TimeOfDay:      "day",
-		ThreatLevel:    1,
-		NearbyResource: map[string]int{"wood": 10, "stone": 5},
-	}}
+	worldProvider := buildWorldProviderFromEnv()
 	skillsProvider := staticskills.Provider{Root: "./skills"}
 
 	h := httpadapter.Handler{
@@ -79,4 +76,60 @@ func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionReposito
 	}
 
 	return stateRepo, gormrepo.NewActionExecutionRepo(db), gormrepo.NewEventRepo(db), gormrepo.NewTxManager(db)
+}
+
+func buildWorldProviderFromEnv() ports.WorldProvider {
+	cfg := worldruntime.DefaultConfig()
+	cfg.DayStartHour = intEnv("WORLD_DAY_START_HOUR", cfg.DayStartHour)
+	cfg.NightStart = intEnv("WORLD_NIGHT_START_HOUR", cfg.NightStart)
+	cfg.ThreatDay = intEnv("WORLD_THREAT_DAY", cfg.ThreatDay)
+	cfg.ThreatNight = intEnv("WORLD_THREAT_NIGHT", cfg.ThreatNight)
+
+	if resources := resourcesEnv("WORLD_RESOURCES_DAY"); len(resources) > 0 {
+		cfg.ResourcesDay = resources
+	}
+	if resources := resourcesEnv("WORLD_RESOURCES_NIGHT"); len(resources) > 0 {
+		cfg.ResourcesNight = resources
+	}
+
+	return worldruntime.NewProvider(cfg)
+}
+
+func intEnv(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+func resourcesEnv(key string) map[string]int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+	out := map[string]int{}
+	for _, pair := range strings.Split(raw, ",") {
+		kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		name := strings.TrimSpace(kv[0])
+		if name == "" {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(kv[1]))
+		if err != nil {
+			continue
+		}
+		out[name] = n
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

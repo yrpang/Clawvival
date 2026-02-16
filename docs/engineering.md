@@ -506,6 +506,6 @@ sequenceDiagram
 
 下一步 TODO（按优先级）：
 - [x] 身份边界收口：以 `X-Agent-ID` 为主，逐步移除 body `agent_id`
-- [ ] World Provider 最小可配置化：支持昼夜与威胁动态，不再固定 mock 常量
+- [x] World Provider 最小可配置化：支持昼夜与威胁动态，不再固定 mock 常量
 - [ ] 完成 P0 回归测试：主循环、死亡/濒死、幂等重复请求、昼夜切换
 - [ ] 建立 KPI 计算任务与看板（先从 action 成功率/冲突率/生存时长开始）
