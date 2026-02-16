@@ -25,7 +25,10 @@ type UseCase struct {
 }
 
 func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
-	if strings.TrimSpace(req.AgentID) == "" || strings.TrimSpace(req.IdempotencyKey) == "" || req.DeltaMinutes <= 0 {
+	req.AgentID = strings.TrimSpace(req.AgentID)
+	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
+	req.Intent.Type = survival.ActionType(strings.TrimSpace(string(req.Intent.Type)))
+	if req.AgentID == "" || req.IdempotencyKey == "" || req.DeltaMinutes <= 0 || !isSupportedActionType(req.Intent.Type) {
 		return Response{}, ErrInvalidRequest
 	}
 
@@ -81,6 +84,8 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		execution := ports.ActionExecutionRecord{
 			AgentID:        req.AgentID,
 			IdempotencyKey: req.IdempotencyKey,
+			IntentType:     string(req.Intent.Type),
+			DT:             req.DeltaMinutes,
 			Result: ports.ActionResult{
 				UpdatedState: result.UpdatedState,
 				Events:       result.Events,
@@ -92,7 +97,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			return err
 		}
 
-		if err := u.EventRepo.Append(txCtx, result.Events); err != nil {
+		if err := u.EventRepo.Append(txCtx, req.AgentID, result.Events); err != nil {
 			return err
 		}
 
@@ -108,4 +113,13 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	}
 
 	return out, nil
+}
+
+func isSupportedActionType(t survival.ActionType) bool {
+	switch t {
+	case survival.ActionGather, survival.ActionRest, survival.ActionMove:
+		return true
+	default:
+		return false
+	}
 }

@@ -45,8 +45,8 @@ func (r ActionExecutionRepo) SaveExecution(ctx context.Context, execution ports.
 	m := model.ActionExecution{
 		AgentID:        execution.AgentID,
 		IdempotencyKey: execution.IdempotencyKey,
-		IntentType:     "",
-		Dt:             0,
+		IntentType:     execution.IntentType,
+		Dt:             int32(execution.DT),
 		ResultCode:     string(execution.Result.ResultCode),
 		UpdatedState:   stateJSON,
 		Events:         eventsJSON,

@@ -2,6 +2,7 @@ package action
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -54,6 +55,37 @@ func TestUseCase_Idempotency(t *testing.T) {
 
 	if first.UpdatedState.Version != second.UpdatedState.Version {
 		t.Fatalf("idempotency broken: version mismatch first=%d second=%d", first.UpdatedState.Version, second.UpdatedState.Version)
+	}
+}
+
+func TestUseCase_RejectsMissingIntent(t *testing.T) {
+	uc := UseCase{}
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-1",
+		DeltaMinutes:   30,
+	})
+	if err == nil {
+		t.Fatalf("expected error for missing intent")
+	}
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("expected ErrInvalidRequest, got %v", err)
+	}
+}
+
+func TestUseCase_RejectsUnknownIntentType(t *testing.T) {
+	uc := UseCase{}
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionType("unknown")},
+		DeltaMinutes:   30,
+	})
+	if err == nil {
+		t.Fatalf("expected error for unknown intent type")
+	}
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("expected ErrInvalidRequest, got %v", err)
 	}
 }
 
@@ -113,7 +145,7 @@ type stubEventRepo struct {
 	events []survival.DomainEvent
 }
 
-func (r *stubEventRepo) Append(_ context.Context, events []survival.DomainEvent) error {
+func (r *stubEventRepo) Append(_ context.Context, _ string, events []survival.DomainEvent) error {
 	r.events = append(r.events, events...)
 	return nil
 }
