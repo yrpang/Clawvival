@@ -60,13 +60,19 @@ type actionIntent struct {
 }
 
 func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
+	agentID, err := requireAgentID(ctx)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+
 	var body observeRequest
 	if err := decodeJSON(ctx, &body); err != nil {
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	resp, err := h.ObserveUC.Execute(c, observe.Request{AgentID: resolveAgentID(ctx, body.AgentID)})
+	resp, err := h.ObserveUC.Execute(c, observe.Request{AgentID: agentID})
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -76,6 +82,12 @@ func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
 }
 
 func (h Handler) action(c context.Context, ctx *app.RequestContext) {
+	agentID, err := requireAgentID(ctx)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+
 	var body actionRequest
 	if err := decodeJSON(ctx, &body); err != nil {
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
@@ -83,7 +95,7 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 	}
 
 	resp, err := h.ActionUC.Execute(c, action.Request{
-		AgentID:        resolveAgentID(ctx, body.AgentID),
+		AgentID:        agentID,
 		IdempotencyKey: body.IdempotencyKey,
 		Intent: survival.ActionIntent{
 			Type:   survival.ActionType(body.Intent.Type),
@@ -101,13 +113,19 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 }
 
 func (h Handler) status(c context.Context, ctx *app.RequestContext) {
+	agentID, err := requireAgentID(ctx)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+
 	var body statusRequest
 	if err := decodeJSON(ctx, &body); err != nil {
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
 
-	resp, err := h.StatusUC.Execute(c, status.Request{AgentID: resolveAgentID(ctx, body.AgentID)})
+	resp, err := h.StatusUC.Execute(c, status.Request{AgentID: agentID})
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -148,15 +166,19 @@ func decodeJSON(ctx *app.RequestContext, out any) error {
 	return json.Unmarshal(body, out)
 }
 
-func resolveAgentID(ctx *app.RequestContext, bodyAgentID string) string {
+var ErrMissingAgentIDHeader = errors.New("missing x-agent-id header")
+
+func requireAgentID(ctx *app.RequestContext) (string, error) {
 	if fromHeader := strings.TrimSpace(string(ctx.GetHeader(agentIDHeader))); fromHeader != "" {
-		return fromHeader
+		return fromHeader, nil
 	}
-	return strings.TrimSpace(bodyAgentID)
+	return "", ErrMissingAgentIDHeader
 }
 
 func writeError(ctx *app.RequestContext, err error) {
 	switch {
+	case errors.Is(err, ErrMissingAgentIDHeader):
+		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_id", err.Error())
 	case errors.Is(err, action.ErrInvalidRequest),
 		errors.Is(err, observe.ErrInvalidRequest),
 		errors.Is(err, status.ErrInvalidRequest),
