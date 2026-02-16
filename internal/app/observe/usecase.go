@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"clawverse/internal/app/ports"
+	"clawverse/internal/domain/world"
 )
 
 var ErrInvalidRequest = errors.New("invalid observe request")
@@ -23,7 +24,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
-	snapshot, err := u.World.SnapshotForAgent(ctx, req.AgentID)
+	snapshot, err := u.World.SnapshotForAgent(ctx, req.AgentID, world.Point{X: state.Position.X, Y: state.Position.Y})
 	if err != nil {
 		return Response{}, err
 	}
