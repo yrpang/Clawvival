@@ -6,12 +6,14 @@ import (
 	"strings"
 
 	"clawverse/internal/app/ports"
+	"clawverse/internal/domain/world"
 )
 
 var ErrInvalidRequest = errors.New("invalid status request")
 
 type UseCase struct {
 	StateRepo ports.AgentStateRepository
+	World     ports.WorldProvider
 }
 
 func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
@@ -22,5 +24,13 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
-	return Response{State: state}, nil
+	snapshot, err := u.World.SnapshotForAgent(ctx, req.AgentID, world.Point{X: state.Position.X, Y: state.Position.Y})
+	if err != nil {
+		return Response{}, err
+	}
+	return Response{
+		State:              state,
+		TimeOfDay:          snapshot.TimeOfDay,
+		NextPhaseInSeconds: snapshot.NextPhaseInSeconds,
+	}, nil
 }

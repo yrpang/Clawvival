@@ -9,8 +9,7 @@ import (
 )
 
 type Config struct {
-	DayStartHour   int
-	NightStart     int
+	Clock          world.Clock
 	ThreatDay      int
 	ThreatNight    int
 	ResourcesDay   map[string]int
@@ -25,8 +24,7 @@ type Provider struct {
 
 func DefaultConfig() Config {
 	return Config{
-		DayStartHour:   6,
-		NightStart:     18,
+		Clock:          world.DefaultClock(),
 		ThreatDay:      1,
 		ThreatNight:    3,
 		ResourcesDay:   map[string]int{"wood": 10, "stone": 5},
@@ -38,15 +36,8 @@ func DefaultConfig() Config {
 
 func NewProvider(cfg Config) Provider {
 	def := DefaultConfig()
-	if cfg.DayStartHour < 0 || cfg.DayStartHour > 23 {
-		cfg.DayStartHour = def.DayStartHour
-	}
-	if cfg.NightStart < 0 || cfg.NightStart > 23 {
-		cfg.NightStart = def.NightStart
-	}
-	if cfg.DayStartHour >= cfg.NightStart {
-		cfg.DayStartHour = def.DayStartHour
-		cfg.NightStart = def.NightStart
+	if cfg.Clock == (world.Clock{}) {
+		cfg.Clock = def.Clock
 	}
 	if cfg.ResourcesDay == nil {
 		cfg.ResourcesDay = copyMap(def.ResourcesDay)
@@ -64,8 +55,8 @@ func NewProvider(cfg Config) Provider {
 }
 
 func (p Provider) SnapshotForAgent(_ context.Context, _ string, center world.Point) (world.Snapshot, error) {
-	hour := p.cfg.Now().Hour()
-	isDay := hour >= p.cfg.DayStartHour && hour < p.cfg.NightStart
+	phase, next := p.cfg.Clock.PhaseAt(p.cfg.Now())
+	isDay := phase == world.PhaseDay
 	timeOfDay := "night"
 	threat := p.cfg.ThreatNight
 	nearby := copyMap(p.cfg.ResourcesNight)
@@ -94,12 +85,13 @@ func (p Provider) SnapshotForAgent(_ context.Context, _ string, center world.Poi
 	}
 
 	return world.Snapshot{
-		TimeOfDay:      timeOfDay,
-		ThreatLevel:    threat,
-		NearbyResource: nearby,
-		Center:         center,
-		ViewRadius:     p.cfg.ViewRadius,
-		VisibleTiles:   tiles,
+		TimeOfDay:          timeOfDay,
+		ThreatLevel:        threat,
+		NearbyResource:     nearby,
+		Center:             center,
+		ViewRadius:         p.cfg.ViewRadius,
+		VisibleTiles:       tiles,
+		NextPhaseInSeconds: int(next.Seconds()),
 	}, nil
 }
 

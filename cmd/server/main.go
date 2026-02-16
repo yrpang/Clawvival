@@ -20,6 +20,7 @@ import (
 	"clawverse/internal/app/skills"
 	"clawverse/internal/app/status"
 	"clawverse/internal/domain/survival"
+	"clawverse/internal/domain/world"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
@@ -42,7 +43,7 @@ func main() {
 			Settle:     survival.SettlementService{},
 			Now:        time.Now,
 		},
-		StatusUC: status.UseCase{StateRepo: stateRepo},
+		StatusUC: status.UseCase{StateRepo: stateRepo, World: worldProvider},
 		SkillsUC: skills.UseCase{Provider: skillsProvider},
 		KPI:      kpiRecorder,
 	}
@@ -84,8 +85,13 @@ func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionReposito
 
 func buildWorldProviderFromEnv() ports.WorldProvider {
 	cfg := worldruntime.DefaultConfig()
-	cfg.DayStartHour = intEnv("WORLD_DAY_START_HOUR", cfg.DayStartHour)
-	cfg.NightStart = intEnv("WORLD_NIGHT_START_HOUR", cfg.NightStart)
+	daySeconds := intEnv("WORLD_DAY_SECONDS", int((10 * time.Minute).Seconds()))
+	nightSeconds := intEnv("WORLD_NIGHT_SECONDS", int((5 * time.Minute).Seconds()))
+	cfg.Clock = world.NewClock(world.ClockConfig{
+		StartAt:       time.Unix(int64(intEnv("WORLD_CLOCK_START_UNIX", 0)), 0),
+		DayDuration:   time.Duration(daySeconds) * time.Second,
+		NightDuration: time.Duration(nightSeconds) * time.Second,
+	})
 	cfg.ThreatDay = intEnv("WORLD_THREAT_DAY", cfg.ThreatDay)
 	cfg.ThreatNight = intEnv("WORLD_THREAT_NIGHT", cfg.ThreatNight)
 
