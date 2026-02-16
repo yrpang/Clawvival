@@ -39,7 +39,7 @@ func TestP0_MainLoop_ObserveActionStatus(t *testing.T) {
 		Settle:     survival.SettlementService{},
 		Now:        func() time.Time { return time.Unix(1700000000, 0) },
 	}
-	statusUC := status.UseCase{StateRepo: stateRepo}
+	statusUC := status.UseCase{StateRepo: stateRepo, World: worldProvider}
 
 	obs, err := observeUC.Execute(context.Background(), observe.Request{AgentID: "agent-1"})
 	if err != nil {

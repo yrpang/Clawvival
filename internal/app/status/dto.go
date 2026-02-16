@@ -7,5 +7,7 @@ type Request struct {
 }
 
 type Response struct {
-	State survival.AgentStateAggregate
+	State              survival.AgentStateAggregate
+	TimeOfDay          string
+	NextPhaseInSeconds int
 }
