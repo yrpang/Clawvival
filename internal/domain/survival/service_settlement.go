@@ -30,6 +30,18 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 	case ActionMove:
 		next.Vitals.Energy -= scaledInt(6, delta.Minutes)
 		next.Vitals.Hunger -= scaledInt(1, delta.Minutes)
+	case ActionCombat:
+		next.Vitals.Energy -= scaledInt(22, delta.Minutes)
+		next.Vitals.Hunger -= scaledInt(2, delta.Minutes)
+	case ActionBuild:
+		next.Vitals.Energy -= scaledInt(14, delta.Minutes)
+	case ActionFarm:
+		next.Vitals.Energy -= scaledInt(10, delta.Minutes)
+		next.Vitals.Hunger -= scaledInt(1, delta.Minutes)
+	case ActionRetreat:
+		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
+	case ActionCraft:
+		next.Vitals.Energy -= scaledInt(12, delta.Minutes)
 	}
 
 	hpLossFromHunger := scaledFloat(0.08*float64(absMinZero(next.Vitals.Hunger)), delta.Minutes)
