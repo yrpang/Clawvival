@@ -8,6 +8,7 @@ import (
 
 	"clawverse/internal/app/ports"
 	"clawverse/internal/domain/survival"
+	"clawverse/internal/domain/world"
 )
 
 var (
@@ -58,7 +59,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			return err
 		}
 
-		snapshot, err := u.World.SnapshotForAgent(txCtx, req.AgentID)
+		snapshot, err := u.World.SnapshotForAgent(txCtx, req.AgentID, world.Point{X: state.Position.X, Y: state.Position.Y})
 		if err != nil {
 			return err
 		}

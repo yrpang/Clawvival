@@ -7,5 +7,5 @@ import (
 )
 
 type WorldProvider interface {
-	SnapshotForAgent(ctx context.Context, agentID string) (world.Snapshot, error)
+	SnapshotForAgent(ctx context.Context, agentID string, center world.Point) (world.Snapshot, error)
 }
