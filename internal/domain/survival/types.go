@@ -14,11 +14,14 @@ type Position struct {
 }
 
 type AgentStateAggregate struct {
-	AgentID   string
-	Vitals    Vitals
-	Position  Position
-	Version   int64
-	UpdatedAt time.Time
+	AgentID    string
+	Vitals     Vitals
+	Position   Position
+	Inventory  map[string]int
+	Dead       bool
+	DeathCause DeathCause
+	Version    int64
+	UpdatedAt  time.Time
 }
 
 type ActionType string
@@ -62,3 +65,12 @@ type SettlementResult struct {
 	Events       []DomainEvent
 	ResultCode   ResultCode
 }
+
+type DeathCause string
+
+const (
+	DeathCauseUnknown    DeathCause = "unknown"
+	DeathCauseStarvation DeathCause = "starvation"
+	DeathCauseExhaustion DeathCause = "exhaustion"
+	DeathCauseCombat     DeathCause = "combat"
+)
