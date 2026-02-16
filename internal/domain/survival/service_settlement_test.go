@@ -45,3 +45,34 @@ func TestSettlementService_GameOver(t *testing.T) {
 		t.Fatalf("expected game over, got %s", out.ResultCode)
 	}
 }
+
+func TestSettlementService_CriticalHP(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID: "a-1",
+		Vitals:  Vitals{HP: 25, Hunger: -100, Energy: 0},
+		Version: 1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{Type: ActionGather}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if out.ResultCode != ResultOK {
+		t.Fatalf("expected result ok, got %s", out.ResultCode)
+	}
+	if out.UpdatedState.Vitals.HP > 20 || out.UpdatedState.Vitals.HP <= 0 {
+		t.Fatalf("expected hp in critical range (1-20), got %d", out.UpdatedState.Vitals.HP)
+	}
+
+	foundCritical := false
+	for _, e := range out.Events {
+		if e.Type == "critical_hp" {
+			foundCritical = true
+			break
+		}
+	}
+	if !foundCritical {
+		t.Fatalf("expected critical_hp event")
+	}
+}
