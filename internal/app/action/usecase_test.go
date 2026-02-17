@@ -292,3 +292,37 @@ func TestUseCase_AppendsPhaseChangedEvent(t *testing.T) {
 		t.Fatalf("expected world_phase_changed event")
 	}
 }
+
+func TestUseCase_RejectsBuildWhenInventoryInsufficient(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Inventory: map[string]int{}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-build-precheck",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionBuild,
+			Params: map[string]int{"kind": int(survival.BuildBed)},
+		},
+		DeltaMinutes: 30,
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}

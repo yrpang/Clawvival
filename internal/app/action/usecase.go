@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	ErrInvalidRequest      = errors.New("invalid action request")
-	ErrInvalidActionParams = errors.New("invalid action params")
+	ErrInvalidRequest           = errors.New("invalid action request")
+	ErrInvalidActionParams      = errors.New("invalid action params")
+	ErrActionPreconditionFailed = errors.New("action precondition failed")
 )
 
 type UseCase struct {
@@ -63,6 +64,9 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		state, err := u.StateRepo.GetByAgentID(txCtx, req.AgentID)
 		if err != nil {
 			return err
+		}
+		if !actionPreconditionsSatisfied(state, req.Intent) {
+			return ErrActionPreconditionFailed
 		}
 		sessionID := "session-" + req.AgentID
 		if u.SessionRepo != nil {
@@ -183,6 +187,22 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	}
 
 	return out, nil
+}
+
+func actionPreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
+	switch intent.Type {
+	case survival.ActionBuild:
+		return survival.CanBuild(state, survival.BuildKind(intent.Params["kind"]))
+	case survival.ActionCraft:
+		return survival.CanCraft(state, survival.RecipeID(intent.Params["recipe"]))
+	case survival.ActionFarm:
+		if intent.Params["seed"] > 0 {
+			return survival.CanPlantSeed(state)
+		}
+		return true
+	default:
+		return true
+	}
 }
 
 func isSupportedActionType(t survival.ActionType) bool {

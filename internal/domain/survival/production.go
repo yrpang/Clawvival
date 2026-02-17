@@ -105,6 +105,26 @@ func Build(state *AgentStateAggregate, kind BuildKind, x, y int) (BuiltObject, b
 	return BuiltObject{Kind: kind, X: x, Y: y}, true
 }
 
+func CanCraft(state AgentStateAggregate, recipeID RecipeID) bool {
+	recipe, ok := recipeDefs[recipeID]
+	if !ok {
+		return false
+	}
+	return hasEnough(&state, recipe.In)
+}
+
+func CanBuild(state AgentStateAggregate, kind BuildKind) bool {
+	cost, ok := buildCosts[kind]
+	if !ok {
+		return false
+	}
+	return hasEnough(&state, cost)
+}
+
+func CanPlantSeed(state AgentStateAggregate) bool {
+	return state.Inventory["seed"] > 0
+}
+
 func PlantSeed(state *AgentStateAggregate) (FarmPlot, bool) {
 	if !state.ConsumeItem("seed", 1) {
 		return FarmPlot{}, false
