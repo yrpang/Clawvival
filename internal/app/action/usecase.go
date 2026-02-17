@@ -277,7 +277,7 @@ func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 		return ok && survival.CanBuild(state, kind)
 	case survival.ActionCraft:
 		return survival.CanCraft(state, survival.RecipeID(intent.RecipeID))
-	case survival.ActionFarm, survival.ActionFarmPlant:
+	case survival.ActionFarmPlant:
 		return survival.CanPlantSeed(state)
 	case survival.ActionEat:
 		foodID, ok := foodIDFromItemType(intent.ItemType)
@@ -309,7 +309,6 @@ func positionPreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 var actionCooldowns = map[survival.ActionType]time.Duration{
 	survival.ActionBuild:     5 * time.Minute,
 	survival.ActionCraft:     5 * time.Minute,
-	survival.ActionFarm:      3 * time.Minute,
 	survival.ActionFarmPlant: 3 * time.Minute,
 	survival.ActionMove:      1 * time.Minute,
 }
@@ -393,7 +392,7 @@ func isSupportedActionType(t survival.ActionType) bool {
 	switch t {
 	case survival.ActionGather, survival.ActionRest, survival.ActionSleep, survival.ActionMove:
 		return true
-	case survival.ActionBuild, survival.ActionFarm, survival.ActionFarmPlant, survival.ActionFarmHarvest, survival.ActionContainerDeposit, survival.ActionContainerWithdraw, survival.ActionRetreat, survival.ActionCraft, survival.ActionEat, survival.ActionTerminate:
+	case survival.ActionBuild, survival.ActionFarmPlant, survival.ActionFarmHarvest, survival.ActionContainerDeposit, survival.ActionContainerWithdraw, survival.ActionRetreat, survival.ActionCraft, survival.ActionEat, survival.ActionTerminate:
 		return true
 	default:
 		return false
@@ -414,7 +413,7 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 	case survival.ActionBuild:
 		_, ok := buildKindFromObjectType(intent.ObjectType)
 		return ok && intent.Pos != nil
-	case survival.ActionFarm, survival.ActionFarmPlant:
+	case survival.ActionFarmPlant:
 		return strings.TrimSpace(intent.FarmID) != ""
 	case survival.ActionFarmHarvest:
 		return strings.TrimSpace(intent.FarmID) != ""
