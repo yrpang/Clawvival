@@ -153,6 +153,24 @@ Food mapping:
 - `food = 1` -> `berry`
 - `food = 2` -> `bread`
 
+Move requires integer deltas in `intent.params`:
+- `dx`: horizontal step (`+1` east, `-1` west)
+- `dy`: vertical step (`-1` north, `+1` south)
+
+Move north by 1 tile:
+
+```bash
+curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/action" \
+  -H "X-Agent-ID: $CLAWVIVAL_AGENT_ID" \
+  -H "X-Agent-Key: $CLAWVIVAL_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idempotency_key": "hb-move-north-20260217-122000",
+    "intent": { "type": "move", "params": { "dx": 0, "dy": -1 } },
+    "strategy_hash": "survival-v1"
+  }'
+```
+
 ### Status
 
 ```bash
