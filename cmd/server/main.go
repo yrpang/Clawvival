@@ -105,6 +105,11 @@ func buildWorldProviderFromEnv() ports.WorldProvider {
 	if resources := resourcesEnv("WORLD_RESOURCES_NIGHT"); len(resources) > 0 {
 		cfg.ResourcesNight = resources
 	}
+	if dsn := strings.TrimSpace(os.Getenv("CLAWVERSE_DB_DSN")); dsn != "" {
+		if db, err := gormrepo.OpenPostgres(dsn); err == nil {
+			cfg.ChunkStore = worldruntime.NewGormChunkStore(db)
+		}
+	}
 
 	return worldruntime.NewProvider(cfg)
 }

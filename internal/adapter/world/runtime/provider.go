@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"time"
 
@@ -16,10 +17,17 @@ type Config struct {
 	ResourcesNight map[string]int
 	ViewRadius     int
 	Now            func() time.Time
+	ChunkStore     ChunkStore
 }
 
 type Provider struct {
-	cfg Config
+	cfg       Config
+	chunkSize int
+}
+
+type ChunkStore interface {
+	GetChunk(ctx context.Context, coord world.ChunkCoord, phase string) (world.Chunk, bool, error)
+	SaveChunk(ctx context.Context, coord world.ChunkCoord, phase string, chunk world.Chunk) error
 }
 
 func DefaultConfig() Config {
@@ -51,10 +59,10 @@ func NewProvider(cfg Config) Provider {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return Provider{cfg: cfg}
+	return Provider{cfg: cfg, chunkSize: 8}
 }
 
-func (p Provider) SnapshotForAgent(_ context.Context, _ string, center world.Point) (world.Snapshot, error) {
+func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.Point) (world.Snapshot, error) {
 	phase, next := p.cfg.Clock.PhaseAt(p.cfg.Now())
 	isDay := phase == world.PhaseDay
 	timeOfDay := "night"
@@ -68,9 +76,15 @@ func (p Provider) SnapshotForAgent(_ context.Context, _ string, center world.Poi
 
 	tiles := make([]world.Tile, 0, (p.cfg.ViewRadius*2+1)*(p.cfg.ViewRadius*2+1))
 	counts := map[string]int{}
-	for y := center.Y - p.cfg.ViewRadius; y <= center.Y+p.cfg.ViewRadius; y++ {
-		for x := center.X - p.cfg.ViewRadius; x <= center.X+p.cfg.ViewRadius; x++ {
-			t := genTile(x, y)
+	chunks, err := p.loadChunksForWindow(ctx, center, timeOfDay)
+	if err != nil {
+		return world.Snapshot{}, err
+	}
+	for _, chunk := range chunks {
+		for _, t := range chunk.Tiles {
+			if t.X < center.X-p.cfg.ViewRadius || t.X > center.X+p.cfg.ViewRadius || t.Y < center.Y-p.cfg.ViewRadius || t.Y > center.Y+p.cfg.ViewRadius {
+				continue
+			}
 			if !isDay {
 				t.BaseThreat++
 			}
@@ -93,6 +107,55 @@ func (p Provider) SnapshotForAgent(_ context.Context, _ string, center world.Poi
 		VisibleTiles:       tiles,
 		NextPhaseInSeconds: int(next.Seconds()),
 	}, nil
+}
+
+func (p Provider) loadChunksForWindow(ctx context.Context, center world.Point, phase string) ([]world.Chunk, error) {
+	minX := floorDiv(center.X-p.cfg.ViewRadius, p.chunkSize)
+	maxX := floorDiv(center.X+p.cfg.ViewRadius, p.chunkSize)
+	minY := floorDiv(center.Y-p.cfg.ViewRadius, p.chunkSize)
+	maxY := floorDiv(center.Y+p.cfg.ViewRadius, p.chunkSize)
+
+	out := make([]world.Chunk, 0, (maxX-minX+1)*(maxY-minY+1))
+	for cy := minY; cy <= maxY; cy++ {
+		for cx := minX; cx <= maxX; cx++ {
+			coord := world.ChunkCoord{X: cx, Y: cy}
+			if p.cfg.ChunkStore != nil {
+				if cached, ok, err := p.cfg.ChunkStore.GetChunk(ctx, coord, phase); err != nil {
+					return nil, err
+				} else if ok {
+					out = append(out, cached)
+					continue
+				}
+			}
+			chunk := p.generateChunk(coord)
+			if p.cfg.ChunkStore != nil {
+				if err := p.cfg.ChunkStore.SaveChunk(ctx, coord, phase, chunk); err != nil {
+					return nil, err
+				}
+			}
+			out = append(out, chunk)
+		}
+	}
+	return out, nil
+}
+
+func (p Provider) generateChunk(coord world.ChunkCoord) world.Chunk {
+	tiles := make([]world.Tile, 0, p.chunkSize*p.chunkSize)
+	baseX := coord.X * p.chunkSize
+	baseY := coord.Y * p.chunkSize
+	for y := 0; y < p.chunkSize; y++ {
+		for x := 0; x < p.chunkSize; x++ {
+			tiles = append(tiles, genTile(baseX+x, baseY+y))
+		}
+	}
+	return world.Chunk{Coord: coord, Tiles: tiles}
+}
+
+func floorDiv(a, b int) int {
+	if a >= 0 {
+		return a / b
+	}
+	return -(((-a)+b-1)/b)
 }
 
 func genTile(x, y int) world.Tile {
@@ -202,4 +265,19 @@ func copyMap(in map[string]int) map[string]int {
 		out[k] = v
 	}
 	return out
+}
+
+func marshalChunkTiles(tiles []world.Tile) ([]byte, error) {
+	return json.Marshal(tiles)
+}
+
+func unmarshalChunkTiles(data []byte) ([]world.Tile, error) {
+	out := []world.Tile{}
+	if len(data) == 0 {
+		return out, nil
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
