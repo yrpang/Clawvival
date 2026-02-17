@@ -340,6 +340,128 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 	}
 }
 
+func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:      "day",
+			ThreatLevel:    1,
+			NearbyResource: map[string]int{"wood": 1},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true},
+				{X: 1, Y: 0, Passable: true},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "rest-start",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionRest,
+			Params: map[string]int{"rest_minutes": 30},
+		},
+	})
+	if err != nil {
+		t.Fatalf("start rest: %v", err)
+	}
+
+	now = now.Add(10 * time.Minute)
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "rest-terminate",
+		Intent:         survival.ActionIntent{Type: survival.ActionTerminate},
+	})
+	if err != nil {
+		t.Fatalf("terminate rest: %v", err)
+	}
+	if out.UpdatedState.OngoingAction != nil {
+		t.Fatalf("expected ongoing action cleared by terminate")
+	}
+	if got, want := out.UpdatedState.Vitals.Energy, 63; got != want {
+		t.Fatalf("expected proportional rest settlement energy=%d, got=%d", want, got)
+	}
+	if got, want := out.UpdatedState.Vitals.Hunger, 79; got != want {
+		t.Fatalf("expected proportional rest settlement hunger=%d, got=%d", want, got)
+	}
+	if rec := actionRepo.byKey["agent-1|rest-terminate"]; rec.DT != 10 {
+		t.Fatalf("expected terminate execution dt=10, got=%d", rec.DT)
+	}
+	foundEnded := false
+	for _, evt := range out.Events {
+		if evt.Type == "ongoing_action_ended" {
+			if got, ok := evt.Payload["actual_minutes"].(int); !ok || got != 10 {
+				t.Fatalf("expected ongoing_action_ended actual_minutes=10, got=%v", evt.Payload["actual_minutes"])
+			}
+			foundEnded = true
+			break
+		}
+	}
+	if !foundEnded {
+		t.Fatalf("expected ongoing_action_ended event")
+	}
+
+	now = now.Add(1 * time.Minute)
+	_, err = uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "gather-after-terminate",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+	})
+	if err != nil {
+		t.Fatalf("gather after terminate should succeed, got: %v", err)
+	}
+}
+
+func TestUseCase_TerminateWithoutOngoingReturnsPreconditionFailed(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "terminate-no-ongoing",
+		Intent:         survival.ActionIntent{Type: survival.ActionTerminate},
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
 func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
 		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},

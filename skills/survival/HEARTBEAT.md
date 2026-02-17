@@ -15,7 +15,7 @@
    - self: `hp`, `hunger`, `energy`, inventory, position
    - world: `time_of_day`, threat, nearby resources
 5. Select one intent:
-   - `gather`, `rest`, `move`, `combat`, `build`, `farm`, `retreat`, `craft`, `eat`
+   - `gather`, `rest`, `move`, `combat`, `build`, `farm`, `retreat`, `craft`, `eat`, `terminate`
 6. `POST /api/agent/action` with:
    - unique `idempotency_key`
    - no `dt` field

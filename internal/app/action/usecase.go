@@ -77,9 +77,30 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			return err
 		}
 		nowAt := nowFn()
-		state, err = finalizeOngoingActionIfDue(txCtx, u, req.AgentID, state, nowAt)
+		finalized, err := finalizeOngoingAction(txCtx, u, req.AgentID, state, nowAt, req.Intent.Type == survival.ActionTerminate)
 		if err != nil {
 			return err
+		}
+		if finalized.Settled {
+			state = finalized.UpdatedState
+		}
+		if req.Intent.Type == survival.ActionTerminate {
+			if !finalized.Settled {
+				return ErrActionPreconditionFailed
+			}
+			if err := saveActionExecution(txCtx, u.ActionRepo, req.AgentID, req.IdempotencyKey, req.Intent.Type, finalized.DTMinutes, ports.ActionResult{
+				UpdatedState: finalized.UpdatedState,
+				Events:       finalized.Events,
+				ResultCode:   finalized.ResultCode,
+			}, nowAt); err != nil {
+				return err
+			}
+			out = Response{
+				UpdatedState: finalized.UpdatedState,
+				Events:       finalized.Events,
+				ResultCode:   finalized.ResultCode,
+			}
+			return nil
 		}
 		if state.OngoingAction != nil {
 			return ErrActionInProgress
@@ -154,19 +175,11 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			}
 		}
 
-		execution := ports.ActionExecutionRecord{
-			AgentID:        req.AgentID,
-			IdempotencyKey: req.IdempotencyKey,
-			IntentType:     string(req.Intent.Type),
-			DT:             deltaMinutes,
-			Result: ports.ActionResult{
-				UpdatedState: result.UpdatedState,
-				Events:       result.Events,
-				ResultCode:   result.ResultCode,
-			},
-			AppliedAt: nowAt,
-		}
-		if err := u.ActionRepo.SaveExecution(txCtx, execution); err != nil {
+		if err := saveActionExecution(txCtx, u.ActionRepo, req.AgentID, req.IdempotencyKey, req.Intent.Type, deltaMinutes, ports.ActionResult{
+			UpdatedState: result.UpdatedState,
+			Events:       result.Events,
+			ResultCode:   result.ResultCode,
+		}, nowAt); err != nil {
 			return err
 		}
 
@@ -347,7 +360,7 @@ func isSupportedActionType(t survival.ActionType) bool {
 	switch t {
 	case survival.ActionGather, survival.ActionRest, survival.ActionMove:
 		return true
-	case survival.ActionCombat, survival.ActionBuild, survival.ActionFarm, survival.ActionRetreat, survival.ActionCraft, survival.ActionEat:
+	case survival.ActionCombat, survival.ActionBuild, survival.ActionFarm, survival.ActionRetreat, survival.ActionCraft, survival.ActionEat, survival.ActionTerminate:
 		return true
 	default:
 		return false
@@ -371,40 +384,72 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 		return intent.Params["recipe"] > 0
 	case survival.ActionEat:
 		return intent.Params["food"] > 0
+	case survival.ActionTerminate:
+		return true
 	default:
 		return true
 	}
 }
 
-func finalizeOngoingActionIfDue(ctx context.Context, u UseCase, agentID string, state survival.AgentStateAggregate, nowAt time.Time) (survival.AgentStateAggregate, error) {
+type ongoingFinalizeResult struct {
+	Settled      bool
+	UpdatedState survival.AgentStateAggregate
+	Events       []survival.DomainEvent
+	ResultCode   survival.ResultCode
+	DTMinutes    int
+}
+
+func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state survival.AgentStateAggregate, nowAt time.Time, forceTerminate bool) (ongoingFinalizeResult, error) {
 	ongoing := state.OngoingAction
 	if ongoing == nil {
-		return state, nil
+		return ongoingFinalizeResult{}, nil
 	}
-	if nowAt.Before(ongoing.EndAt) {
-		return state, nil
+	if nowAt.Before(ongoing.EndAt) && !forceTerminate {
+		return ongoingFinalizeResult{}, nil
+	}
+	startAt := ongoing.EndAt.Add(-time.Duration(ongoing.Minutes) * time.Minute)
+	deltaMinutes := int(nowAt.Sub(startAt).Minutes())
+	if deltaMinutes < 0 {
+		deltaMinutes = 0
+	}
+	if deltaMinutes > ongoing.Minutes {
+		deltaMinutes = ongoing.Minutes
+	}
+	if deltaMinutes < minHeartbeatDeltaMinutes && !nowAt.Before(ongoing.EndAt) {
+		deltaMinutes = minHeartbeatDeltaMinutes
 	}
 
 	snapshot, err := u.World.SnapshotForAgent(ctx, agentID, world.Point{X: state.Position.X, Y: state.Position.Y})
 	if err != nil {
-		return survival.AgentStateAggregate{}, err
+		return ongoingFinalizeResult{}, err
 	}
-	result, err := u.Settle.Settle(
-		state,
-		survival.ActionIntent{Type: ongoing.Type},
-		survival.HeartbeatDelta{Minutes: ongoing.Minutes},
-		ongoing.EndAt,
-		survival.WorldSnapshot{
-			TimeOfDay:         snapshot.TimeOfDay,
-			ThreatLevel:       snapshot.ThreatLevel,
-			VisibilityPenalty: snapshot.VisibilityPenalty,
-			NearbyResource:    snapshot.NearbyResource,
-		},
-	)
-	if err != nil {
-		return survival.AgentStateAggregate{}, err
+
+	var result survival.SettlementResult
+	if deltaMinutes > 0 {
+		result, err = u.Settle.Settle(
+			state,
+			survival.ActionIntent{Type: ongoing.Type},
+			survival.HeartbeatDelta{Minutes: deltaMinutes},
+			nowAt,
+			survival.WorldSnapshot{
+				TimeOfDay:         snapshot.TimeOfDay,
+				ThreatLevel:       snapshot.ThreatLevel,
+				VisibilityPenalty: snapshot.VisibilityPenalty,
+				NearbyResource:    snapshot.NearbyResource,
+			},
+		)
+		if err != nil {
+			return ongoingFinalizeResult{}, err
+		}
+	} else {
+		result = survival.SettlementResult{
+			UpdatedState: state,
+			Events:       []survival.DomainEvent{},
+			ResultCode:   survival.ResultOK,
+		}
 	}
 	result.UpdatedState.OngoingAction = nil
+	result.UpdatedState.UpdatedAt = nowAt
 
 	sessionID := "session-" + agentID
 	for i := range result.Events {
@@ -414,13 +459,36 @@ func finalizeOngoingActionIfDue(ctx context.Context, u UseCase, agentID string, 
 		result.Events[i].Payload["agent_id"] = agentID
 		result.Events[i].Payload["session_id"] = sessionID
 	}
+	result.Events = append(result.Events, survival.DomainEvent{
+		Type:       "ongoing_action_ended",
+		OccurredAt: nowAt,
+		Payload: map[string]any{
+			"agent_id":        agentID,
+			"session_id":      sessionID,
+			"action_type":     string(ongoing.Type),
+			"planned_minutes": ongoing.Minutes,
+			"actual_minutes":  deltaMinutes,
+			"forced":          forceTerminate,
+		},
+	})
 	if err := u.StateRepo.SaveWithVersion(ctx, result.UpdatedState, state.Version); err != nil {
-		return survival.AgentStateAggregate{}, err
+		return ongoingFinalizeResult{}, err
 	}
 	if err := u.EventRepo.Append(ctx, agentID, result.Events); err != nil {
-		return survival.AgentStateAggregate{}, err
+		return ongoingFinalizeResult{}, err
 	}
-	return result.UpdatedState, nil
+	if u.SessionRepo != nil && result.ResultCode == survival.ResultGameOver {
+		if err := u.SessionRepo.Close(ctx, sessionID, result.UpdatedState.DeathCause, nowAt); err != nil {
+			return ongoingFinalizeResult{}, err
+		}
+	}
+	return ongoingFinalizeResult{
+		Settled:      true,
+		UpdatedState: result.UpdatedState,
+		Events:       result.Events,
+		ResultCode:   result.ResultCode,
+		DTMinutes:    deltaMinutes,
+	}, nil
 }
 
 func startRestAction(ctx context.Context, u UseCase, req Request, state survival.AgentStateAggregate, nowAt time.Time) (Response, error) {
@@ -450,19 +518,11 @@ func startRestAction(ctx context.Context, u UseCase, req Request, state survival
 	if err := u.StateRepo.SaveWithVersion(ctx, next, state.Version); err != nil {
 		return Response{}, err
 	}
-	execution := ports.ActionExecutionRecord{
-		AgentID:        req.AgentID,
-		IdempotencyKey: req.IdempotencyKey,
-		IntentType:     string(req.Intent.Type),
-		DT:             0,
-		Result: ports.ActionResult{
-			UpdatedState: next,
-			Events:       []survival.DomainEvent{event},
-			ResultCode:   survival.ResultOK,
-		},
-		AppliedAt: nowAt,
-	}
-	if err := u.ActionRepo.SaveExecution(ctx, execution); err != nil {
+	if err := saveActionExecution(ctx, u.ActionRepo, req.AgentID, req.IdempotencyKey, req.Intent.Type, 0, ports.ActionResult{
+		UpdatedState: next,
+		Events:       []survival.DomainEvent{event},
+		ResultCode:   survival.ResultOK,
+	}, nowAt); err != nil {
 		return Response{}, err
 	}
 	if err := u.EventRepo.Append(ctx, req.AgentID, []survival.DomainEvent{event}); err != nil {
@@ -473,6 +533,21 @@ func startRestAction(ctx context.Context, u UseCase, req Request, state survival
 		Events:       []survival.DomainEvent{event},
 		ResultCode:   survival.ResultOK,
 	}, nil
+}
+
+func saveActionExecution(ctx context.Context, repo ports.ActionExecutionRepository, agentID, idempotencyKey string, intentType survival.ActionType, dt int, result ports.ActionResult, appliedAt time.Time) error {
+	execution := ports.ActionExecutionRecord{
+		AgentID:        agentID,
+		IdempotencyKey: idempotencyKey,
+		IntentType:     string(intentType),
+		DT:             dt,
+		Result:         result,
+		AppliedAt:      appliedAt,
+	}
+	if err := repo.SaveExecution(ctx, execution); err != nil {
+		return err
+	}
+	return nil
 }
 
 func toNum(v any) float64 {

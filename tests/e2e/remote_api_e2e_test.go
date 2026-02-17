@@ -213,6 +213,97 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 			t.Fatalf("expected action_total in kpi response")
 		}
 	})
+
+	t.Run("rest can be terminated and settles proportionally", func(t *testing.T) {
+		restStartKey := "remote-rest-start-" + time.Now().UTC().Format("150405")
+		terminateKey := "remote-rest-term-" + time.Now().UTC().Format("150405")
+		postTerminateGatherKey := "remote-after-term-" + time.Now().UTC().Format("150405")
+
+		status, restBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, map[string]any{
+			"idempotency_key": restStartKey,
+			"intent": map[string]any{
+				"type": "rest",
+				"params": map[string]any{
+					"rest_minutes": 2,
+				},
+			},
+		})
+		if status != http.StatusOK {
+			t.Fatalf("rest start status=%d body=%s", status, string(restBody))
+		}
+		var restResp map[string]any
+		if err := json.Unmarshal(restBody, &restResp); err != nil {
+			t.Fatalf("unmarshal rest start: %v body=%s", err, string(restBody))
+		}
+		ongoing := asMap(asMap(restResp["updated_state"])["ongoing_action"])
+		if ongoing["type"] != "rest" {
+			t.Fatalf("expected ongoing rest action, got=%v", ongoing)
+		}
+
+		status, blockedBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, map[string]any{
+			"idempotency_key": "remote-blocked-" + time.Now().UTC().Format("150405"),
+			"intent": map[string]any{
+				"type": "gather",
+			},
+		})
+		if status != http.StatusConflict {
+			t.Fatalf("expected 409 while resting, got %d body=%s", status, string(blockedBody))
+		}
+
+		time.Sleep(65 * time.Second)
+
+		status, terminateBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, map[string]any{
+			"idempotency_key": terminateKey,
+			"intent": map[string]any{
+				"type": "terminate",
+			},
+		})
+		if status != http.StatusOK {
+			t.Fatalf("terminate status=%d body=%s", status, string(terminateBody))
+		}
+		var termResp map[string]any
+		if err := json.Unmarshal(terminateBody, &termResp); err != nil {
+			t.Fatalf("unmarshal terminate: %v body=%s", err, string(terminateBody))
+		}
+		if asMap(termResp["updated_state"])["ongoing_action"] != nil {
+			t.Fatalf("expected ongoing action cleared after terminate")
+		}
+
+		foundEnded := false
+		for _, evtAny := range asSlice(termResp["events"]) {
+			evt := asMap(evtAny)
+			if evt["type"] != "ongoing_action_ended" {
+				continue
+			}
+			payload := asMap(evt["payload"])
+			if payload["forced"] != true {
+				t.Fatalf("expected forced=true in ongoing_action_ended, got=%v", payload)
+			}
+			actualMinutes, _ := payload["actual_minutes"].(float64)
+			plannedMinutes, _ := payload["planned_minutes"].(float64)
+			if actualMinutes < 1 {
+				t.Fatalf("expected proportional settle with actual_minutes>=1, got=%v payload=%v", actualMinutes, payload)
+			}
+			if plannedMinutes != 2 {
+				t.Fatalf("expected planned_minutes=2, got=%v payload=%v", plannedMinutes, payload)
+			}
+			foundEnded = true
+			break
+		}
+		if !foundEnded {
+			t.Fatalf("expected ongoing_action_ended event in terminate response")
+		}
+
+		status, afterBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, map[string]any{
+			"idempotency_key": postTerminateGatherKey,
+			"intent": map[string]any{
+				"type": "gather",
+			},
+		})
+		if status != http.StatusOK {
+			t.Fatalf("expected action available after terminate, got=%d body=%s", status, string(afterBody))
+		}
+	})
 }
 
 func mustJSONWithAuth(t *testing.T, client *http.Client, method, url, agentID, agentKey string, body map[string]any) (int, []byte) {
