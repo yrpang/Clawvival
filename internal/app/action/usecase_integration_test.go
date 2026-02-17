@@ -483,3 +483,77 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 		t.Fatalf("expected world_phase_changed event")
 	}
 }
+
+func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
+	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-build-precheck"
+	ctx := context.Background()
+	if err := db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup action_executions: %v", err)
+	}
+	if err := db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup domain_events: %v", err)
+	}
+	if err := db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup agent_states: %v", err)
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	seed := survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   1,
+	}
+	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700005000, 0) },
+	}
+
+	_, err = uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "build-precheck-1",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionBuild,
+			Params: map[string]int{"kind": int(survival.BuildBed)},
+		},
+		DeltaMinutes: 30,
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+
+	var executionCount int64
+	if err := db.Table("action_executions").Where("agent_id = ?", agentID).Count(&executionCount).Error; err != nil {
+		t.Fatalf("count action_executions: %v", err)
+	}
+	if executionCount != 0 {
+		t.Fatalf("expected no persisted execution for precheck failure, got=%d", executionCount)
+	}
+}

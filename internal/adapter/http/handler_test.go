@@ -51,3 +51,20 @@ func TestWriteError_InvalidActionParams(t *testing.T) {
 		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
 	}
 }
+
+func TestWriteError_ActionPreconditionFailed(t *testing.T) {
+	ctx := &app.RequestContext{}
+	writeError(ctx, action.ErrActionPreconditionFailed)
+
+	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+
+	var body map[string]map[string]string
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got, want := body["error"]["code"], "action_precondition_failed"; got != want {
+		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
+	}
+}
