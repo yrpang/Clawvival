@@ -2,6 +2,7 @@ package action
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -299,5 +300,83 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 	}
 	if st.Position.X != 4 || st.Position.Y != 4 {
 		t.Fatalf("expected persisted retreat position (4,4), got (%d,%d)", st.Position.X, st.Position.Y)
+	}
+}
+
+func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T) {
+	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-invalid-action"
+	ctx := context.Background()
+	if err := db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup action_executions: %v", err)
+	}
+	if err := db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup domain_events: %v", err)
+	}
+	if err := db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup agent_states: %v", err)
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	seed := survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   1,
+	}
+	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700003000, 0) },
+	}
+
+	_, err = uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "invalid-move-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionMove},
+		DeltaMinutes:   30,
+	})
+	if !errors.Is(err, ErrInvalidActionParams) {
+		t.Fatalf("expected ErrInvalidActionParams, got %v", err)
+	}
+
+	var executionCount int64
+	if err := db.Table("action_executions").Where("agent_id = ?", agentID).Count(&executionCount).Error; err != nil {
+		t.Fatalf("count action_executions: %v", err)
+	}
+	if executionCount != 0 {
+		t.Fatalf("expected no persisted execution for invalid params, got=%d", executionCount)
+	}
+	var eventCount int64
+	if err := db.Table("domain_events").Where("agent_id = ?", agentID).Count(&eventCount).Error; err != nil {
+		t.Fatalf("count domain_events: %v", err)
+	}
+	if eventCount != 0 {
+		t.Fatalf("expected no persisted events for invalid params, got=%d", eventCount)
 	}
 }

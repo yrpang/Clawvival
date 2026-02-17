@@ -174,8 +174,8 @@ func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected invalid request for intent=%s", req.Intent.Type)
 		}
-		if !errors.Is(err, ErrInvalidRequest) {
-			t.Fatalf("expected ErrInvalidRequest for intent=%s, got %v", req.Intent.Type, err)
+		if !errors.Is(err, ErrInvalidActionParams) {
+			t.Fatalf("expected ErrInvalidActionParams for intent=%s, got %v", req.Intent.Type, err)
 		}
 	}
 }
