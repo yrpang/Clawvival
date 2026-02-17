@@ -13,12 +13,12 @@ import (
 
 func main() {
 	var dsn, out string
-	flag.StringVar(&dsn, "dsn", os.Getenv("CLAWVERSE_DB_DSN"), "postgres dsn")
+	flag.StringVar(&dsn, "dsn", os.Getenv("CLAWVIVAL_DB_DSN"), "postgres dsn")
 	flag.StringVar(&out, "out", "internal/adapter/repo/gorm/model", "output dir for generated models")
 	flag.Parse()
 
 	if dsn == "" {
-		log.Fatal("missing --dsn or CLAWVERSE_DB_DSN")
+		log.Fatal("missing --dsn or CLAWVIVAL_DB_DSN")
 	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})

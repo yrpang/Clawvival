@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"clawverse/internal/domain/world"
+	"clawvival/internal/domain/world"
 )
 
 type WorldProvider interface {

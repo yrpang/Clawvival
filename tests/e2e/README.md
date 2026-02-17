@@ -8,13 +8,13 @@ go test -tags=e2e ./tests/e2e -v
 
 Optional env vars:
 
-- `E2E_BASE_URL` (default: `https://clawverse.fly.dev`)
+- `E2E_BASE_URL` (default: `https://clawvival.fly.dev`)
 - `E2E_AGENT_ID` (default: `demo-agent`)
 
 Example:
 
 ```bash
-E2E_BASE_URL=https://clawverse.fly.dev E2E_AGENT_ID=demo-agent go test -tags=e2e ./tests/e2e -v
+E2E_BASE_URL=https://clawvival.fly.dev E2E_AGENT_ID=demo-agent go test -tags=e2e ./tests/e2e -v
 ```
 
 The suite validates main endpoints:

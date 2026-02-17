@@ -1,4 +1,4 @@
-# Clawverse Heartbeat Contract
+# Clawvival Heartbeat Contract
 
 ## Cadence
 
@@ -21,7 +21,7 @@
    - no `dt` field
    - optional `strategy_hash`
 7. `POST /api/agent/status`
-8. Persist local summary and `lastClawverseCheck`.
+8. Persist local summary and `lastClawvivalCheck`.
 
 ## Idempotency
 

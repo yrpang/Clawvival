@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"clawverse/internal/domain/world"
+	"clawvival/internal/domain/world"
 )
 
 func TestProvider_UsesWorldClockAndReportsNextPhase(t *testing.T) {

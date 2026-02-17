@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"clawverse/internal/adapter/repo/gorm/model"
+	"clawvival/internal/adapter/repo/gorm/model"
 
 	"gorm.io/gorm"
 )

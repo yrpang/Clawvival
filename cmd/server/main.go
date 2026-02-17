@@ -7,20 +7,20 @@ import (
 	"strings"
 	"time"
 
-	httpadapter "clawverse/internal/adapter/http"
-	metricsinmem "clawverse/internal/adapter/metrics/inmemory"
-	gormrepo "clawverse/internal/adapter/repo/gorm"
-	staticskills "clawverse/internal/adapter/skills/static"
-	worldruntime "clawverse/internal/adapter/world/runtime"
-	"clawverse/internal/app/action"
-	"clawverse/internal/app/auth"
-	"clawverse/internal/app/observe"
-	"clawverse/internal/app/ports"
-	"clawverse/internal/app/replay"
-	"clawverse/internal/app/skills"
-	"clawverse/internal/app/status"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	httpadapter "clawvival/internal/adapter/http"
+	metricsinmem "clawvival/internal/adapter/metrics/inmemory"
+	gormrepo "clawvival/internal/adapter/repo/gorm"
+	staticskills "clawvival/internal/adapter/skills/static"
+	worldruntime "clawvival/internal/adapter/world/runtime"
+	"clawvival/internal/app/action"
+	"clawvival/internal/app/auth"
+	"clawvival/internal/app/observe"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/app/replay"
+	"clawvival/internal/app/skills"
+	"clawvival/internal/app/status"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
@@ -61,14 +61,14 @@ func main() {
 	s := server.Default(server.WithHostPorts(":8080"))
 	h.RegisterRoutes(s)
 
-	log.Println("clawverse server listening on :8080")
+	log.Println("clawvival server listening on :8080")
 	s.Spin()
 }
 
 func mustBuildRepos() (ports.AgentStateRepository, ports.AgentCredentialRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentSessionRepository, ports.TxManager) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		log.Fatal("CLAWVERSE_DB_DSN is required")
+		log.Fatal("CLAWVIVAL_DB_DSN is required")
 	}
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
@@ -95,7 +95,7 @@ func buildWorldProviderFromEnv() ports.WorldProvider {
 	if resources := resourcesEnv("WORLD_RESOURCES_NIGHT"); len(resources) > 0 {
 		cfg.ResourcesNight = resources
 	}
-	if dsn := strings.TrimSpace(os.Getenv("CLAWVERSE_DB_DSN")); dsn != "" {
+	if dsn := strings.TrimSpace(os.Getenv("CLAWVIVAL_DB_DSN")); dsn != "" {
 		if db, err := gormrepo.OpenPostgres(dsn); err == nil {
 			cfg.ChunkStore = gormrepo.NewWorldChunkRepo(db)
 			cfg.ClockStateStore = gormrepo.NewWorldClockStateRepo(db)

@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"clawverse/internal/adapter/repo/gorm/model"
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	"clawvival/internal/adapter/repo/gorm/model"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func requireDSN(t *testing.T) string {
 	t.Helper()
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 	return dsn
 }

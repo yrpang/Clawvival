@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"clawverse/internal/adapter/repo/gorm/model"
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/adapter/repo/gorm/model"
+	"clawvival/internal/domain/survival"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"clawverse/internal/domain/world"
+	"clawvival/internal/domain/world"
 )
 
 type Config struct {

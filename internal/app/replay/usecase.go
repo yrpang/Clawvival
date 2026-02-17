@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
 )
 
 var ErrInvalidRequest = errors.New("invalid replay request")

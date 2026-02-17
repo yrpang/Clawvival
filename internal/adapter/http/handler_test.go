@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	staticskills "clawverse/internal/adapter/skills/static"
-	"clawverse/internal/app/action"
-	"clawverse/internal/app/auth"
-	"clawverse/internal/app/ports"
-	"clawverse/internal/app/skills"
-	"clawverse/internal/domain/survival"
+	staticskills "clawvival/internal/adapter/skills/static"
+	"clawvival/internal/app/action"
+	"clawvival/internal/app/auth"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/app/skills"
+	"clawvival/internal/domain/survival"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"

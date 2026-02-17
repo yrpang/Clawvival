@@ -7,18 +7,18 @@ import (
 	"testing"
 	"time"
 
-	gormrepo "clawverse/internal/adapter/repo/gorm"
-	"clawverse/internal/adapter/repo/gorm/model"
-	worldmock "clawverse/internal/adapter/world/mock"
-	worldruntime "clawverse/internal/adapter/world/runtime"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	gormrepo "clawvival/internal/adapter/repo/gorm"
+	"clawvival/internal/adapter/repo/gorm/model"
+	worldmock "clawvival/internal/adapter/world/mock"
+	worldruntime "clawvival/internal/adapter/world/runtime"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -138,9 +138,9 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 }
 
 func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -214,9 +214,9 @@ func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
 }
 
 func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -299,9 +299,9 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 }
 
 func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -375,9 +375,9 @@ func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T)
 }
 
 func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -473,9 +473,9 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 }
 
 func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -545,9 +545,9 @@ func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
 }
 
 func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/world"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/world"
 )
 
 var ErrInvalidRequest = errors.New("invalid status request")

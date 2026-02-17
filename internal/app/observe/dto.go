@@ -1,8 +1,8 @@
 package observe
 
 import (
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 type Request struct {

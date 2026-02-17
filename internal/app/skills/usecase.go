@@ -3,7 +3,7 @@ package skills
 import (
 	"context"
 
-	"clawverse/internal/app/ports"
+	"clawvival/internal/app/ports"
 )
 
 type UseCase struct {

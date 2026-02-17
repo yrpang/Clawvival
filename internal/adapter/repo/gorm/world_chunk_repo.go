@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"clawverse/internal/adapter/repo/gorm/model"
-	"clawverse/internal/domain/world"
+	"clawvival/internal/adapter/repo/gorm/model"
+	"clawvival/internal/domain/world"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

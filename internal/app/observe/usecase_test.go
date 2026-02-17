@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func TestUseCase_RejectsEmptyAgentID(t *testing.T) {

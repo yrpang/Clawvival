@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"clawverse/internal/adapter/repo/gorm/model"
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/adapter/repo/gorm/model"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

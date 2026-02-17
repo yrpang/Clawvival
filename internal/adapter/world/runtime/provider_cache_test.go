@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"clawverse/internal/domain/world"
+	"clawvival/internal/domain/world"
 )
 
 type fakeChunkStore struct {

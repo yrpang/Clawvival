@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 var (

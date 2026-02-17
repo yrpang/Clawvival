@@ -3,7 +3,7 @@ package mock
 import (
 	"context"
 
-	"clawverse/internal/domain/world"
+	"clawvival/internal/domain/world"
 )
 
 type Provider struct {

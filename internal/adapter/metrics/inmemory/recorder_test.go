@@ -3,7 +3,7 @@ package inmemory
 import (
 	"testing"
 
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/domain/survival"
 )
 
 func TestRecorderSnapshot(t *testing.T) {

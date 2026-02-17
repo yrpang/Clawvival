@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/domain/survival"
 )
 
 func TestUseCase_ReconstructsLatestStateFromEvents(t *testing.T) {

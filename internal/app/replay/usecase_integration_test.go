@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	gormrepo "clawverse/internal/adapter/repo/gorm"
-	worldmock "clawverse/internal/adapter/world/mock"
-	"clawverse/internal/app/action"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	gormrepo "clawvival/internal/adapter/repo/gorm"
+	worldmock "clawvival/internal/adapter/world/mock"
+	"clawvival/internal/app/action"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -128,9 +128,9 @@ func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
 }
 
 func TestUseCase_E2E_AppliesFiltersBeforeLimit(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)

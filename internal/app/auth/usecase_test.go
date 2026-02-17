@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
 )
 
 func TestRegisterUseCase_CreatesCredentialAndSeedState(t *testing.T) {

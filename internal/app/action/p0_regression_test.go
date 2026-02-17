@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	worldmock "clawverse/internal/adapter/world/mock"
-	"clawverse/internal/app/observe"
-	"clawverse/internal/app/ports"
-	"clawverse/internal/app/status"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	worldmock "clawvival/internal/adapter/world/mock"
+	"clawvival/internal/app/observe"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/app/status"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func TestP0_MainLoop_ObserveActionStatus(t *testing.T) {

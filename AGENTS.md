@@ -1,4 +1,4 @@
-# Clawverse Agent Engineering Constraints
+# Clawvival Agent Engineering Constraints
 
 ## DDD Layering
 - `domain` only contains business rules and pure domain models; it must not import GORM/DB or adapter implementations.
@@ -28,7 +28,7 @@
 - Use the project script to prepare local integration-test dependencies and env vars:
   - `source scripts/setup_test_env.sh --prepare`
 - This step should be run before any DB-backed integration/e2e test.
-- After prepare, tests should use exported DSN env vars from the script (for example `CLAWVERSE_DB_DSN`).
+- After prepare, tests should use exported DSN env vars from the script (for example `CLAWVIVAL_DB_DSN`).
 - Recommended execution order:
 1. Run unit tests for the changed package(s).
 2. Prepare local integration env (`source scripts/setup_test_env.sh --prepare`).
@@ -45,7 +45,7 @@
 3. Changes are limited to the task scope.
 
 ## Deployment Runbook
-- Clawverse production deploy is triggered by pushing to `main` (GitHub Action `Fly Deploy`).
+- Clawvival production deploy is triggered by pushing to `main` (GitHub Action `Fly Deploy`).
 - Before deploy, if schema changed:
 1. Apply DB migration manually first (schema-first).
 2. Use `scripts/migrate_postgres.sh` following the current project procedure (fly proxy + secrets/env + migrate).

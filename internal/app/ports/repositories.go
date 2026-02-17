@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/domain/survival"
 )
 
 type ActionResult struct {

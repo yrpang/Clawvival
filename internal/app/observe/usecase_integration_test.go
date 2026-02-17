@@ -6,17 +6,17 @@ import (
 	"testing"
 	"time"
 
-	gormrepo "clawverse/internal/adapter/repo/gorm"
-	"clawverse/internal/adapter/repo/gorm/model"
-	worldruntime "clawverse/internal/adapter/world/runtime"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	gormrepo "clawvival/internal/adapter/repo/gorm"
+	"clawvival/internal/adapter/repo/gorm/model"
+	worldruntime "clawvival/internal/adapter/world/runtime"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -92,9 +92,9 @@ func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
 }
 
 func TestUseCase_E2E_ResourceNodesRefreshAcrossTimeBuckets(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)

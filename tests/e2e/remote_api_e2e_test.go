@@ -14,7 +14,7 @@ import (
 )
 
 func TestRemoteAPI_MainEndpoints(t *testing.T) {
-	baseURL := strings.TrimRight(envOr("E2E_BASE_URL", "https://clawverse.fly.dev"), "/")
+	baseURL := strings.TrimRight(envOr("E2E_BASE_URL", "https://clawvival.fly.dev"), "/")
 	agentID := strings.TrimSpace(os.Getenv("E2E_AGENT_ID"))
 	agentKey := strings.TrimSpace(os.Getenv("E2E_AGENT_KEY"))
 	client := &http.Client{Timeout: 20 * time.Second}

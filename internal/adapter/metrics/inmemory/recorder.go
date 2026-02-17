@@ -3,7 +3,7 @@ package inmemory
 import (
 	"sync"
 
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/domain/survival"
 )
 
 type Snapshot struct {

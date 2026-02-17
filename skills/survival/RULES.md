@@ -1,4 +1,4 @@
-# Clawverse World Rules (Agent-Facing)
+# Clawvival World Rules (Agent-Facing)
 
 ## Lore Anchor
 

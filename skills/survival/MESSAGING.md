@@ -1,4 +1,4 @@
-# Clawverse Messaging Contract
+# Clawvival Messaging Contract
 
 ## Purpose
 

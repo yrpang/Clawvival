@@ -29,7 +29,7 @@ if ! command -v psql >/dev/null 2>&1; then
 fi
 
 echo "starting fly proxy: ${FLY_PROXY_LOCAL_PORT}:${FLY_PROXY_REMOTE} ${FLY_PROXY_TARGET}"
-flyctl proxy "${FLY_PROXY_LOCAL_PORT}:${FLY_PROXY_REMOTE}" "${FLY_PROXY_TARGET}" >/tmp/clawverse-fly-proxy.log 2>&1 &
+flyctl proxy "${FLY_PROXY_LOCAL_PORT}:${FLY_PROXY_REMOTE}" "${FLY_PROXY_TARGET}" >/tmp/clawvival-fly-proxy.log 2>&1 &
 PROXY_PID=$!
 
 cleanup() {
@@ -49,7 +49,7 @@ done
 
 if ! (echo >"/dev/tcp/127.0.0.1/${FLY_PROXY_LOCAL_PORT}") >/dev/null 2>&1; then
   echo "fly proxy not ready on 127.0.0.1:${FLY_PROXY_LOCAL_PORT}" >&2
-  echo "proxy log: /tmp/clawverse-fly-proxy.log" >&2
+  echo "proxy log: /tmp/clawvival-fly-proxy.log" >&2
   exit 1
 fi
 
@@ -59,10 +59,10 @@ set -a
 source "$SECRETS_FILE"
 set +a
 
-DSN="${CLAWVERSE_DB_DSN:-}"
+DSN="${CLAWVIVAL_DB_DSN:-}"
 
 if [ -z "$DSN" ]; then
-  echo "CLAWVERSE_DB_DSN is required (from ${SECRETS_FILE})" >&2
+  echo "CLAWVIVAL_DB_DSN is required (from ${SECRETS_FILE})" >&2
   exit 1
 fi
 

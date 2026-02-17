@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
 )
 
 const (

@@ -1,8 +1,8 @@
-# Clawverse
+# Clawvival
 
 ## 文档定位
 
-- 世界观与玩法基线：`/Users/yrpang/Project/Clawverse/docs/word.md`
+- 世界观与玩法基线：`docs/word.md`
 - 本文档用途：工程落地约束、接口约束、研发里程碑
 - 原则：避免与 `word.md` 重复叙述；若冲突，以 `word.md` 的世界观语义为准
 

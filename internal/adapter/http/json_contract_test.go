@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"clawverse/internal/app/action"
-	"clawverse/internal/app/observe"
-	"clawverse/internal/app/replay"
-	"clawverse/internal/app/status"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	"clawvival/internal/app/action"
+	"clawvival/internal/app/observe"
+	"clawvival/internal/app/replay"
+	"clawvival/internal/app/status"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func TestResponseJSONUsesSnakeCase(t *testing.T) {

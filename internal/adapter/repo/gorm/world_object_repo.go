@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"clawverse/internal/adapter/repo/gorm/model"
-	"clawverse/internal/app/ports"
+	"clawvival/internal/adapter/repo/gorm/model"
+	"clawvival/internal/app/ports"
 
 	"gorm.io/gorm"
 )

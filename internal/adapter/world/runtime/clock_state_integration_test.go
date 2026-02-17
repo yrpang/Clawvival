@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	gormrepo "clawverse/internal/adapter/repo/gorm"
-	"clawverse/internal/domain/world"
+	gormrepo "clawvival/internal/adapter/repo/gorm"
+	"clawvival/internal/domain/world"
 )
 
 func TestProvider_GormClockStateStorePersistsPhaseSwitch(t *testing.T) {
-	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
-		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
 	}
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {

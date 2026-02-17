@@ -1,6 +1,6 @@
 package status
 
-import "clawverse/internal/domain/survival"
+import "clawvival/internal/domain/survival"
 
 type Request struct {
 	AgentID string

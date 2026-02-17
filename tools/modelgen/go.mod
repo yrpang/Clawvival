@@ -1,4 +1,4 @@
-module clawverse-modelgen
+module clawvival-modelgen
 
 go 1.24.0
 

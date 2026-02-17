@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # ---- Config (override via env) ----
-CONTAINER_NAME="${CONTAINER_NAME:-clawverse-pg-gen}"
+CONTAINER_NAME="${CONTAINER_NAME:-clawvival-pg-gen}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
 POSTGRES_PORT="${POSTGRES_PORT:-54329}"
-POSTGRES_USER="${POSTGRES_USER:-clawverse}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-clawverse}"
-POSTGRES_DB="${POSTGRES_DB:-clawverse}"
+POSTGRES_USER="${POSTGRES_USER:-clawvival}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-clawvival}"
+POSTGRES_DB="${POSTGRES_DB:-clawvival}"
 SCHEMA_DIR="${SCHEMA_DIR:-db/schema}"
 MODEL_OUT="${MODEL_OUT:-../../internal/adapter/repo/gorm/model}"
 KEEP_CONTAINER="${KEEP_CONTAINER:-1}" # 1=keep, 0=remove after generation
@@ -74,7 +74,7 @@ echo "$SQL_FILES" | while IFS= read -r f; do
     -d "$POSTGRES_DB" < "$f" >/dev/null
 done
 
-export CLAWVERSE_DB_DSN="host=127.0.0.1 port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DB sslmode=disable"
+export CLAWVIVAL_DB_DSN="host=127.0.0.1 port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DB sslmode=disable"
 
 echo "running gorm/gen"
 (
@@ -82,7 +82,7 @@ echo "running gorm/gen"
   if [ ! -f go.sum ]; then
     GOCACHE=/tmp/gocache go mod download
   fi
-  GOCACHE=/tmp/gocache go run . --dsn "$CLAWVERSE_DB_DSN" --out "$MODEL_OUT"
+  GOCACHE=/tmp/gocache go run . --dsn "$CLAWVIVAL_DB_DSN" --out "$MODEL_OUT"
 )
 
 echo "done. generated models under internal/adapter/repo/gorm/model"

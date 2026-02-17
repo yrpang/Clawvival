@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	worldmock "clawverse/internal/adapter/world/mock"
-	"clawverse/internal/app/ports"
-	"clawverse/internal/domain/survival"
-	"clawverse/internal/domain/world"
+	worldmock "clawvival/internal/adapter/world/mock"
+	"clawvival/internal/app/ports"
+	"clawvival/internal/domain/survival"
+	"clawvival/internal/domain/world"
 )
 
 func TestUseCase_Idempotency(t *testing.T) {
