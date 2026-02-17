@@ -36,6 +36,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		return Response{}, err
 	}
 	state = stateview.Enrich(state, snapshot.TimeOfDay)
+	tiles := buildWindowTiles(world.Point{X: state.Position.X, Y: state.Position.Y}, snapshot.TimeOfDay, snapshot.VisibleTiles)
 	return Response{
 		State:    state,
 		Snapshot: snapshot,
@@ -62,10 +63,10 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			"container_withdraw": {BaseMinutes: 1},
 			"retreat":            {BaseMinutes: 1},
 		},
-		Tiles:            projectTiles(snapshot.VisibleTiles, snapshot.TimeOfDay),
+		Tiles:            tiles,
 		Objects:          []ObservedObject{},
-		Resources:        projectResources(snapshot.VisibleTiles),
-		Threats:          projectThreats(snapshot.VisibleTiles),
+		Resources:        projectResources(tiles),
+		Threats:          projectThreats(tiles),
 		LocalThreatLevel: snapshot.ThreatLevel,
 	}, nil
 }
@@ -105,46 +106,87 @@ func projectTiles(tiles []world.Tile, timeOfDay string) []ObservedTile {
 	out := make([]ObservedTile, 0, len(tiles))
 	for _, t := range tiles {
 		out = append(out, ObservedTile{
-			Pos:         world.Point{X: t.X, Y: t.Y},
-			TerrainType: string(t.Kind),
-			IsWalkable:  t.Passable,
-			IsLit:       isLit,
-			IsVisible:   true,
+			Pos:          world.Point{X: t.X, Y: t.Y},
+			TerrainType:  string(t.Kind),
+			IsWalkable:   t.Passable,
+			IsLit:        isLit,
+			IsVisible:    true,
+			ResourceType: t.Resource,
+			BaseThreat:   t.BaseThreat,
 		})
 	}
 	return out
 }
 
-func projectResources(tiles []world.Tile) []ObservedResource {
+func projectResources(tiles []ObservedTile) []ObservedResource {
 	out := make([]ObservedResource, 0, len(tiles))
 	for _, t := range tiles {
-		if t.Resource == "" {
+		if !t.IsVisible || t.ResourceType == "" {
 			continue
 		}
 		out = append(out, ObservedResource{
-			ID:         fmt.Sprintf("res_%d_%d_%s", t.X, t.Y, t.Resource),
-			Type:       t.Resource,
-			Pos:        world.Point{X: t.X, Y: t.Y},
+			ID:         fmt.Sprintf("res_%d_%d_%s", t.Pos.X, t.Pos.Y, t.ResourceType),
+			Type:       t.ResourceType,
+			Pos:        t.Pos,
 			IsDepleted: false,
 		})
 	}
 	return out
 }
 
-func projectThreats(tiles []world.Tile) []ObservedThreat {
+func projectThreats(tiles []ObservedTile) []ObservedThreat {
 	out := make([]ObservedThreat, 0, len(tiles))
 	for _, t := range tiles {
-		if t.BaseThreat <= 0 {
+		if !t.IsVisible || t.BaseThreat <= 0 {
 			continue
 		}
 		out = append(out, ObservedThreat{
-			ID:          fmt.Sprintf("thr_%d_%d", t.X, t.Y),
+			ID:          fmt.Sprintf("thr_%d_%d", t.Pos.X, t.Pos.Y),
 			Type:        "wild",
-			Pos:         world.Point{X: t.X, Y: t.Y},
+			Pos:         t.Pos,
 			DangerScore: min(100, t.BaseThreat*25),
 		})
 	}
 	return out
+}
+
+func buildWindowTiles(center world.Point, timeOfDay string, visible []world.Tile) []ObservedTile {
+	isLit := timeOfDay == "day"
+	visibleByPos := make(map[string]world.Tile, len(visible))
+	for _, tile := range visible {
+		visibleByPos[posKey(tile.X, tile.Y)] = tile
+	}
+
+	out := make([]ObservedTile, 0, fixedViewSize*fixedViewSize)
+	for y := center.Y - fixedViewRadius; y <= center.Y+fixedViewRadius; y++ {
+		for x := center.X - fixedViewRadius; x <= center.X+fixedViewRadius; x++ {
+			tile, ok := visibleByPos[posKey(x, y)]
+			if !ok {
+				out = append(out, ObservedTile{
+					Pos:         world.Point{X: x, Y: y},
+					TerrainType: "unknown",
+					IsWalkable:  false,
+					IsLit:       false,
+					IsVisible:   false,
+				})
+				continue
+			}
+			out = append(out, ObservedTile{
+				Pos:          world.Point{X: x, Y: y},
+				TerrainType:  string(tile.Kind),
+				IsWalkable:   tile.Passable,
+				IsLit:        isLit,
+				IsVisible:    true,
+				ResourceType: tile.Resource,
+				BaseThreat:   tile.BaseThreat,
+			})
+		}
+	}
+	return out
+}
+
+func posKey(x, y int) string {
+	return fmt.Sprintf("%d:%d", x, y)
 }
 
 func min(a, b int) int {

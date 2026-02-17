@@ -81,8 +81,17 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 	if resp.LocalThreatLevel != 2 {
 		t.Fatalf("expected local threat level 2, got %d", resp.LocalThreatLevel)
 	}
-	if len(resp.Tiles) != 1 || !resp.Tiles[0].IsVisible {
-		t.Fatalf("expected one visible tile, got %+v", resp.Tiles)
+	if len(resp.Tiles) != 121 {
+		t.Fatalf("expected 121 window tiles, got %d", len(resp.Tiles))
+	}
+	visibleCount := 0
+	for _, tile := range resp.Tiles {
+		if tile.IsVisible {
+			visibleCount++
+		}
+	}
+	if visibleCount != 1 {
+		t.Fatalf("expected one visible tile in sparse window, got %d", visibleCount)
 	}
 	if len(resp.Resources) != 1 || resp.Resources[0].ID == "" {
 		t.Fatalf("expected one resource with stable id, got %+v", resp.Resources)

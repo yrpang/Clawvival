@@ -34,7 +34,7 @@ type WorldMeta struct {
 }
 
 type Rules struct {
-	StandardTickMinutes int `json:"standard_tick_minutes"`
+	StandardTickMinutes int          `json:"standard_tick_minutes"`
 	DrainsPer30m        DrainsPer30m `json:"drains_per_30m"`
 	Thresholds          Thresholds   `json:"thresholds"`
 	Visibility          Visibility   `json:"visibility"`
@@ -60,15 +60,15 @@ type Visibility struct {
 }
 
 type Farming struct {
-	FarmGrowMinutes int   `json:"farm_grow_minutes"`
-	WheatYieldMin   int   `json:"wheat_yield_min"`
-	WheatYieldMax   int   `json:"wheat_yield_max"`
+	FarmGrowMinutes  int     `json:"farm_grow_minutes"`
+	WheatYieldMin    int     `json:"wheat_yield_min"`
+	WheatYieldMax    int     `json:"wheat_yield_max"`
 	SeedReturnChance float64 `json:"seed_return_chance"`
 }
 
 type Seed struct {
-	SeedDropChance  float64 `json:"seed_drop_chance"`
-	SeedPityMaxFails int    `json:"seed_pity_max_fails"`
+	SeedDropChance   float64 `json:"seed_drop_chance"`
+	SeedPityMaxFails int     `json:"seed_pity_max_fails"`
 }
 
 type ActionCost struct {
@@ -76,11 +76,13 @@ type ActionCost struct {
 }
 
 type ObservedTile struct {
-	Pos         world.Point `json:"pos"`
-	TerrainType string      `json:"terrain_type"`
-	IsWalkable  bool        `json:"is_walkable"`
-	IsLit       bool        `json:"is_lit"`
-	IsVisible   bool        `json:"is_visible"`
+	Pos          world.Point `json:"pos"`
+	TerrainType  string      `json:"terrain_type"`
+	IsWalkable   bool        `json:"is_walkable"`
+	IsLit        bool        `json:"is_lit"`
+	IsVisible    bool        `json:"is_visible"`
+	ResourceType string      `json:"-"`
+	BaseThreat   int         `json:"-"`
 }
 
 type ObservedObject struct {
