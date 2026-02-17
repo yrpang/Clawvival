@@ -2,6 +2,7 @@ package gormrepo
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -33,13 +34,13 @@ func TestAgentStateRepo_RoundTripInventoryAndDeath(t *testing.T) {
 
 	repo := NewAgentStateRepo(db)
 	seed := survival.AgentStateAggregate{
-		AgentID: agentID,
-		Vitals:  survival.Vitals{HP: 88, Hunger: 55, Energy: 44},
-		Position: survival.Position{X: 2, Y: 3},
-		Inventory: map[string]int{"wood": 3, "stone": 1},
-		Dead: true,
+		AgentID:    agentID,
+		Vitals:     survival.Vitals{HP: 88, Hunger: 55, Energy: 44},
+		Position:   survival.Position{X: 2, Y: 3},
+		Inventory:  map[string]int{"wood": 3, "stone": 1},
+		Dead:       true,
 		DeathCause: survival.DeathCauseCombat,
-		Version: 1,
+		Version:    1,
 	}
 	if err := repo.SaveWithVersion(ctx, seed, 0); err != nil {
 		t.Fatalf("save: %v", err)
@@ -150,5 +151,171 @@ func TestWorldChunkRepo_ZeroCoordinateRoundTrip(t *testing.T) {
 	}
 	if len(got.Tiles) != 2 {
 		t.Fatalf("expected 2 tiles, got %d", len(got.Tiles))
+	}
+}
+
+func TestActionExecutionRepo_SaveAndGetRoundTrip(t *testing.T) {
+	dsn := requireDSN(t)
+	db, err := OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	ctx := context.Background()
+	agentID := "it-action-exec"
+	_ = db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error
+
+	repo := NewActionExecutionRepo(db)
+	rec := ports.ActionExecutionRecord{
+		AgentID:        agentID,
+		IdempotencyKey: "key-1",
+		IntentType:     "gather",
+		DT:             30,
+		Result: ports.ActionResult{
+			UpdatedState: survival.AgentStateAggregate{
+				AgentID:  agentID,
+				Vitals:   survival.Vitals{HP: 90, Hunger: 70, Energy: 50},
+				Position: survival.Position{X: 1, Y: 2},
+				Version:  2,
+			},
+			Events: []survival.DomainEvent{
+				{Type: "action_settled", OccurredAt: time.Unix(10, 0), Payload: map[string]any{"decision": map[string]any{"intent": "gather"}}},
+			},
+			ResultCode: survival.ResultOK,
+		},
+		AppliedAt: time.Unix(20, 0),
+	}
+	if err := repo.SaveExecution(ctx, rec); err != nil {
+		t.Fatalf("save execution: %v", err)
+	}
+	got, err := repo.GetByIdempotencyKey(ctx, agentID, "key-1")
+	if err != nil {
+		t.Fatalf("get execution: %v", err)
+	}
+	if got.Result.UpdatedState.Version != 2 {
+		t.Fatalf("expected version 2, got %d", got.Result.UpdatedState.Version)
+	}
+	if len(got.Result.Events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(got.Result.Events))
+	}
+	if _, err := repo.GetByIdempotencyKey(ctx, agentID, "missing"); err != ports.ErrNotFound {
+		t.Fatalf("expected ErrNotFound for missing key, got %v", err)
+	}
+}
+
+func TestEventRepo_AppendAndListByAgentID(t *testing.T) {
+	dsn := requireDSN(t)
+	db, err := OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	ctx := context.Background()
+	agentID := "it-event-repo"
+	_ = db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error
+
+	repo := NewEventRepo(db)
+	if err := repo.Append(ctx, agentID, []survival.DomainEvent{
+		{Type: "e-old", OccurredAt: time.Unix(100, 0), Payload: map[string]any{"k": "v1"}},
+		{Type: "e-new", OccurredAt: time.Unix(200, 0), Payload: map[string]any{"k": "v2"}},
+	}); err != nil {
+		t.Fatalf("append events: %v", err)
+	}
+
+	list, err := repo.ListByAgentID(ctx, agentID, 1)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(list) != 1 || list[0].Type != "e-new" {
+		t.Fatalf("expected only latest event, got=%+v", list)
+	}
+	all, err := repo.ListByAgentID(ctx, agentID, 0)
+	if err != nil {
+		t.Fatalf("list all events: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(all))
+	}
+}
+
+func TestWorldClockStateRepo_SaveAndGet(t *testing.T) {
+	dsn := requireDSN(t)
+	db, err := OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	ctx := context.Background()
+	_ = db.Exec("DELETE FROM world_clock_state").Error
+
+	repo := NewWorldClockStateRepo(db)
+	if _, _, ok, err := repo.Get(ctx); err != nil || ok {
+		t.Fatalf("expected no state initially, ok=%v err=%v", ok, err)
+	}
+	t1 := time.Unix(300, 0)
+	if err := repo.Save(ctx, "day", t1); err != nil {
+		t.Fatalf("save day: %v", err)
+	}
+	phase, switchedAt, ok, err := repo.Get(ctx)
+	if err != nil || !ok {
+		t.Fatalf("get day state failed: ok=%v err=%v", ok, err)
+	}
+	if phase != "day" || !switchedAt.Equal(t1) {
+		t.Fatalf("unexpected day state: phase=%s switched=%v", phase, switchedAt)
+	}
+	t2 := time.Unix(600, 0)
+	if err := repo.Save(ctx, "night", t2); err != nil {
+		t.Fatalf("save night: %v", err)
+	}
+	phase, switchedAt, ok, err = repo.Get(ctx)
+	if err != nil || !ok {
+		t.Fatalf("get night state failed: ok=%v err=%v", ok, err)
+	}
+	if phase != "night" || !switchedAt.Equal(t2) {
+		t.Fatalf("unexpected night state: phase=%s switched=%v", phase, switchedAt)
+	}
+}
+
+func TestTxManager_RunInTxCommitAndRollback(t *testing.T) {
+	dsn := requireDSN(t)
+	db, err := OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	ctx := context.Background()
+	agentID := "it-tx-manager"
+	_ = db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error
+
+	txManager := NewTxManager(db)
+	stateRepo := NewAgentStateRepo(db)
+
+	commitErr := txManager.RunInTx(ctx, func(txCtx context.Context) error {
+		return stateRepo.SaveWithVersion(txCtx, survival.AgentStateAggregate{
+			AgentID:  agentID,
+			Vitals:   survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position: survival.Position{X: 0, Y: 0},
+			Version:  1,
+		}, 0)
+	})
+	if commitErr != nil {
+		t.Fatalf("commit tx failed: %v", commitErr)
+	}
+	if _, err := stateRepo.GetByAgentID(ctx, agentID); err != nil {
+		t.Fatalf("expected committed state exists, got err=%v", err)
+	}
+
+	rollbackErr := txManager.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := stateRepo.SaveWithVersion(txCtx, survival.AgentStateAggregate{
+			AgentID:  agentID + "-rb",
+			Vitals:   survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position: survival.Position{X: 0, Y: 0},
+			Version:  1,
+		}, 0); err != nil {
+			return err
+		}
+		return errors.New("force rollback")
+	})
+	if rollbackErr == nil {
+		t.Fatalf("expected rollback error")
+	}
+	if _, err := stateRepo.GetByAgentID(ctx, agentID+"-rb"); err != ports.ErrNotFound {
+		t.Fatalf("expected rollback to remove state, got err=%v", err)
 	}
 }
