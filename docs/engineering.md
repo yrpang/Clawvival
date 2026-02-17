@@ -541,7 +541,7 @@ sequenceDiagram
 - [x] 实现动作拒绝策略（无效动作快速返回）
 
 5. 资源生产闭环（P0）
-- [ ] 资源节点刷新逻辑（森林木材、矿区石矿等）
+- [x] 资源节点刷新逻辑（森林木材、矿区石矿等）
 - [x] 采集产出与工具效率倍率
 - [x] 配方系统（craft recipes）
 - [x] 建筑系统最小集：`bed/box/farm/torch/wall/door/furnace`
@@ -557,7 +557,7 @@ sequenceDiagram
 7. 可解释与复盘链路（P0/P1）
 - [x] 统一事件模型：`state_before/decision/action/result/state_after`
 - [x] 每次 action 记录策略元信息（`strategy_hash` 等）
-- [ ] 事件查询接口（按 agent、时间、会话）
+- [x] 事件查询接口（按 agent、时间、会话）
 - [x] 最小回放接口（按事件重建关键状态）
 - [ ] 日志字段标准化文档
 
