@@ -559,7 +559,16 @@ sequenceDiagram
 - [x] 每次 action 记录策略元信息（`strategy_hash` 等）
 - [x] 事件查询接口（按 agent、时间、会话）
 - [x] 最小回放接口（按事件重建关键状态）
-- [ ] 日志字段标准化文档
+- [x] 日志字段标准化文档
+
+日志字段标准（MVP）：
+- 顶层必填：`event_type`、`occurred_at`、`agent_id`、`session_id`。
+- 决策链路（`action_settled`）必填：`decision.intent`、`decision.params`、`decision.dt_minutes`。
+- 状态快照必填：`state_before.hp/hunger/energy/x/y`、`state_after.hp/hunger/energy/x/y`。
+- 结算结果必填：`result.hp_loss`、`result_code`（由 `action_executions.result_code` 记录）。
+- 策略元信息可选：`strategy_hash`（Agent 本地策略版本指纹）。
+- 世界时序事件：`world_phase_changed` 需带 `from/to`；不要求 `state_before/state_after`。
+- 兼容要求：新增字段只能追加，禁止重命名已上线字段。
 
 8. KPI 体系（P1）
 - [ ] 从进程内计数升级为持久化指标流水
