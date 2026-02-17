@@ -29,6 +29,12 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		ApplyGather(&next, snapshot)
 	case ActionRest:
 		next.Vitals.Energy += scaledInt(10, delta.Minutes)
+	case ActionSleep:
+		next.Vitals.Energy += scaledInt(18, delta.Minutes)
+		next.Vitals.HP += scaledInt(4, delta.Minutes)
+		if next.Vitals.HP > 100 {
+			next.Vitals.HP = 100
+		}
 	case ActionMove:
 		moveEnergyCost := scaledInt(6, delta.Minutes)
 		if moveEnergyCost < 1 {
@@ -56,12 +62,21 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 				},
 			})
 		}
-	case ActionFarm:
+	case ActionFarm, ActionFarmPlant:
 		next.Vitals.Energy -= scaledInt(10, delta.Minutes)
 		next.Vitals.Hunger -= scaledInt(1, delta.Minutes)
-		if intent.Params["seed"] > 0 {
+		seedToUse := intent.Params["seed"]
+		if seedToUse <= 0 {
+			seedToUse = 1
+		}
+		if seedToUse > 0 {
 			_, _ = PlantSeed(&next)
 		}
+	case ActionFarmHarvest:
+		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
+		next.AddItem("wheat", 2)
+	case ActionContainerDeposit, ActionContainerWithdraw:
+		next.Vitals.Energy -= scaledInt(4, delta.Minutes)
 	case ActionRetreat:
 		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
 		next.Position = moveToward(next.Position, next.Home)

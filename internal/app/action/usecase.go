@@ -257,11 +257,11 @@ func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 		return survival.CanBuild(state, survival.BuildKind(intent.Params["kind"]))
 	case survival.ActionCraft:
 		return survival.CanCraft(state, survival.RecipeID(intent.Params["recipe"]))
-	case survival.ActionFarm:
+	case survival.ActionFarm, survival.ActionFarmPlant:
 		if intent.Params["seed"] > 0 {
 			return survival.CanPlantSeed(state)
 		}
-		return true
+		return survival.CanPlantSeed(state)
 	case survival.ActionEat:
 		return survival.CanEat(state, survival.FoodID(intent.Params["food"]))
 	default:
@@ -289,11 +289,11 @@ func positionPreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 }
 
 var actionCooldowns = map[survival.ActionType]time.Duration{
-	survival.ActionCombat: 10 * time.Minute,
-	survival.ActionBuild:  5 * time.Minute,
-	survival.ActionCraft:  5 * time.Minute,
-	survival.ActionFarm:   3 * time.Minute,
-	survival.ActionMove:   1 * time.Minute,
+	survival.ActionBuild:     5 * time.Minute,
+	survival.ActionCraft:     5 * time.Minute,
+	survival.ActionFarm:      3 * time.Minute,
+	survival.ActionFarmPlant: 3 * time.Minute,
+	survival.ActionMove:      1 * time.Minute,
 }
 
 func ensureCooldownReady(ctx context.Context, repo ports.EventRepository, agentID string, intentType survival.ActionType, now time.Time) error {
@@ -373,9 +373,9 @@ func abs(v int) int {
 
 func isSupportedActionType(t survival.ActionType) bool {
 	switch t {
-	case survival.ActionGather, survival.ActionRest, survival.ActionMove:
+	case survival.ActionGather, survival.ActionRest, survival.ActionSleep, survival.ActionMove:
 		return true
-	case survival.ActionCombat, survival.ActionBuild, survival.ActionFarm, survival.ActionRetreat, survival.ActionCraft, survival.ActionEat, survival.ActionTerminate:
+	case survival.ActionBuild, survival.ActionFarm, survival.ActionFarmPlant, survival.ActionFarmHarvest, survival.ActionContainerDeposit, survival.ActionContainerWithdraw, survival.ActionRetreat, survival.ActionCraft, survival.ActionEat, survival.ActionTerminate:
 		return true
 	default:
 		return false
@@ -387,18 +387,22 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 	case survival.ActionRest:
 		restMinutes := intent.Params["rest_minutes"]
 		return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
+	case survival.ActionSleep:
+		return true
 	case survival.ActionMove:
 		return intent.Params["dx"] != 0 || intent.Params["dy"] != 0
-	case survival.ActionCombat:
-		return intent.Params["target_level"] > 0
 	case survival.ActionBuild:
 		return intent.Params["kind"] > 0
-	case survival.ActionFarm:
-		return intent.Params["seed"] > 0
+	case survival.ActionFarm, survival.ActionFarmPlant:
+		return intent.Params["seed"] > 0 || intent.Params["farm_id"] > 0
+	case survival.ActionFarmHarvest:
+		return intent.Params["farm_id"] > 0 || len(intent.Params) == 0
 	case survival.ActionCraft:
 		return intent.Params["recipe"] > 0
 	case survival.ActionEat:
 		return intent.Params["food"] > 0
+	case survival.ActionContainerDeposit, survival.ActionContainerWithdraw:
+		return intent.Params["container_id"] > 0 || len(intent.Params) == 0
 	case survival.ActionTerminate:
 		return true
 	default:
