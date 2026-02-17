@@ -49,7 +49,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 		Home:     survival.Position{X: 0, Y: 0},
 		Inventory: map[string]int{
 			"plank": 4,
-			"seed":  1,
+			"seed":  2,
 			"wood":  2,
 		},
 		Version: 1,
@@ -127,13 +127,22 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 		t.Fatalf("build: %v", err)
 	}
 
+	now = now.Add(6 * time.Minute)
+	if _, err := actionUC.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "loop-build-farm",
+		Intent:         survival.ActionIntent{Type: survival.ActionBuild, ObjectType: "farm_plot", Pos: &survival.Position{X: 1, Y: 1}}, StrategyHash: "sha-loop",
+	}); err != nil {
+		t.Fatalf("build farm: %v", err)
+	}
+
 	now = now.Add(4 * time.Minute)
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
-		IdempotencyKey: "loop-farm",
-		Intent:         survival.ActionIntent{Type: survival.ActionFarm, FarmID: "farm-1"}, StrategyHash: "sha-loop",
+		IdempotencyKey: "loop-farm-plant",
+		Intent:         survival.ActionIntent{Type: survival.ActionFarmPlant, FarmID: "obj-it-gameplay-loop-loop-build-farm"}, StrategyHash: "sha-loop",
 	}); err != nil {
-		t.Fatalf("farm: %v", err)
+		t.Fatalf("farm plant: %v", err)
 	}
 
 	now = now.Add(11 * time.Minute)
