@@ -513,52 +513,52 @@ sequenceDiagram
 ## World.md 对齐差距与完整 TODO
 
 1. 世界地图核心（P0）
-- [ ] 定义世界数据模型：`Tile/Chunk/Zone/Biome`
-- [ ] 实现无限网格坐标与分块加载（chunk）
-- [ ] 实现基础分区：安全区/森林/矿区/荒野
-- [ ] 实现区域风险-收益梯度
-- [ ] `observe` 返回当前位置周边窗口而非固定快照
+- [x] 定义世界数据模型：`Tile/Chunk/Zone/Biome`
+- [x] 实现无限网格坐标与分块加载（chunk）
+- [x] 实现基础分区：安全区/森林/矿区/荒野
+- [x] 实现区域风险-收益梯度
+- [x] `observe` 返回当前位置周边窗口而非固定快照
 
 2. 世界时钟与昼夜系统（P0）
-- [ ] 实现独立世界时钟（不依赖本地小时）
-- [ ] 落地白天 10 分钟 / 黑夜 5 分钟循环
+- [x] 实现独立世界时钟（不依赖本地小时）
+- [x] 落地白天 10 分钟 / 黑夜 5 分钟循环
 - [ ] 昼夜切换事件（供策略与日志使用）
 - [ ] 夜晚威胁提升与可见度惩罚接入结算
-- [ ] `status/observe` 暴露当前时段与切换倒计时
+- [x] `status/observe` 暴露当前时段与切换倒计时
 
 3. 状态与实体扩展（P0）
-- [ ] 增加 `Inventory`（资源、食物、工具）
-- [ ] 增加 `WorldObject`（建筑、农田、火把等）
-- [ ] 增加 `AgentSession`（会话起止、死亡原因）
-- [ ] 增加 `DeathCause` 与濒死状态标记
-- [ ] 完成 schema-first 迁移与模型生成
+- [x] 增加 `Inventory`（资源、食物、工具）
+- [x] 增加 `WorldObject`（建筑、农田、火把等）
+- [x] 增加 `AgentSession`（会话起止、死亡原因）
+- [x] 增加 `DeathCause` 与濒死状态标记
+- [x] 完成 schema-first 迁移与模型生成
 
 4. 行动系统补全（P0）
-- [ ] 扩展动作：`gather/move/combat/build/farm/rest/retreat/craft`
-- [ ] 为每个动作定义输入参数与失败码
+- [x] 扩展动作：`gather/move/combat/build/farm/rest/retreat/craft`
+- [x] 为每个动作定义输入参数与失败码
 - [ ] 实现动作前置校验（资源、位置、冷却）
-- [ ] 实现动作结果标准化（收益、消耗、事件）
-- [ ] 实现动作拒绝策略（无效动作快速返回）
+- [x] 实现动作结果标准化（收益、消耗、事件）
+- [x] 实现动作拒绝策略（无效动作快速返回）
 
 5. 资源生产闭环（P0）
 - [ ] 资源节点刷新逻辑（森林木材、矿区石矿等）
-- [ ] 采集产出与工具效率倍率
-- [ ] 配方系统（craft recipes）
-- [ ] 建筑系统最小集：`bed/box/farm/torch/wall/door/furnace`
-- [ ] 农田生长与收获循环（seed -> wheat -> food）
+- [x] 采集产出与工具效率倍率
+- [x] 配方系统（craft recipes）
+- [x] 建筑系统最小集：`bed/box/farm/torch/wall/door/furnace`
+- [x] 农田生长与收获循环（seed -> wheat -> food）
 
 6. 生存与战斗规则（P0）
-- [ ] 饥饿/精力/生命衰减与恢复参数表
-- [ ] 濒死强制保命策略钩子
-- [ ] 夜晚战斗压力模型
-- [ ] 撤离/回家判定逻辑
-- [ ] `GameOver` 终局与会话封存
+- [x] 饥饿/精力/生命衰减与恢复参数表
+- [x] 濒死强制保命策略钩子
+- [x] 夜晚战斗压力模型
+- [x] 撤离/回家判定逻辑
+- [x] `GameOver` 终局与会话封存
 
 7. 可解释与复盘链路（P0/P1）
-- [ ] 统一事件模型：`state_before/decision/action/result/state_after`
-- [ ] 每次 action 记录策略元信息（`strategy_hash` 等）
+- [x] 统一事件模型：`state_before/decision/action/result/state_after`
+- [x] 每次 action 记录策略元信息（`strategy_hash` 等）
 - [ ] 事件查询接口（按 agent、时间、会话）
-- [ ] 最小回放接口（按事件重建关键状态）
+- [x] 最小回放接口（按事件重建关键状态）
 - [ ] 日志字段标准化文档
 
 8. KPI 体系（P1）
