@@ -52,3 +52,11 @@ func (c Clock) PhaseAt(now time.Time) (Phase, time.Duration) {
 	nightOffset := offset - c.cfg.DayDuration
 	return PhaseNight, c.cfg.NightDuration - nightOffset
 }
+
+func (c Clock) WorldTimeSecondsAt(now time.Time) int64 {
+	elapsed := now.Sub(c.cfg.StartAt)
+	if elapsed < 0 {
+		return 0
+	}
+	return int64(elapsed / time.Second)
+}

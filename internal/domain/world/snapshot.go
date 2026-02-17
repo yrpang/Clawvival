@@ -1,6 +1,7 @@
 package world
 
 type Snapshot struct {
+	WorldTimeSeconds   int64          `json:"world_time_seconds"`
 	TimeOfDay          string         `json:"time_of_day"`
 	ThreatLevel        int            `json:"threat_level"`
 	VisibilityPenalty  int            `json:"visibility_penalty"`

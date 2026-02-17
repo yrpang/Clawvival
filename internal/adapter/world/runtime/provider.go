@@ -73,7 +73,8 @@ func NewProvider(cfg Config) Provider {
 }
 
 func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.Point) (world.Snapshot, error) {
-	phase, next := p.cfg.Clock.PhaseAt(p.cfg.Now())
+	nowAt := p.cfg.Now()
+	phase, next := p.cfg.Clock.PhaseAt(nowAt)
 	isDay := phase == world.PhaseDay
 	timeOfDay := "night"
 	threat := p.cfg.ThreatNight
@@ -83,14 +84,14 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 		threat = p.cfg.ThreatDay
 		nearby = copyMap(p.cfg.ResourcesDay)
 	}
-	phaseChange, err := p.persistPhase(ctx, timeOfDay, p.cfg.Now())
+	phaseChange, err := p.persistPhase(ctx, timeOfDay, nowAt)
 	if err != nil {
 		return world.Snapshot{}, err
 	}
 
 	tiles := make([]world.Tile, 0, (p.cfg.ViewRadius*2+1)*(p.cfg.ViewRadius*2+1))
 	counts := map[string]int{}
-	refreshBucket := resourceRefreshBucket(p.cfg.Now(), p.cfg.RefreshInterval)
+	refreshBucket := resourceRefreshBucket(nowAt, p.cfg.RefreshInterval)
 	chunks, err := p.loadChunksForWindow(ctx, center, timeOfDay)
 	if err != nil {
 		return world.Snapshot{}, err
@@ -114,6 +115,7 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 	}
 
 	return world.Snapshot{
+		WorldTimeSeconds:   p.cfg.Clock.WorldTimeSecondsAt(nowAt),
 		TimeOfDay:          timeOfDay,
 		ThreatLevel:        threat,
 		VisibilityPenalty:  visibilityPenalty(isDay),
