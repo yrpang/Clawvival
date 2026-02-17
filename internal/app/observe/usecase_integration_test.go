@@ -48,7 +48,7 @@ func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
 	worldProvider := worldruntime.NewProvider(worldruntime.Config{
 		ViewRadius: 2,
 		Now:        func() time.Time { return time.Unix(0, 0) },
-		ChunkStore: worldruntime.NewGormChunkStore(db),
+		ChunkStore: gormrepo.NewWorldChunkRepo(db),
 	})
 	uc := UseCase{StateRepo: stateRepo, World: worldProvider}
 
@@ -128,8 +128,8 @@ func TestUseCase_E2E_ResourceNodesRefreshAcrossTimeBuckets(t *testing.T) {
 		ViewRadius:      2,
 		Now:             func() time.Time { return now },
 		RefreshInterval: 5 * time.Minute,
-		ChunkStore:      worldruntime.NewGormChunkStore(db),
-		ClockStateStore: worldruntime.NewGormClockStateStore(db),
+		ChunkStore:      gormrepo.NewWorldChunkRepo(db),
+		ClockStateStore: gormrepo.NewWorldClockStateRepo(db),
 	})
 	uc := UseCase{StateRepo: stateRepo, World: worldProvider}
 

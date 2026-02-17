@@ -1,4 +1,4 @@
-package runtime
+package gormrepo
 
 import (
 	"context"
@@ -9,17 +9,17 @@ import (
 	"gorm.io/gorm"
 )
 
-type GormClockStateStore struct {
+type WorldClockStateRepo struct {
 	db *gorm.DB
 }
 
-func NewGormClockStateStore(db *gorm.DB) GormClockStateStore {
-	return GormClockStateStore{db: db}
+func NewWorldClockStateRepo(db *gorm.DB) WorldClockStateRepo {
+	return WorldClockStateRepo{db: db}
 }
 
-func (s GormClockStateStore) Get(ctx context.Context) (string, time.Time, bool, error) {
+func (r WorldClockStateRepo) Get(ctx context.Context) (string, time.Time, bool, error) {
 	var row model.WorldClockState
-	err := s.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).
 		Where(&model.WorldClockState{StateKey: "global"}).
 		First(&row).Error
 	if err != nil {
@@ -31,8 +31,8 @@ func (s GormClockStateStore) Get(ctx context.Context) (string, time.Time, bool, 
 	return row.Phase, row.SwitchedAt, true, nil
 }
 
-func (s GormClockStateStore) Save(ctx context.Context, phase string, switchedAt time.Time) error {
-	return s.db.WithContext(ctx).
+func (r WorldClockStateRepo) Save(ctx context.Context, phase string, switchedAt time.Time) error {
+	return r.db.WithContext(ctx).
 		Where(&model.WorldClockState{StateKey: "global"}).
 		Assign(model.WorldClockState{
 			Phase:      phase,

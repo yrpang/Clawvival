@@ -32,7 +32,7 @@ func TestProvider_GormChunkStoreCachesChunks(t *testing.T) {
 		}),
 		ViewRadius: 2,
 		Now:        func() time.Time { return now },
-		ChunkStore: NewGormChunkStore(db),
+		ChunkStore: gormrepo.NewWorldChunkRepo(db),
 	})
 
 	ctx := context.Background()

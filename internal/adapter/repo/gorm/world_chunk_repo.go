@@ -1,7 +1,8 @@
-package runtime
+package gormrepo
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"clawverse/internal/adapter/repo/gorm/model"
@@ -11,17 +12,17 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type GormChunkStore struct {
+type WorldChunkRepo struct {
 	db *gorm.DB
 }
 
-func NewGormChunkStore(db *gorm.DB) GormChunkStore {
-	return GormChunkStore{db: db}
+func NewWorldChunkRepo(db *gorm.DB) WorldChunkRepo {
+	return WorldChunkRepo{db: db}
 }
 
-func (s GormChunkStore) GetChunk(ctx context.Context, coord world.ChunkCoord, phase string) (world.Chunk, bool, error) {
+func (r WorldChunkRepo) GetChunk(ctx context.Context, coord world.ChunkCoord, phase string) (world.Chunk, bool, error) {
 	var row model.WorldChunk
-	err := s.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).
 		Where(&model.WorldChunk{ChunkX: int32(coord.X), ChunkY: int32(coord.Y), Phase: phase}).
 		First(&row).Error
 	if err != nil {
@@ -30,15 +31,15 @@ func (s GormChunkStore) GetChunk(ctx context.Context, coord world.ChunkCoord, ph
 		}
 		return world.Chunk{}, false, err
 	}
-	tiles, err := unmarshalChunkTiles(row.Tiles)
+	tiles, err := decodeChunkTiles(row.Tiles)
 	if err != nil {
 		return world.Chunk{}, false, err
 	}
 	return world.Chunk{Coord: coord, Tiles: tiles}, true, nil
 }
 
-func (s GormChunkStore) SaveChunk(ctx context.Context, coord world.ChunkCoord, phase string, chunk world.Chunk) error {
-	b, err := marshalChunkTiles(chunk.Tiles)
+func (r WorldChunkRepo) SaveChunk(ctx context.Context, coord world.ChunkCoord, phase string, chunk world.Chunk) error {
+	b, err := encodeChunkTiles(chunk.Tiles)
 	if err != nil {
 		return err
 	}
@@ -49,8 +50,23 @@ func (s GormChunkStore) SaveChunk(ctx context.Context, coord world.ChunkCoord, p
 		Tiles:     b,
 		UpdatedAt: time.Now(),
 	}
-	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "chunk_x"}, {Name: "chunk_y"}, {Name: "phase"}},
 		DoUpdates: clause.AssignmentColumns([]string{"tiles", "updated_at"}),
 	}).Create(&row).Error
+}
+
+func encodeChunkTiles(tiles []world.Tile) ([]byte, error) {
+	return json.Marshal(tiles)
+}
+
+func decodeChunkTiles(data []byte) ([]world.Tile, error) {
+	out := []world.Tile{}
+	if len(data) == 0 {
+		return out, nil
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

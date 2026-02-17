@@ -28,7 +28,7 @@ func TestProvider_GormClockStateStorePersistsPhaseSwitch(t *testing.T) {
 	p := NewProvider(Config{
 		Clock:           world.NewClock(world.ClockConfig{StartAt: start, DayDuration: 10 * time.Minute, NightDuration: 5 * time.Minute}),
 		Now:             func() time.Time { return now },
-		ClockStateStore: NewGormClockStateStore(db),
+		ClockStateStore: gormrepo.NewWorldClockStateRepo(db),
 	})
 
 	ctx := context.Background()
@@ -36,7 +36,7 @@ func TestProvider_GormClockStateStorePersistsPhaseSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot day: %v", err)
 	}
-	phase, _, ok, err := NewGormClockStateStore(db).Get(ctx)
+	phase, _, ok, err := gormrepo.NewWorldClockStateRepo(db).Get(ctx)
 	if err != nil || !ok {
 		t.Fatalf("get day phase error=%v ok=%v", err, ok)
 	}
@@ -49,7 +49,7 @@ func TestProvider_GormClockStateStorePersistsPhaseSwitch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot night: %v", err)
 	}
-	phase, _, ok, err = NewGormClockStateStore(db).Get(ctx)
+	phase, _, ok, err = gormrepo.NewWorldClockStateRepo(db).Get(ctx)
 	if err != nil || !ok {
 		t.Fatalf("get night phase error=%v ok=%v", err, ok)
 	}

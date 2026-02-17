@@ -432,7 +432,7 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 			NightDuration: 5 * time.Minute,
 		}),
 		Now:             func() time.Time { return now },
-		ClockStateStore: worldruntime.NewGormClockStateStore(db),
+		ClockStateStore: gormrepo.NewWorldClockStateRepo(db),
 	})
 
 	uc := UseCase{
