@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"clawverse/internal/app/action"
+	"clawverse/internal/app/auth"
 	"clawverse/internal/app/observe"
 	"clawverse/internal/app/ports"
 	"clawverse/internal/app/replay"
@@ -22,18 +23,22 @@ import (
 )
 
 const agentIDHeader = "X-Agent-ID"
+const agentKeyHeader = "X-Agent-Key"
 
 type Handler struct {
-	ObserveUC observe.UseCase
-	ActionUC  action.UseCase
-	StatusUC  status.UseCase
-	ReplayUC  replay.UseCase
-	SkillsUC  skills.UseCase
-	KPI       kpiSnapshotProvider
+	RegisterUC auth.RegisterUseCase
+	AuthUC     auth.VerifyUseCase
+	ObserveUC  observe.UseCase
+	ActionUC   action.UseCase
+	StatusUC   status.UseCase
+	ReplayUC   replay.UseCase
+	SkillsUC   skills.UseCase
+	KPI        kpiSnapshotProvider
 }
 
 func (h Handler) RegisterRoutes(s *server.Hertz) {
 	agent := s.Group("/api/agent")
+	agent.POST("/register", h.register)
 	agent.POST("/observe", h.observe)
 	agent.POST("/action", h.action)
 	agent.POST("/status", h.status)
@@ -66,7 +71,7 @@ type actionIntent struct {
 }
 
 func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
-	agentID, err := requireAgentID(ctx)
+	agentID, err := h.requireAuthenticatedAgent(c, ctx)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -88,7 +93,7 @@ func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
 }
 
 func (h Handler) action(c context.Context, ctx *app.RequestContext) {
-	agentID, err := requireAgentID(ctx)
+	agentID, err := h.requireAuthenticatedAgent(c, ctx)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -119,7 +124,7 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 }
 
 func (h Handler) status(c context.Context, ctx *app.RequestContext) {
-	agentID, err := requireAgentID(ctx)
+	agentID, err := h.requireAuthenticatedAgent(c, ctx)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -141,7 +146,7 @@ func (h Handler) status(c context.Context, ctx *app.RequestContext) {
 }
 
 func (h Handler) replay(c context.Context, ctx *app.RequestContext) {
-	agentID, err := requireAgentID(ctx)
+	agentID, err := h.requireAuthenticatedAgent(c, ctx)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -188,6 +193,15 @@ func (h Handler) skillsFile(c context.Context, ctx *app.RequestContext) {
 	ctx.Data(http.StatusOK, "text/plain; charset=utf-8", b)
 }
 
+func (h Handler) register(c context.Context, ctx *app.RequestContext) {
+	resp, err := h.RegisterUC.Execute(c, auth.RegisterRequest{})
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.JSON(consts.StatusCreated, resp)
+}
+
 type kpiSnapshotProvider interface {
 	SnapshotAny() any
 }
@@ -209,18 +223,40 @@ func decodeJSON(ctx *app.RequestContext, out any) error {
 }
 
 var ErrMissingAgentIDHeader = errors.New("missing x-agent-id header")
+var ErrMissingAgentKeyHeader = errors.New("missing x-agent-key header")
+var ErrMissingAgentCredentials = errors.New("missing agent credentials")
 
-func requireAgentID(ctx *app.RequestContext) (string, error) {
-	if fromHeader := strings.TrimSpace(string(ctx.GetHeader(agentIDHeader))); fromHeader != "" {
-		return fromHeader, nil
+func (h Handler) requireAuthenticatedAgent(c context.Context, ctx *app.RequestContext) (string, error) {
+	agentID := strings.TrimSpace(string(ctx.GetHeader(agentIDHeader)))
+	agentKey := strings.TrimSpace(string(ctx.GetHeader(agentKeyHeader)))
+	if agentID == "" && agentKey == "" {
+		return "", ErrMissingAgentCredentials
 	}
-	return "", ErrMissingAgentIDHeader
+	if agentID == "" {
+		return "", ErrMissingAgentIDHeader
+	}
+	if agentKey == "" {
+		return "", ErrMissingAgentKeyHeader
+	}
+	if err := h.AuthUC.Execute(c, auth.VerifyRequest{
+		AgentID:  agentID,
+		AgentKey: agentKey,
+	}); err != nil {
+		return "", err
+	}
+	return agentID, nil
 }
 
 func writeError(ctx *app.RequestContext, err error) {
 	switch {
+	case errors.Is(err, ErrMissingAgentCredentials):
+		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_credentials", err.Error())
 	case errors.Is(err, ErrMissingAgentIDHeader):
 		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_id", err.Error())
+	case errors.Is(err, ErrMissingAgentKeyHeader):
+		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_key", err.Error())
+	case errors.Is(err, auth.ErrInvalidCredentials):
+		writeErrorBody(ctx, consts.StatusUnauthorized, "invalid_agent_credentials", err.Error())
 	case errors.Is(err, action.ErrActionInvalidPosition):
 		writeErrorBody(ctx, consts.StatusConflict, "action_invalid_position", err.Error())
 	case errors.Is(err, action.ErrActionCooldownActive):
@@ -230,6 +266,7 @@ func writeError(ctx *app.RequestContext, err error) {
 	case errors.Is(err, action.ErrInvalidActionParams):
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_action_params", err.Error())
 	case errors.Is(err, action.ErrInvalidRequest),
+		errors.Is(err, auth.ErrInvalidRequest),
 		errors.Is(err, observe.ErrInvalidRequest),
 		errors.Is(err, replay.ErrInvalidRequest),
 		errors.Is(err, status.ErrInvalidRequest),

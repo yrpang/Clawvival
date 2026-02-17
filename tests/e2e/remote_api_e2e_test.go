@@ -15,18 +15,42 @@ import (
 
 func TestRemoteAPI_MainEndpoints(t *testing.T) {
 	baseURL := strings.TrimRight(envOr("E2E_BASE_URL", "https://clawverse.fly.dev"), "/")
-	agentID := envOr("E2E_AGENT_ID", "demo-agent")
+	agentID := strings.TrimSpace(os.Getenv("E2E_AGENT_ID"))
+	agentKey := strings.TrimSpace(os.Getenv("E2E_AGENT_KEY"))
 	client := &http.Client{Timeout: 20 * time.Second}
 
+	if agentID == "" || agentKey == "" {
+		status, regBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/register", "", "", map[string]any{})
+		if status != http.StatusCreated {
+			t.Fatalf("register status=%d body=%s", status, string(regBody))
+		}
+		var reg map[string]any
+		if err := json.Unmarshal(regBody, &reg); err != nil {
+			t.Fatalf("unmarshal register response: %v body=%s", err, string(regBody))
+		}
+		agentID, _ = reg["agent_id"].(string)
+		agentKey, _ = reg["agent_key"].(string)
+		if strings.TrimSpace(agentID) == "" || strings.TrimSpace(agentKey) == "" {
+			t.Fatalf("register returned empty credentials: %v", reg)
+		}
+	}
+
 	t.Run("observe requires agent header", func(t *testing.T) {
-		status, body := mustJSON(t, client, http.MethodPost, baseURL+"/api/agent/observe", "", map[string]any{})
+		status, body := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/observe", "", "", map[string]any{})
 		if status != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d body=%s", status, string(body))
 		}
 	})
 
+	t.Run("observe rejects invalid key", func(t *testing.T) {
+		status, body := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/observe", agentID, "invalid-key", map[string]any{})
+		if status != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d body=%s", status, string(body))
+		}
+	})
+
 	t.Run("skills endpoints", func(t *testing.T) {
-		status, indexBody, err := doRequest(client, http.MethodGet, baseURL+"/skills/index.json", "", nil)
+		status, indexBody, err := doRequest(client, http.MethodGet, baseURL+"/skills/index.json", "", "", nil)
 		if err != nil {
 			t.Fatalf("skills index request: %v", err)
 		}
@@ -38,7 +62,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 			t.Fatalf("unmarshal skills index: %v body=%s", err, string(indexBody))
 		}
 
-		status, fileBody, err := doRequest(client, http.MethodGet, baseURL+"/skills/survival/skill.md", "", nil)
+		status, fileBody, err := doRequest(client, http.MethodGet, baseURL+"/skills/survival/skill.md", "", "", nil)
 		if err != nil {
 			t.Fatalf("skills file request: %v", err)
 		}
@@ -53,7 +77,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 	idempotencyKey := "remote-e2e-" + time.Now().UTC().Format("20060102150405")
 
 	t.Run("observe action status replay ops", func(t *testing.T) {
-		status, observeBody := mustJSON(t, client, http.MethodPost, baseURL+"/api/agent/observe", agentID, map[string]any{})
+		status, observeBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/observe", agentID, agentKey, map[string]any{})
 		if status != http.StatusOK {
 			t.Fatalf("observe status=%d body=%s", status, string(observeBody))
 		}
@@ -66,7 +90,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 			"dt":            30,
 			"strategy_hash": "remote-e2e",
 		}
-		status, firstActionBody := mustJSON(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, actionReq)
+		status, firstActionBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, actionReq)
 		if status != http.StatusOK {
 			t.Fatalf("first action status=%d body=%s", status, string(firstActionBody))
 		}
@@ -75,7 +99,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 			t.Fatalf("unmarshal first action: %v body=%s", err, string(firstActionBody))
 		}
 
-		status, secondActionBody := mustJSON(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, actionReq)
+		status, secondActionBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, actionReq)
 		if status != http.StatusOK {
 			t.Fatalf("second action status=%d body=%s", status, string(secondActionBody))
 		}
@@ -87,7 +111,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 			t.Fatalf("idempotency mismatch: first=%v second=%v", first["updated_state"], second["updated_state"])
 		}
 
-		status, statusBody := mustJSON(t, client, http.MethodPost, baseURL+"/api/agent/status", agentID, map[string]any{})
+		status, statusBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/status", agentID, agentKey, map[string]any{})
 		if status != http.StatusOK {
 			t.Fatalf("status endpoint status=%d body=%s", status, string(statusBody))
 		}
@@ -101,7 +125,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 		}
 
 		replayURL := baseURL + "/api/agent/replay?limit=20"
-		status, replayBody, err := doRequest(client, http.MethodGet, replayURL, agentID, nil)
+		status, replayBody, err := doRequest(client, http.MethodGet, replayURL, agentID, agentKey, nil)
 		if err != nil {
 			t.Fatalf("replay request: %v", err)
 		}
@@ -116,7 +140,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 			t.Fatalf("expected replay events in response")
 		}
 
-		status, kpiBody, err := doRequest(client, http.MethodGet, baseURL+"/ops/kpi", "", nil)
+		status, kpiBody, err := doRequest(client, http.MethodGet, baseURL+"/ops/kpi", "", "", nil)
 		if err != nil {
 			t.Fatalf("kpi request: %v", err)
 		}
@@ -133,16 +157,16 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 	})
 }
 
-func mustJSON(t *testing.T, client *http.Client, method, url, agentID string, body map[string]any) (int, []byte) {
+func mustJSONWithAuth(t *testing.T, client *http.Client, method, url, agentID, agentKey string, body map[string]any) (int, []byte) {
 	t.Helper()
-	status, respBody, err := doRequest(client, method, url, agentID, body)
+	status, respBody, err := doRequest(client, method, url, agentID, agentKey, body)
 	if err != nil {
 		t.Fatalf("%s %s request failed: %v", method, url, err)
 	}
 	return status, respBody
 }
 
-func doRequest(client *http.Client, method, url, agentID string, body map[string]any) (int, []byte, error) {
+func doRequest(client *http.Client, method, url, agentID, agentKey string, body map[string]any) (int, []byte, error) {
 	var payloadBytes []byte
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -169,6 +193,9 @@ func doRequest(client *http.Client, method, url, agentID string, body map[string
 		}
 		if strings.TrimSpace(agentID) != "" {
 			req.Header.Set("X-Agent-ID", agentID)
+		}
+		if strings.TrimSpace(agentKey) != "" {
+			req.Header.Set("X-Agent-Key", agentKey)
 		}
 		resp, err := client.Do(req)
 		if err != nil {

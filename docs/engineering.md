@@ -50,6 +50,9 @@
 
 ## 接口约束（单一入口）
 
+注册与身份接口：
+- `POST /api/agent/register`（注册并领取 `agent_id` 与凭据）
+
 Agent 动作与状态统一使用：
 - `POST /api/agent/observe`
 - `POST /api/agent/action`（必须包含 `idempotency_key`）
@@ -60,6 +63,8 @@ Skills 静态资源读取接口（只读）：
 - `GET /skills/*filepath`（例如 `GET /skills/survival/skill.md`）
 
 约束：
+- 除 `POST /api/agent/register` 外，`/api/agent/*` 请求都必须通过身份校验
+- 身份上下文由 `agent_id + agent_key` 共同确定，不接受匿名调用
 - 状态读取与动作提交仅通过上述接口进入同一结算链路
 - 禁止维护平行动作接口，避免语义漂移与双实现分叉
 - 策略边界（硬约束）：策略由 Agent 本地处理与存储，服务端不提供策略存储或策略读取 API。
@@ -98,7 +103,7 @@ Skills 静态资源读取接口（只读）：
 边界上下文（MVP 三域）：
 - `survival`：核心生存规则与动作结算（唯一业务规则源）。
 - `world`：只读环境快照提供者，不做结算。
-- `platform`：鉴权上下文、skills 静态分发、指标与通知等平台能力。
+- `platform`：Agent 注册、鉴权上下文、skills 静态分发、指标与通知等平台能力。
 
 写入边界：
 - `ActionUseCase` 是唯一写入口。
@@ -133,6 +138,8 @@ flowchart LR
   end
 
   subgraph AP["app（用例编排）"]
+    RG["RegisterAgentUseCase (write)"]
+    AU["AuthUseCase (read)"]
     O["ObserveUseCase (read)"]
     A["ActionUseCase (write)"]
     S["StatusUseCase (read)"]
@@ -147,11 +154,15 @@ flowchart LR
     PF["platform\nIdentityContext + SkillsIndex + NotificationPolicy"]
   end
 
+  H --> RG
+  H --> AU
   H --> O
   H --> A
   H --> S
   H --> K
 
+  RG --> PF
+  AU --> PF
   O --> WD
   O --> SV
   A --> SV
@@ -163,6 +174,8 @@ flowchart LR
   A --> RP
   S --> RP
   K --> RP
+  RG --> RP
+  AU --> RP
   A --> MP
 
   RE -.implements.-> RP
@@ -177,10 +190,10 @@ flowchart LR
 
 ### 上下文关系（Context Map）
 
-- `platform` -> `survival`：提供 `agent_id` 与鉴权上下文（上游）。
+- `platform` -> `survival`：提供经过认证的 `agent_id` 与鉴权上下文（上游）。
 - `world` -> `survival`：提供环境快照（地形、资源、威胁、时间）。
 - `survival` -> `platform`：发布事件用于指标、告警与摘要。
-- `platform` 提供 skills 静态资源分发，但不进入动作结算。
+- `platform` 提供 Agent 注册、凭据校验与 skills 静态资源分发，但不进入动作结算规则。
 
 边界约束：
 - `world` 仅提供只读快照，不做业务结算。
@@ -216,20 +229,28 @@ flowchart LR
 
 ### 应用层用例（与 API 对齐）
 
-1. `ObserveUseCase`
+1. `RegisterAgentUseCase`
+- 对应：`POST /api/agent/register`
+- 职责：分配 Agent 身份并建立后续调用所需的认证上下文
+
+2. `AuthUseCase`
+- 对应：`/api/agent/*`（除 register）
+- 职责：在进入业务用例前完成身份校验并注入 `agent_id` 上下文
+
+3. `ObserveUseCase`
 - 对应：`POST /api/agent/observe`
 - 职责：聚合世界局部信息并返回观察快照，不改写状态
 
-2. `ActionUseCase`
+4. `ActionUseCase`
 - 对应：`POST /api/agent/action`
 - 输入要求：必须包含 `idempotency_key`
 - 职责：幂等校验 -> 载入状态 -> 结算 -> 事务提交（状态/动作/事件）-> 返回结果
 
-3. `StatusUseCase`
+5. `StatusUseCase`
 - 对应：`POST /api/agent/status`
 - 职责：读取最新状态快照（只读）
 
-4. `SkillsReadUseCase`
+6. `SkillsReadUseCase`
 - 对应：`GET /skills/index.json`、`GET /skills/*filepath`
 - 职责：读取静态文件与索引（只读）
 
@@ -343,8 +364,9 @@ flowchart LR
   ST["Local Strategy Store"]
   HS["Heartbeat Scheduler (local)"]
   SK["Skills Static API\nGET /skills/index.json\nGET /skills/*"]
-  API["Agent API\nPOST /api/agent/observe|action|status"]
-  APP["App UseCases\nobserve/action/status"]
+  API["Agent API\nPOST /api/agent/register|observe|action|status"]
+  AUTH["Platform Auth\nregister + verify"]
+  APP["App UseCases\nregister/observe/action/status"]
   DOM["Survival Domain\nrules + settlement"]
   WLD["World Snapshot\n(read-only)"]
   DB["State/Action/Event Store"]
@@ -354,6 +376,7 @@ flowchart LR
   A --> ST
   A --> SK
   A --> API
+  API --> AUTH
   API --> APP --> DOM
   WLD --> DOM
   DOM --> DB
@@ -377,6 +400,7 @@ flowchart LR
   localSkills["Local Skills Runtime"]
   strategyStore["Strategy Store (Local)"]
   scheduler["Heartbeat Scheduler"]
+  auth["Platform Auth"]
   world["World System"]
   api["Agent API (/api/agent/*)"]
   settlement["Settlement State"]
@@ -393,10 +417,13 @@ flowchart LR
 
   scheduler -->|"周期触发"| agent
   agent -->|"循环前读取策略"| strategyStore
+  agent -->|"注册身份"| api
+  api -->|"签发 agent_id/credential"| auth
 
   agent -->|"Observe"| api
   agent -->|"Action"| api
   agent -->|"Status"| api
+  api -->|"校验身份"| auth
 
   api -->|"读取环境"| world
   api -->|"结算状态"| settlement
@@ -451,27 +478,38 @@ sequenceDiagram
   participant A as Agent
   participant SS as Strategy Store
   participant API as Agent API
+  participant AUTH as Platform Auth
   participant W as World
   participant E as Settlement Engine
   participant DB as State/Event Store
   participant M as Metrics
 
+  A->>API: POST /api/agent/register
+  API->>AUTH: Create identity credentials
+  AUTH-->>A: agent_id + credential
+
   HS->>A: Trigger heartbeat(dt)
   A->>SS: Read strategy before loop
   SS-->>A: Active strategy snapshot
   A->>API: POST /api/agent/observe
+  API->>AUTH: Verify agent_id + credential
+  AUTH-->>API: IdentityContext
   API->>W: Read local world state
   W-->>API: Terrain/resources/threat/time
   API-->>A: Observation
 
   A->>A: Evaluate risk & choose intent
   A->>API: POST /api/agent/action(intent, dt)
+  API->>AUTH: Verify agent_id + credential
+  AUTH-->>API: IdentityContext
   API->>E: Execute + settle(HP/Hunger/Energy)
   E->>DB: Persist state/action/event
   E-->>API: Result + updated state
   API-->>A: Action result
 
   A->>API: POST /api/agent/status
+  API->>AUTH: Verify agent_id + credential
+  AUTH-->>API: IdentityContext
   API->>DB: Load latest state
   DB-->>API: Current state snapshot
   API-->>A: Status response
@@ -505,7 +543,9 @@ sequenceDiagram
 - [x] Action 最小契约加固（必填校验、允许动作类型、统一错误结构）
 
 下一步 TODO（按优先级）：
-- [x] 身份边界收口：以 `X-Agent-ID` 为主，逐步移除 body `agent_id`
+- [ ] 增加 Agent 注册与凭据签发（`POST /api/agent/register`）
+- [ ] 增加统一鉴权中间层（`agent_id + credential`）
+- [ ] 身份边界升级：从 `X-Agent-ID` 迁移到“注册身份 + 凭据校验”
 - [x] World Provider 最小可配置化：支持昼夜与威胁动态，不再固定 mock 常量
 - [x] 完成 P0 回归测试：主循环、死亡/濒死、幂等重复请求、昼夜切换
 - [x] 建立 KPI 计算任务与看板（MVP：进程内统计 + `GET /ops/kpi`）

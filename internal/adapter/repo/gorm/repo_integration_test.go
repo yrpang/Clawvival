@@ -319,3 +319,39 @@ func TestTxManager_RunInTxCommitAndRollback(t *testing.T) {
 		t.Fatalf("expected rollback to remove state, got err=%v", err)
 	}
 }
+
+func TestAgentCredentialRepo_CreateGetAndConflict(t *testing.T) {
+	dsn := requireDSN(t)
+	db, err := OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	ctx := context.Background()
+	agentID := "it-agent-credential"
+	_ = db.Exec("DELETE FROM agent_credentials WHERE agent_id = ?", agentID).Error
+
+	repo := NewAgentCredentialRepo(db)
+	rec := ports.AgentCredentialRecord{
+		AgentID:   agentID,
+		KeySalt:   []byte("salt"),
+		KeyHash:   []byte("hash"),
+		Status:    "active",
+		CreatedAt: time.Unix(1000, 0).UTC(),
+	}
+	if err := repo.Create(ctx, rec); err != nil {
+		t.Fatalf("create credential: %v", err)
+	}
+	got, err := repo.GetByAgentID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("get credential: %v", err)
+	}
+	if got.AgentID != agentID || got.Status != "active" {
+		t.Fatalf("unexpected credential: %+v", got)
+	}
+	if err := repo.Create(ctx, rec); err != ports.ErrConflict {
+		t.Fatalf("expected conflict on duplicate create, got %v", err)
+	}
+	if _, err := repo.GetByAgentID(ctx, agentID+"-missing"); err != ports.ErrNotFound {
+		t.Fatalf("expected not found on missing credential, got %v", err)
+	}
+}

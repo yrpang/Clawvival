@@ -43,3 +43,16 @@
 1. Task-specific tests pass.
 2. Full regression passes (`go test ./...`).
 3. Changes are limited to the task scope.
+
+## Deployment Runbook
+- Clawverse production deploy is triggered by pushing to `main` (GitHub Action `Fly Deploy`).
+- Before deploy, if schema changed:
+1. Apply DB migration manually first (schema-first).
+2. Use `scripts/migrate_postgres.sh` following the current project procedure (fly proxy + secrets/env + migrate).
+- Recommended release sequence:
+1. Run full tests: `go test ./...`.
+2. If migration exists, execute migration and verify success.
+3. Commit changes to `main`.
+4. Push: `git push origin main`.
+5. Check workflow status: `gh run list --branch main --limit 5` and `gh run watch <run_id> --exit-status`.
+- Do not push code that depends on unapplied schema changes.

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"log"
 	"os"
 	"strconv"
@@ -15,6 +13,7 @@ import (
 	staticskills "clawverse/internal/adapter/skills/static"
 	worldruntime "clawverse/internal/adapter/world/runtime"
 	"clawverse/internal/app/action"
+	"clawverse/internal/app/auth"
 	"clawverse/internal/app/observe"
 	"clawverse/internal/app/ports"
 	"clawverse/internal/app/replay"
@@ -27,12 +26,19 @@ import (
 )
 
 func main() {
-	stateRepo, actionRepo, eventRepo, worldObjectRepo, sessionRepo, txManager := mustBuildRepos()
+	stateRepo, credRepo, actionRepo, eventRepo, worldObjectRepo, sessionRepo, txManager := mustBuildRepos()
 	worldProvider := buildWorldProviderFromEnv()
 	skillsProvider := staticskills.Provider{Root: "./skills"}
 	kpiRecorder := metricsinmem.NewRecorder()
 
 	h := httpadapter.Handler{
+		RegisterUC: auth.RegisterUseCase{
+			Credentials: credRepo,
+			StateRepo:   stateRepo,
+			TxManager:   txManager,
+			Now:         time.Now,
+		},
+		AuthUC:    auth.VerifyUseCase{Credentials: credRepo},
 		ObserveUC: observe.UseCase{StateRepo: stateRepo, World: worldProvider},
 		ActionUC: action.UseCase{
 			TxManager:   txManager,
@@ -55,11 +61,11 @@ func main() {
 	s := server.Default(server.WithHostPorts(":8080"))
 	h.RegisterRoutes(s)
 
-	log.Println("clawverse server listening on :8080 (demo agent: demo-agent)")
+	log.Println("clawverse server listening on :8080")
 	s.Spin()
 }
 
-func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentSessionRepository, ports.TxManager) {
+func mustBuildRepos() (ports.AgentStateRepository, ports.AgentCredentialRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentSessionRepository, ports.TxManager) {
 	dsn := os.Getenv("CLAWVERSE_DB_DSN")
 	if dsn == "" {
 		log.Fatal("CLAWVERSE_DB_DSN is required")
@@ -68,23 +74,7 @@ func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionReposito
 	if err != nil {
 		log.Fatalf("open postgres: %v", err)
 	}
-
-	stateRepo := gormrepo.NewAgentStateRepo(db)
-	_, err = stateRepo.GetByAgentID(context.Background(), "demo-agent")
-	if err != nil && errors.Is(err, ports.ErrNotFound) {
-		seed := survival.AgentStateAggregate{
-			AgentID: "demo-agent",
-			Vitals:  survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
-			Version: 1,
-		}
-		if saveErr := stateRepo.SaveWithVersion(context.Background(), seed, 0); saveErr != nil {
-			log.Fatalf("seed demo agent: %v (did you run SQL migrations manually?)", saveErr)
-		}
-	} else if err != nil {
-		log.Fatalf("load demo agent: %v (did you run SQL migrations manually?)", err)
-	}
-
-	return stateRepo, gormrepo.NewActionExecutionRepo(db), gormrepo.NewEventRepo(db), gormrepo.NewWorldObjectRepo(db), gormrepo.NewAgentSessionRepo(db), gormrepo.NewTxManager(db)
+	return gormrepo.NewAgentStateRepo(db), gormrepo.NewAgentCredentialRepo(db), gormrepo.NewActionExecutionRepo(db), gormrepo.NewEventRepo(db), gormrepo.NewWorldObjectRepo(db), gormrepo.NewAgentSessionRepo(db), gormrepo.NewTxManager(db)
 }
 
 func buildWorldProviderFromEnv() ports.WorldProvider {

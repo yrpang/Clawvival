@@ -53,3 +53,16 @@ type AgentSessionRepository interface {
 	EnsureActive(ctx context.Context, sessionID, agentID string, startTick int64) error
 	Close(ctx context.Context, sessionID string, cause survival.DeathCause, endedAt time.Time) error
 }
+
+type AgentCredentialRecord struct {
+	AgentID   string
+	KeySalt   []byte
+	KeyHash   []byte
+	Status    string
+	CreatedAt time.Time
+}
+
+type AgentCredentialRepository interface {
+	Create(ctx context.Context, credential AgentCredentialRecord) error
+	GetByAgentID(ctx context.Context, agentID string) (AgentCredentialRecord, error)
+}

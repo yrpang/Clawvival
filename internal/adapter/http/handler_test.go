@@ -2,41 +2,85 @@ package httpadapter
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	staticskills "clawverse/internal/adapter/skills/static"
 	"clawverse/internal/app/action"
+	"clawverse/internal/app/auth"
+	"clawverse/internal/app/ports"
 	"clawverse/internal/app/skills"
+	"clawverse/internal/domain/survival"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/cloudwego/hertz/pkg/route/param"
 )
 
-func TestRequireAgentID_FromHeader(t *testing.T) {
+func TestRequireAuthenticatedAgent_FromHeaders(t *testing.T) {
+	salt := []byte("salt")
+	key := "k1"
+	h := Handler{
+		AuthUC: auth.VerifyUseCase{Credentials: fakeCredentialStore{
+			cred: ports.AgentCredentialRecord{
+				AgentID: "agent-1",
+				KeySalt: salt,
+				KeyHash: hashForTest(salt, key),
+				Status:  auth.CredentialStatusActive,
+			},
+		}},
+	}
 	ctx := &app.RequestContext{}
 	ctx.Request.Header.Set(agentIDHeader, "agent-1")
+	ctx.Request.Header.Set(agentKeyHeader, key)
 
-	agentID, err := requireAgentID(ctx)
+	agentID, err := h.requireAuthenticatedAgent(context.Background(), ctx)
 	if err != nil {
-		t.Fatalf("requireAgentID error: %v", err)
+		t.Fatalf("requireAuthenticatedAgent error: %v", err)
 	}
 	if agentID != "agent-1" {
 		t.Fatalf("unexpected agent id: %q", agentID)
 	}
 }
 
-func TestRequireAgentID_MissingHeader(t *testing.T) {
+func TestRequireAuthenticatedAgent_MissingHeader(t *testing.T) {
+	h := Handler{}
 	ctx := &app.RequestContext{}
 
-	_, err := requireAgentID(ctx)
+	_, err := h.requireAuthenticatedAgent(context.Background(), ctx)
 	if err == nil {
 		t.Fatalf("expected error when header is missing")
 	}
-	if err != ErrMissingAgentIDHeader {
-		t.Fatalf("expected ErrMissingAgentIDHeader, got %v", err)
+	if err != ErrMissingAgentCredentials {
+		t.Fatalf("expected ErrMissingAgentCredentials, got %v", err)
+	}
+}
+
+func TestRequireAuthenticatedAgent_MissingKeyHeader(t *testing.T) {
+	h := Handler{}
+	ctx := &app.RequestContext{}
+	ctx.Request.Header.Set(agentIDHeader, "agent-1")
+
+	_, err := h.requireAuthenticatedAgent(context.Background(), ctx)
+	if err != ErrMissingAgentKeyHeader {
+		t.Fatalf("expected ErrMissingAgentKeyHeader, got %v", err)
+	}
+}
+
+func TestRequireAuthenticatedAgent_InvalidCredentials(t *testing.T) {
+	h := Handler{
+		AuthUC: auth.VerifyUseCase{Credentials: fakeCredentialStore{}},
+	}
+	ctx := &app.RequestContext{}
+	ctx.Request.Header.Set(agentIDHeader, "agent-1")
+	ctx.Request.Header.Set(agentKeyHeader, "wrong")
+
+	_, err := h.requireAuthenticatedAgent(context.Background(), ctx)
+	if err != auth.ErrInvalidCredentials {
+		t.Fatalf("expected ErrInvalidCredentials, got %v", err)
 	}
 }
 
@@ -102,6 +146,22 @@ func TestWriteError_ActionCooldownActive(t *testing.T) {
 		t.Fatalf("unmarshal response: %v", err)
 	}
 	if got, want := body["error"]["code"], "action_cooldown_active"; got != want {
+		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
+	}
+}
+
+func TestWriteError_InvalidCredentials(t *testing.T) {
+	ctx := &app.RequestContext{}
+	writeError(ctx, auth.ErrInvalidCredentials)
+
+	if got, want := ctx.Response.StatusCode(), consts.StatusUnauthorized; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]map[string]string
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got, want := body["error"]["code"], "invalid_agent_credentials"; got != want {
 		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
 	}
 }
@@ -186,6 +246,35 @@ func TestSkillsFile_PathTraversalBlocked(t *testing.T) {
 	}
 }
 
+func TestRegister_OK(t *testing.T) {
+	now := time.Unix(1700000000, 0).UTC()
+	h := Handler{
+		RegisterUC: auth.RegisterUseCase{
+			Credentials: &fakeCredentialStore{},
+			StateRepo:   &fakeStateStore{},
+			TxManager:   fakeTxManager{},
+			Now:         func() time.Time { return now },
+		},
+	}
+	ctx := &app.RequestContext{}
+
+	h.register(context.Background(), ctx)
+
+	if got, want := ctx.Response.StatusCode(), consts.StatusCreated; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if _, ok := body["agent_id"]; !ok {
+		t.Fatalf("expected agent_id in response")
+	}
+	if _, ok := body["agent_key"]; !ok {
+		t.Fatalf("expected agent_key in response")
+	}
+}
+
 type fakeSkillsProvider struct {
 	index []byte
 	files map[string][]byte
@@ -207,4 +296,45 @@ func (p fakeSkillsProvider) File(_ context.Context, path string) ([]byte, error)
 		return b, nil
 	}
 	return nil, errors.New("not found")
+}
+
+type fakeCredentialStore struct {
+	cred ports.AgentCredentialRecord
+}
+
+func (s fakeCredentialStore) Create(_ context.Context, credential ports.AgentCredentialRecord) error {
+	return nil
+}
+
+func (s fakeCredentialStore) GetByAgentID(_ context.Context, _ string) (ports.AgentCredentialRecord, error) {
+	if s.cred.AgentID == "" {
+		return ports.AgentCredentialRecord{}, ports.ErrNotFound
+	}
+	return s.cred, nil
+}
+
+type fakeStateStore struct{}
+
+func (fakeStateStore) GetByAgentID(_ context.Context, _ string) (survival.AgentStateAggregate, error) {
+	return survival.AgentStateAggregate{}, ports.ErrNotFound
+}
+
+func (fakeStateStore) SaveWithVersion(_ context.Context, _ survival.AgentStateAggregate, _ int64) error {
+	return nil
+}
+
+type fakeTxManager struct{}
+
+func (fakeTxManager) RunInTx(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+
+func hashForTest(salt []byte, key string) []byte {
+	b := make([]byte, 0, len(salt)+len(key))
+	b = append(b, salt...)
+	b = append(b, key...)
+	sum := sha256.Sum256(b)
+	out := make([]byte, len(sum))
+	copy(out, sum[:])
+	return out
 }
