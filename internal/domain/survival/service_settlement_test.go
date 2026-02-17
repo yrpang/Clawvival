@@ -115,8 +115,10 @@ func TestSettlementService_MoveChangesPositionAndConsumesEnergy(t *testing.T) {
 	}
 
 	out, err := svc.Settle(state, ActionIntent{
-		Type:   ActionMove,
-		Params: map[string]int{"dx": 1, "dy": -1},
+		Type:      ActionMove,
+		Direction: "E",
+		DX:        1,
+		DY:        -1,
 	}, HeartbeatDelta{Minutes: 1}, time.Now(), WorldSnapshot{})
 	if err != nil {
 		t.Fatalf("settle error: %v", err)
@@ -142,8 +144,9 @@ func TestSettlementService_EatRecoversHungerAndConsumesFood(t *testing.T) {
 	}
 
 	out, err := svc.Settle(state, ActionIntent{
-		Type:   ActionEat,
-		Params: map[string]int{"food": int(FoodBerry)},
+		Type:     ActionEat,
+		ItemType: "berry",
+		Count:    1,
 	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
 	if err != nil {
 		t.Fatalf("settle error: %v", err)

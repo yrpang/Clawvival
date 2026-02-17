@@ -10,11 +10,11 @@ func TestSettlementService_NightCombatHigherRisk(t *testing.T) {
 	state := AgentStateAggregate{AgentID: "a-1", Vitals: Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1}
 	now := time.Now()
 
-	dayOut, err := svc.Settle(state, ActionIntent{Type: ActionCombat, Params: map[string]int{"target_level": 1}}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "day", ThreatLevel: 1})
+	dayOut, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "day", ThreatLevel: 1})
 	if err != nil {
 		t.Fatalf("day settle error: %v", err)
 	}
-	nightOut, err := svc.Settle(state, ActionIntent{Type: ActionCombat, Params: map[string]int{"target_level": 1}}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "night", ThreatLevel: 4})
+	nightOut, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "night", ThreatLevel: 4})
 	if err != nil {
 		t.Fatalf("night settle error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestSettlementService_CombatAffectedByVisibilityPenalty(t *testing.T) {
 	state := AgentStateAggregate{AgentID: "a-1", Vitals: Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1}
 	now := time.Now()
 
-	lowPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat, Params: map[string]int{"target_level": 1}}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
+	lowPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
 		TimeOfDay:         "night",
 		ThreatLevel:       3,
 		VisibilityPenalty: 0,
@@ -82,7 +82,7 @@ func TestSettlementService_CombatAffectedByVisibilityPenalty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("low penalty settle error: %v", err)
 	}
-	highPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat, Params: map[string]int{"target_level": 1}}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
+	highPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
 		TimeOfDay:         "night",
 		ThreatLevel:       3,
 		VisibilityPenalty: 2,

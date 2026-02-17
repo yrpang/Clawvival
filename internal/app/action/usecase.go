@@ -45,6 +45,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	req.AgentID = strings.TrimSpace(req.AgentID)
 	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
 	req.Intent.Type = survival.ActionType(strings.TrimSpace(string(req.Intent.Type)))
+	req.Intent = normalizeIntent(req.Intent)
 	if req.AgentID == "" || req.IdempotencyKey == "" || !isSupportedActionType(req.Intent.Type) {
 		return Response{}, ErrInvalidRequest
 	}
@@ -254,16 +255,15 @@ func worldTimeWindow(beforeSeconds int64, dtMinutes int) (int64, int64) {
 func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
 	switch intent.Type {
 	case survival.ActionBuild:
-		return survival.CanBuild(state, survival.BuildKind(intent.Params["kind"]))
+		kind, ok := buildKindFromObjectType(intent.ObjectType)
+		return ok && survival.CanBuild(state, kind)
 	case survival.ActionCraft:
-		return survival.CanCraft(state, survival.RecipeID(intent.Params["recipe"]))
+		return survival.CanCraft(state, survival.RecipeID(intent.RecipeID))
 	case survival.ActionFarm, survival.ActionFarmPlant:
-		if intent.Params["seed"] > 0 {
-			return survival.CanPlantSeed(state)
-		}
 		return survival.CanPlantSeed(state)
 	case survival.ActionEat:
-		return survival.CanEat(state, survival.FoodID(intent.Params["food"]))
+		foodID, ok := foodIDFromItemType(intent.ItemType)
+		return ok && survival.CanEat(state, foodID)
 	default:
 		return true
 	}
@@ -273,8 +273,8 @@ func positionPreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 	if intent.Type != survival.ActionMove {
 		return true
 	}
-	dx := intent.Params["dx"]
-	dy := intent.Params["dy"]
+	dx := intent.DX
+	dy := intent.DY
 	if abs(dx) > 1 || abs(dy) > 1 {
 		return false
 	}
@@ -385,24 +385,28 @@ func isSupportedActionType(t survival.ActionType) bool {
 func hasValidActionParams(intent survival.ActionIntent) bool {
 	switch intent.Type {
 	case survival.ActionRest:
-		restMinutes := intent.Params["rest_minutes"]
+		restMinutes := intent.RestMinutes
 		return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
 	case survival.ActionSleep:
 		return true
 	case survival.ActionMove:
-		return intent.Params["dx"] != 0 || intent.Params["dy"] != 0
+		return intent.DX != 0 || intent.DY != 0
+	case survival.ActionGather:
+		return true
 	case survival.ActionBuild:
-		return intent.Params["kind"] > 0
+		_, ok := buildKindFromObjectType(intent.ObjectType)
+		return ok && intent.Pos != nil
 	case survival.ActionFarm, survival.ActionFarmPlant:
-		return intent.Params["seed"] > 0 || intent.Params["farm_id"] > 0
+		return strings.TrimSpace(intent.FarmID) != ""
 	case survival.ActionFarmHarvest:
-		return intent.Params["farm_id"] > 0 || len(intent.Params) == 0
+		return strings.TrimSpace(intent.FarmID) != ""
 	case survival.ActionCraft:
-		return intent.Params["recipe"] > 0
+		return intent.RecipeID > 0
 	case survival.ActionEat:
-		return intent.Params["food"] > 0
+		_, ok := foodIDFromItemType(intent.ItemType)
+		return ok && intent.Count > 0
 	case survival.ActionContainerDeposit, survival.ActionContainerWithdraw:
-		return intent.Params["container_id"] > 0 || len(intent.Params) == 0
+		return strings.TrimSpace(intent.ContainerID) != "" && hasValidItems(intent.Items)
 	case survival.ActionTerminate:
 		return true
 	default:
@@ -511,7 +515,7 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 }
 
 func startRestAction(ctx context.Context, u UseCase, req Request, state survival.AgentStateAggregate, nowAt time.Time) (Response, error) {
-	restMinutes := req.Intent.Params["rest_minutes"]
+	restMinutes := req.Intent.RestMinutes
 	next := state
 	next.OngoingAction = &survival.OngoingActionInfo{
 		Type:    survival.ActionRest,
@@ -555,6 +559,63 @@ func startRestAction(ctx context.Context, u UseCase, req Request, state survival
 		Events:                 []survival.DomainEvent{event},
 		ResultCode:             survival.ResultOK,
 	}, nil
+}
+
+func normalizeIntent(in survival.ActionIntent) survival.ActionIntent {
+	out := in
+	out.Direction = strings.ToUpper(strings.TrimSpace(out.Direction))
+	switch out.Direction {
+	case "N":
+		out.DX, out.DY = 0, 1
+	case "S":
+		out.DX, out.DY = 0, -1
+	case "E":
+		out.DX, out.DY = 1, 0
+	case "W":
+		out.DX, out.DY = -1, 0
+	}
+	if out.Count <= 0 {
+		out.Count = 1
+	}
+	return out
+}
+
+func buildKindFromObjectType(objectType string) (survival.BuildKind, bool) {
+	switch strings.ToLower(strings.TrimSpace(objectType)) {
+	case "bed", "bed_rough", "bed_good":
+		return survival.BuildBed, true
+	case "box":
+		return survival.BuildBox, true
+	case "farm_plot":
+		return survival.BuildFarm, true
+	case "torch":
+		return survival.BuildTorch, true
+	default:
+		return 0, false
+	}
+}
+
+func foodIDFromItemType(itemType string) (survival.FoodID, bool) {
+	switch strings.ToLower(strings.TrimSpace(itemType)) {
+	case "berry":
+		return survival.FoodBerry, true
+	case "bread":
+		return survival.FoodBread, true
+	default:
+		return 0, false
+	}
+}
+
+func hasValidItems(items []survival.ItemAmount) bool {
+	if len(items) == 0 {
+		return false
+	}
+	for _, item := range items {
+		if strings.TrimSpace(item.ItemType) == "" || item.Count <= 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func saveActionExecution(ctx context.Context, repo ports.ActionExecutionRepository, agentID, idempotencyKey string, intentType survival.ActionType, dt int, result ports.ActionResult, appliedAt time.Time) error {

@@ -42,14 +42,22 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		}
 		next.Vitals.Energy -= moveEnergyCost
 		next.Vitals.Hunger -= scaledInt(1, delta.Minutes)
-		next.Position.X += intent.Params["dx"]
-		next.Position.Y += intent.Params["dy"]
+		next.Position.X += intent.DX
+		next.Position.Y += intent.DY
 	case ActionCombat:
 		next.Vitals.Energy -= scaledInt(22, delta.Minutes)
 		next.Vitals.Hunger -= scaledInt(2, delta.Minutes)
 	case ActionBuild:
 		next.Vitals.Energy -= scaledInt(14, delta.Minutes)
-		obj, ok := Build(&next, BuildKind(intent.Params["kind"]), next.Position.X, next.Position.Y)
+		kind, ok := buildKindFromIntent(intent.ObjectType)
+		if !ok {
+			break
+		}
+		buildX, buildY := next.Position.X, next.Position.Y
+		if intent.Pos != nil {
+			buildX, buildY = intent.Pos.X, intent.Pos.Y
+		}
+		obj, ok := Build(&next, kind, buildX, buildY)
 		if ok {
 			actionEvents = append(actionEvents, DomainEvent{
 				Type:       "build_completed",
@@ -65,26 +73,21 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 	case ActionFarm, ActionFarmPlant:
 		next.Vitals.Energy -= scaledInt(10, delta.Minutes)
 		next.Vitals.Hunger -= scaledInt(1, delta.Minutes)
-		seedToUse := intent.Params["seed"]
-		if seedToUse <= 0 {
-			seedToUse = 1
-		}
-		if seedToUse > 0 {
-			_, _ = PlantSeed(&next)
-		}
+		_, _ = PlantSeed(&next)
 	case ActionFarmHarvest:
 		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
 		next.AddItem("wheat", 2)
 	case ActionContainerDeposit, ActionContainerWithdraw:
 		next.Vitals.Energy -= scaledInt(4, delta.Minutes)
+		applyContainerTransfer(&next, intent)
 	case ActionRetreat:
 		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
 		next.Position = moveToward(next.Position, next.Home)
 	case ActionCraft:
 		next.Vitals.Energy -= scaledInt(12, delta.Minutes)
-		_ = Craft(&next, RecipeID(intent.Params["recipe"]))
+		_ = Craft(&next, RecipeID(intent.RecipeID))
 	case ActionEat:
-		_ = Eat(&next, FoodID(intent.Params["food"]))
+		_ = Eat(&next, foodIDFromIntent(intent.ItemType))
 	}
 
 	hpLossFromHunger := scaledFloat(0.08*float64(absMinZero(next.Vitals.Hunger)), delta.Minutes)
@@ -119,7 +122,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 			},
 			"decision": map[string]any{
 				"intent":     string(intent.Type),
-				"params":     intent.Params,
+				"params":     intentDecisionParams(intent),
 				"dt_minutes": delta.Minutes,
 			},
 			"state_after": map[string]any{
@@ -152,6 +155,92 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		Events:       events,
 		ResultCode:   resultCode,
 	}, nil
+}
+
+func buildKindFromIntent(objectType string) (BuildKind, bool) {
+	switch objectType {
+	case "bed", "bed_rough", "bed_good":
+		return BuildBed, true
+	case "box":
+		return BuildBox, true
+	case "farm_plot":
+		return BuildFarm, true
+	case "torch":
+		return BuildTorch, true
+	default:
+		return 0, false
+	}
+}
+
+func foodIDFromIntent(itemType string) FoodID {
+	switch itemType {
+	case "berry":
+		return FoodBerry
+	case "bread":
+		return FoodBread
+	default:
+		return FoodBerry
+	}
+}
+
+func intentDecisionParams(intent ActionIntent) map[string]any {
+	out := map[string]any{}
+	if intent.Direction != "" {
+		out["direction"] = intent.Direction
+	}
+	if intent.TargetID != "" {
+		out["target_id"] = intent.TargetID
+	}
+	if intent.RecipeID > 0 {
+		out["recipe_id"] = intent.RecipeID
+	}
+	if intent.ObjectType != "" {
+		out["object_type"] = intent.ObjectType
+	}
+	if intent.Pos != nil {
+		out["pos"] = map[string]int{"x": intent.Pos.X, "y": intent.Pos.Y}
+	}
+	if intent.ItemType != "" {
+		out["item_type"] = intent.ItemType
+	}
+	if intent.RestMinutes > 0 {
+		out["rest_minutes"] = intent.RestMinutes
+	}
+	if intent.BedID != "" {
+		out["bed_id"] = intent.BedID
+	}
+	if intent.FarmID != "" {
+		out["farm_id"] = intent.FarmID
+	}
+	if intent.ContainerID != "" {
+		out["container_id"] = intent.ContainerID
+	}
+	if len(intent.Items) > 0 {
+		items := make([]map[string]any, 0, len(intent.Items))
+		for _, item := range intent.Items {
+			items = append(items, map[string]any{"item_type": item.ItemType, "count": item.Count})
+		}
+		out["items"] = items
+	}
+	if intent.DX != 0 || intent.DY != 0 {
+		out["dx"] = intent.DX
+		out["dy"] = intent.DY
+	}
+	return out
+}
+
+func applyContainerTransfer(state *AgentStateAggregate, intent ActionIntent) {
+	for _, item := range intent.Items {
+		if item.Count <= 0 || item.ItemType == "" {
+			continue
+		}
+		switch intent.Type {
+		case ActionContainerDeposit:
+			_ = state.ConsumeItem(item.ItemType, item.Count)
+		case ActionContainerWithdraw:
+			state.AddItem(item.ItemType, item.Count)
+		}
+	}
 }
 
 func scaledInt(per30 int, dt int) int {

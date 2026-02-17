@@ -83,8 +83,9 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 		AgentID:        agentID,
 		IdempotencyKey: "build-1",
 		Intent: survival.ActionIntent{
-			Type:   survival.ActionBuild,
-			Params: map[string]int{"kind": int(survival.BuildBed)},
+			Type:       survival.ActionBuild,
+			ObjectType: "bed_rough",
+			Pos:        &survival.Position{X: 0, Y: 0},
 		}})
 	if err != nil {
 		t.Fatalf("build execute: %v", err)
@@ -270,7 +271,7 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 	resp, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "combat-critical-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat}})
 	if err != nil {
 		t.Fatalf("combat execute: %v", err)
 	}
@@ -528,8 +529,9 @@ func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
 		AgentID:        agentID,
 		IdempotencyKey: "build-precheck-1",
 		Intent: survival.ActionIntent{
-			Type:   survival.ActionBuild,
-			Params: map[string]int{"kind": int(survival.BuildBed)},
+			Type:       survival.ActionBuild,
+			ObjectType: "bed_rough",
+			Pos:        &survival.Position{X: 0, Y: 0},
 		}})
 	if !errors.Is(err, ErrActionPreconditionFailed) {
 		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
@@ -612,7 +614,7 @@ func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "combat-cooldown-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat}})
 	if !errors.Is(err, ErrActionCooldownActive) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}
