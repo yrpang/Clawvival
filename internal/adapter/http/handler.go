@@ -149,11 +149,13 @@ func (h Handler) replay(c context.Context, ctx *app.RequestContext) {
 	limit, _ := strconv.Atoi(string(ctx.Query("limit")))
 	occurredFrom, _ := strconv.ParseInt(string(ctx.Query("occurred_from")), 10, 64)
 	occurredTo, _ := strconv.ParseInt(string(ctx.Query("occurred_to")), 10, 64)
+	sessionID := string(ctx.Query("session_id"))
 	resp, err := h.ReplayUC.Execute(c, replay.Request{
 		AgentID:      agentID,
 		Limit:        limit,
 		OccurredFrom: occurredFrom,
 		OccurredTo:   occurredTo,
+		SessionID:    sessionID,
 	})
 	if err != nil {
 		writeError(ctx, err)

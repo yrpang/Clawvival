@@ -115,6 +115,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				result.Events[i].Payload = map[string]any{}
 			}
 			result.Events[i].Payload["agent_id"] = req.AgentID
+			result.Events[i].Payload["session_id"] = sessionID
 			if req.StrategyHash != "" {
 				result.Events[i].Payload["strategy_hash"] = req.StrategyHash
 			}

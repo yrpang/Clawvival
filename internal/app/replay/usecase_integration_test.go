@@ -102,4 +102,31 @@ func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
 	if got, want := out.Events[0].Payload["strategy_hash"], "sha-new"; got != want {
 		t.Fatalf("strategy hash mismatch: got=%v want=%v", got, want)
 	}
+	if got, want := out.Events[0].Payload["session_id"], "session-"+agentID; got != want {
+		t.Fatalf("session id mismatch: got=%v want=%v", got, want)
+	}
+
+	none, err := replayUC.Execute(ctx, Request{
+		AgentID:   agentID,
+		Limit:     50,
+		SessionID: "session-other",
+	})
+	if err != nil {
+		t.Fatalf("replay with other session: %v", err)
+	}
+	if len(none.Events) != 0 {
+		t.Fatalf("expected empty events for unmatched session, got=%d", len(none.Events))
+	}
+
+	bySession, err := replayUC.Execute(ctx, Request{
+		AgentID:   agentID,
+		Limit:     50,
+		SessionID: "session-" + agentID,
+	})
+	if err != nil {
+		t.Fatalf("replay with target session: %v", err)
+	}
+	if len(bySession.Events) == 0 {
+		t.Fatalf("expected events for matched session")
+	}
 }

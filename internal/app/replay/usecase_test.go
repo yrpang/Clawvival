@@ -52,6 +52,29 @@ func TestUseCase_FiltersEventsByTimeWindow(t *testing.T) {
 	}
 }
 
+func TestUseCase_FiltersEventsBySessionID(t *testing.T) {
+	repo := fakeRepo{events: []survival.DomainEvent{
+		{Type: "action_settled", OccurredAt: time.Unix(100, 0), Payload: map[string]any{"session_id": "session-a", "state_after": map[string]any{"hp": 80.0, "hunger": 70.0, "energy": 50.0, "x": 2.0, "y": 3.0}}},
+		{Type: "action_settled", OccurredAt: time.Unix(200, 0), Payload: map[string]any{"session_id": "session-b", "state_after": map[string]any{"hp": 60.0, "hunger": 65.0, "energy": 40.0, "x": 3.0, "y": 4.0}}},
+	}}
+
+	uc := UseCase{Events: repo}
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:   "agent-1",
+		Limit:     10,
+		SessionID: "session-b",
+	})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if got, want := len(out.Events), 1; got != want {
+		t.Fatalf("filtered events mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := out.LatestState.Vitals.HP, 60; got != want {
+		t.Fatalf("latest hp mismatch: got=%d want=%d", got, want)
+	}
+}
+
 type fakeRepo struct {
 	events []survival.DomainEvent
 }
