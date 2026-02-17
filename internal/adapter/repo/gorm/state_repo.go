@@ -2,6 +2,7 @@ package gormrepo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"clawverse/internal/adapter/repo/gorm/model"
@@ -34,8 +35,11 @@ func (r AgentStateRepo) GetByAgentID(ctx context.Context, agentID string) (survi
 			Hunger: int(m.Hunger),
 			Energy: int(m.Energy),
 		},
-		Position: survival.Position{X: int(m.X), Y: int(m.Y)},
-		Version:  m.Version,
+		Position:   survival.Position{X: int(m.X), Y: int(m.Y)},
+		Inventory:  decodeInventory(m.Inventory),
+		Dead:       m.Dead,
+		DeathCause: survival.DeathCause(m.DeathCause),
+		Version:    m.Version,
 	}, nil
 }
 
@@ -43,13 +47,16 @@ func (r AgentStateRepo) SaveWithVersion(ctx context.Context, state survival.Agen
 	db := getDBFromCtx(ctx, r.db)
 	if expectedVersion == 0 {
 		m := model.AgentState{
-			AgentID: state.AgentID,
-			Hp:      int32(state.Vitals.HP),
-			Hunger:  int32(state.Vitals.Hunger),
-			Energy:  int32(state.Vitals.Energy),
-			X:       int32(state.Position.X),
-			Y:       int32(state.Position.Y),
-			Version: state.Version,
+			AgentID:    state.AgentID,
+			Hp:         int32(state.Vitals.HP),
+			Hunger:     int32(state.Vitals.Hunger),
+			Energy:     int32(state.Vitals.Energy),
+			X:          int32(state.Position.X),
+			Y:          int32(state.Position.Y),
+			Version:    state.Version,
+			Inventory:  encodeInventory(state.Inventory),
+			Dead:       state.Dead,
+			DeathCause: string(state.DeathCause),
 		}
 		if err := db.Create(&m).Error; err != nil {
 			return err
@@ -58,12 +65,15 @@ func (r AgentStateRepo) SaveWithVersion(ctx context.Context, state survival.Agen
 	}
 
 	updates := map[string]any{
-		"hp":      int32(state.Vitals.HP),
-		"hunger":  int32(state.Vitals.Hunger),
-		"energy":  int32(state.Vitals.Energy),
-		"x":       int32(state.Position.X),
-		"y":       int32(state.Position.Y),
-		"version": state.Version,
+		"hp":          int32(state.Vitals.HP),
+		"hunger":      int32(state.Vitals.Hunger),
+		"energy":      int32(state.Vitals.Energy),
+		"x":           int32(state.Position.X),
+		"y":           int32(state.Position.Y),
+		"version":     state.Version,
+		"inventory":   encodeInventory(state.Inventory),
+		"dead":        state.Dead,
+		"death_cause": string(state.DeathCause),
 	}
 
 	res := db.Model(&model.AgentState{}).
@@ -76,4 +86,21 @@ func (r AgentStateRepo) SaveWithVersion(ctx context.Context, state survival.Agen
 		return ports.ErrConflict
 	}
 	return nil
+}
+
+func encodeInventory(inv map[string]int) string {
+	if len(inv) == 0 {
+		return "{}"
+	}
+	b, _ := json.Marshal(inv)
+	return string(b)
+}
+
+func decodeInventory(raw string) map[string]int {
+	if raw == "" {
+		return map[string]int{}
+	}
+	out := map[string]int{}
+	_ = json.Unmarshal([]byte(raw), &out)
+	return out
 }

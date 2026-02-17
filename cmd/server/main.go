@@ -27,7 +27,7 @@ import (
 )
 
 func main() {
-	stateRepo, actionRepo, eventRepo, txManager := mustBuildRepos()
+	stateRepo, actionRepo, eventRepo, worldObjectRepo, sessionRepo, txManager := mustBuildRepos()
 	worldProvider := buildWorldProviderFromEnv()
 	skillsProvider := staticskills.Provider{Root: "./skills"}
 	kpiRecorder := metricsinmem.NewRecorder()
@@ -35,14 +35,16 @@ func main() {
 	h := httpadapter.Handler{
 		ObserveUC: observe.UseCase{StateRepo: stateRepo, World: worldProvider},
 		ActionUC: action.UseCase{
-			TxManager:  txManager,
-			StateRepo:  stateRepo,
-			ActionRepo: actionRepo,
-			EventRepo:  eventRepo,
-			World:      worldProvider,
-			Metrics:    kpiRecorder,
-			Settle:     survival.SettlementService{},
-			Now:        time.Now,
+			TxManager:   txManager,
+			StateRepo:   stateRepo,
+			ActionRepo:  actionRepo,
+			EventRepo:   eventRepo,
+			ObjectRepo:  worldObjectRepo,
+			SessionRepo: sessionRepo,
+			World:       worldProvider,
+			Metrics:     kpiRecorder,
+			Settle:      survival.SettlementService{},
+			Now:         time.Now,
 		},
 		StatusUC: status.UseCase{StateRepo: stateRepo, World: worldProvider},
 		ReplayUC: replay.UseCase{Events: eventRepo},
@@ -57,7 +59,7 @@ func main() {
 	s.Spin()
 }
 
-func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.TxManager) {
+func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentSessionRepository, ports.TxManager) {
 	dsn := os.Getenv("CLAWVERSE_DB_DSN")
 	if dsn == "" {
 		log.Fatal("CLAWVERSE_DB_DSN is required")
@@ -82,7 +84,7 @@ func mustBuildRepos() (ports.AgentStateRepository, ports.ActionExecutionReposito
 		log.Fatalf("load demo agent: %v (did you run SQL migrations manually?)", err)
 	}
 
-	return stateRepo, gormrepo.NewActionExecutionRepo(db), gormrepo.NewEventRepo(db), gormrepo.NewTxManager(db)
+	return stateRepo, gormrepo.NewActionExecutionRepo(db), gormrepo.NewEventRepo(db), gormrepo.NewWorldObjectRepo(db), gormrepo.NewAgentSessionRepo(db), gormrepo.NewTxManager(db)
 }
 
 func buildWorldProviderFromEnv() ports.WorldProvider {
