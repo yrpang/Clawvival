@@ -61,10 +61,14 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	err := u.TxManager.RunInTx(ctx, func(txCtx context.Context) error {
 		exec, err := u.ActionRepo.GetByIdempotencyKey(txCtx, req.AgentID, req.IdempotencyKey)
 		if err == nil && exec != nil {
+			before, after := worldTimeWindow(0, exec.DT)
 			out = Response{
-				UpdatedState: exec.Result.UpdatedState,
-				Events:       exec.Result.Events,
-				ResultCode:   exec.Result.ResultCode,
+				SettledDTMinutes:       exec.DT,
+				WorldTimeBeforeSeconds: before,
+				WorldTimeAfterSeconds:  after,
+				UpdatedState:           exec.Result.UpdatedState,
+				Events:                 exec.Result.Events,
+				ResultCode:             exec.Result.ResultCode,
 			}
 			return nil
 		}
@@ -96,9 +100,12 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				return err
 			}
 			out = Response{
-				UpdatedState: finalized.UpdatedState,
-				Events:       finalized.Events,
-				ResultCode:   finalized.ResultCode,
+				SettledDTMinutes:       finalized.DTMinutes,
+				WorldTimeBeforeSeconds: 0,
+				WorldTimeAfterSeconds:  int64(finalized.DTMinutes * 60),
+				UpdatedState:           finalized.UpdatedState,
+				Events:                 finalized.Events,
+				ResultCode:             finalized.ResultCode,
 			}
 			return nil
 		}
@@ -212,10 +219,14 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			}
 		}
 
+		before, after := worldTimeWindow(snapshot.WorldTimeSeconds, deltaMinutes)
 		out = Response{
-			UpdatedState: result.UpdatedState,
-			Events:       result.Events,
-			ResultCode:   result.ResultCode,
+			SettledDTMinutes:       deltaMinutes,
+			WorldTimeBeforeSeconds: before,
+			WorldTimeAfterSeconds:  after,
+			UpdatedState:           result.UpdatedState,
+			Events:                 result.Events,
+			ResultCode:             result.ResultCode,
 		}
 		return nil
 	})
@@ -234,6 +245,10 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	}
 
 	return out, nil
+}
+
+func worldTimeWindow(beforeSeconds int64, dtMinutes int) (int64, int64) {
+	return beforeSeconds, beforeSeconds + int64(dtMinutes*60)
 }
 
 func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
@@ -529,9 +544,12 @@ func startRestAction(ctx context.Context, u UseCase, req Request, state survival
 		return Response{}, err
 	}
 	return Response{
-		UpdatedState: next,
-		Events:       []survival.DomainEvent{event},
-		ResultCode:   survival.ResultOK,
+		SettledDTMinutes:       0,
+		WorldTimeBeforeSeconds: 0,
+		WorldTimeAfterSeconds:  0,
+		UpdatedState:           next,
+		Events:                 []survival.DomainEvent{event},
+		ResultCode:             survival.ResultOK,
 	}, nil
 }
 
