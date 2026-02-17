@@ -68,18 +68,31 @@ func TestUseCase_DeltaUsesSystemTimeDefaultOnFirstAction(t *testing.T) {
 		StateRepo:  stateRepo,
 		ActionRepo: actionRepo,
 		EventRepo:  eventRepo,
-		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
-		Settle:     survival.SettlementService{},
-		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 1000,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
 	}
 
-	_, err := uc.Execute(context.Background(), Request{
+	out, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-system-dt-default",
 		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // external value should be ignored
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
+	}
+	if out.SettledDTMinutes != 30 {
+		t.Fatalf("expected settled dt=30, got %d", out.SettledDTMinutes)
+	}
+	if out.WorldTimeBeforeSeconds != 1000 {
+		t.Fatalf("expected world_time_before=1000, got %d", out.WorldTimeBeforeSeconds)
+	}
+	if out.WorldTimeAfterSeconds != 2800 {
+		t.Fatalf("expected world_time_after=2800, got %d", out.WorldTimeAfterSeconds)
 	}
 	got := actionRepo.byKey["agent-1|k-system-dt-default"]
 	if got.DT != 30 {
@@ -104,18 +117,31 @@ func TestUseCase_DeltaUsesElapsedSinceLastSettle(t *testing.T) {
 		StateRepo:  stateRepo,
 		ActionRepo: actionRepo,
 		EventRepo:  eventRepo,
-		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
-		Settle:     survival.SettlementService{},
-		Now:        func() time.Time { return nowAt },
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 2000,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return nowAt },
 	}
 
-	_, err := uc.Execute(context.Background(), Request{
+	out, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-system-dt-elapsed",
 		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // external value should be ignored
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
+	}
+	if out.SettledDTMinutes != 45 {
+		t.Fatalf("expected settled dt=45, got %d", out.SettledDTMinutes)
+	}
+	if out.WorldTimeBeforeSeconds != 2000 {
+		t.Fatalf("expected world_time_before=2000, got %d", out.WorldTimeBeforeSeconds)
+	}
+	if out.WorldTimeAfterSeconds != 4700 {
+		t.Fatalf("expected world_time_after=4700, got %d", out.WorldTimeAfterSeconds)
 	}
 	got := actionRepo.byKey["agent-1|k-system-dt-elapsed"]
 	if got.DT != 45 {

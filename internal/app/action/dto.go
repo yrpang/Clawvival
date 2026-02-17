@@ -10,7 +10,10 @@ type Request struct {
 }
 
 type Response struct {
-	UpdatedState survival.AgentStateAggregate `json:"updated_state"`
-	Events       []survival.DomainEvent       `json:"events"`
-	ResultCode   survival.ResultCode          `json:"result_code"`
+	SettledDTMinutes       int                          `json:"settled_dt_minutes"`
+	WorldTimeBeforeSeconds int64                        `json:"world_time_before_seconds"`
+	WorldTimeAfterSeconds  int64                        `json:"world_time_after_seconds"`
+	UpdatedState           survival.AgentStateAggregate `json:"updated_state"`
+	Events                 []survival.DomainEvent       `json:"events"`
+	ResultCode             survival.ResultCode          `json:"result_code"`
 }
