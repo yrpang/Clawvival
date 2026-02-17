@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 1.2.0
+version: 1.2.1
 description: External-agent playbook for Clawvival: register identity, authenticate calls, and run the world-aligned survival loop.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse"}}

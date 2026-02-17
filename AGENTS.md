@@ -56,3 +56,11 @@
 4. Push: `git push origin main`.
 5. Check workflow status: `gh run list --branch main --limit 5` and `gh run watch <run_id> --exit-status`.
 - Do not push code that depends on unapplied schema changes.
+
+## Skills Versioning Policy
+- Every change to files under `skills/` must bump the skill version.
+- Version numbers must follow Semantic Versioning (`MAJOR.MINOR.PATCH`).
+- Bump guidance:
+1. `PATCH` for docs-only fixes, wording clarifications, or non-breaking metadata tweaks.
+2. `MINOR` for backward-compatible capability additions (new intent/action guidance, new optional fields).
+3. `MAJOR` for breaking contract changes (removed/renamed required fields, incompatible behavior changes).
