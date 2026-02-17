@@ -62,6 +62,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 		t.Fatalf("seed state: %v", err)
 	}
 
+	now := time.Unix(1700000000, 0)
 	uc := UseCase{
 		TxManager:   txManager,
 		StateRepo:   stateRepo,
@@ -75,7 +76,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 			NearbyResource: map[string]int{"wood": 1},
 		}},
 		Settle: survival.SettlementService{},
-		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+		Now:    func() time.Time { return now },
 	}
 
 	_, err = uc.Execute(ctx, Request{
@@ -117,6 +118,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 	if err := stateRepo.SaveWithVersion(ctx, st, st.Version); err != nil {
 		t.Fatalf("prepare gameover state: %v", err)
 	}
+	now = now.Add(30 * time.Minute)
 
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,

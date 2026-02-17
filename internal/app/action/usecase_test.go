@@ -58,6 +58,101 @@ func TestUseCase_Idempotency(t *testing.T) {
 	}
 }
 
+func TestUseCase_DeltaUsesSystemTimeDefaultOnFirstAction(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-system-dt-default",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		DeltaMinutes:   1, // external value should be ignored
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	got := actionRepo.byKey["agent-1|k-system-dt-default"]
+	if got.DT != 30 {
+		t.Fatalf("expected default system dt=30, got %d", got.DT)
+	}
+}
+
+func TestUseCase_DeltaUsesElapsedSinceLastSettle(t *testing.T) {
+	nowAt := time.Unix(1700000900, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{
+		events: []survival.DomainEvent{
+			{Type: "action_settled", OccurredAt: nowAt.Add(-45 * time.Minute)},
+		},
+	}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return nowAt },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-system-dt-elapsed",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		DeltaMinutes:   999, // external value should be ignored
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	got := actionRepo.byKey["agent-1|k-system-dt-elapsed"]
+	if got.DT != 45 {
+		t.Fatalf("expected elapsed system dt=45, got %d", got.DT)
+	}
+}
+
+func TestResolveHeartbeatDeltaMinutes_ClampsBounds(t *testing.T) {
+	nowAt := time.Unix(1700000000, 0)
+	cases := []struct {
+		name string
+		last time.Time
+		want int
+	}{
+		{name: "min clamp", last: nowAt, want: 1},
+		{name: "max clamp", last: nowAt.Add(-500 * time.Minute), want: 120},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &stubEventRepo{events: []survival.DomainEvent{
+				{Type: "action_settled", OccurredAt: tc.last},
+			}}
+			got, err := resolveHeartbeatDeltaMinutes(context.Background(), repo, "agent-1", nowAt)
+			if err != nil {
+				t.Fatalf("resolve delta error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("expected dt=%d, got %d", tc.want, got)
+			}
+		})
+	}
+}
+
 func TestUseCase_RejectsMissingIntent(t *testing.T) {
 	uc := UseCase{}
 	_, err := uc.Execute(context.Background(), Request{

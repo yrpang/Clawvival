@@ -364,6 +364,17 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	}
 
 	now := time.Unix(0, 0)
+	if err := eventRepo.Append(ctx, agent30, []survival.DomainEvent{
+		{Type: "action_settled", OccurredAt: now.Add(-30 * time.Minute)},
+	}); err != nil {
+		t.Fatalf("seed event 30: %v", err)
+	}
+	if err := eventRepo.Append(ctx, agent60, []survival.DomainEvent{
+		{Type: "action_settled", OccurredAt: now.Add(-60 * time.Minute)},
+	}); err != nil {
+		t.Fatalf("seed event 60: %v", err)
+	}
+
 	worldProvider := worldruntime.NewProvider(worldruntime.Config{
 		Clock: world.NewClock(world.ClockConfig{
 			StartAt:       time.Unix(0, 0),
@@ -388,7 +399,7 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 		AgentID:        agent30,
 		IdempotencyKey: "dt-30-gather",
 		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
+		DeltaMinutes:   5, // ignored: server derives dt from event timeline
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {
@@ -398,7 +409,7 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 		AgentID:        agent60,
 		IdempotencyKey: "dt-60-gather",
 		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   60,
+		DeltaMinutes:   5, // ignored: server derives dt from event timeline
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {

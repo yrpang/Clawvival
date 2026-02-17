@@ -19,6 +19,12 @@ var (
 	ErrActionCooldownActive     = errors.New("action cooldown active")
 )
 
+const (
+	defaultHeartbeatDeltaMinutes = 30
+	minHeartbeatDeltaMinutes     = 1
+	maxHeartbeatDeltaMinutes     = 120
+)
+
 type UseCase struct {
 	TxManager   ports.TxManager
 	StateRepo   ports.AgentStateRepository
@@ -36,7 +42,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	req.AgentID = strings.TrimSpace(req.AgentID)
 	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
 	req.Intent.Type = survival.ActionType(strings.TrimSpace(string(req.Intent.Type)))
-	if req.AgentID == "" || req.IdempotencyKey == "" || req.DeltaMinutes <= 0 || !isSupportedActionType(req.Intent.Type) {
+	if req.AgentID == "" || req.IdempotencyKey == "" || !isSupportedActionType(req.Intent.Type) {
 		return Response{}, ErrInvalidRequest
 	}
 	if !hasValidActionParams(req.Intent) {
@@ -88,11 +94,15 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err := ensureCooldownReady(txCtx, u.EventRepo, req.AgentID, req.Intent.Type, nowAt); err != nil {
 			return err
 		}
+		deltaMinutes, err := resolveHeartbeatDeltaMinutes(txCtx, u.EventRepo, req.AgentID, nowAt)
+		if err != nil {
+			return err
+		}
 
 		result, err := u.Settle.Settle(
 			state,
 			req.Intent,
-			survival.HeartbeatDelta{Minutes: req.DeltaMinutes},
+			survival.HeartbeatDelta{Minutes: deltaMinutes},
 			nowAt,
 			survival.WorldSnapshot{
 				TimeOfDay:         snapshot.TimeOfDay,
@@ -134,7 +144,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			AgentID:        req.AgentID,
 			IdempotencyKey: req.IdempotencyKey,
 			IntentType:     string(req.Intent.Type),
-			DT:             req.DeltaMinutes,
+			DT:             deltaMinutes,
 			Result: ports.ActionResult{
 				UpdatedState: result.UpdatedState,
 				Events:       result.Events,
@@ -275,6 +285,39 @@ func ensureCooldownReady(ctx context.Context, repo ports.EventRepository, agentI
 		return ErrActionCooldownActive
 	}
 	return nil
+}
+
+func resolveHeartbeatDeltaMinutes(ctx context.Context, repo ports.EventRepository, agentID string, now time.Time) (int, error) {
+	if repo == nil {
+		return defaultHeartbeatDeltaMinutes, nil
+	}
+	events, err := repo.ListByAgentID(ctx, agentID, 50)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			return defaultHeartbeatDeltaMinutes, nil
+		}
+		return 0, err
+	}
+	lastAt := time.Time{}
+	for _, evt := range events {
+		if evt.Type != "action_settled" {
+			continue
+		}
+		if evt.OccurredAt.After(lastAt) {
+			lastAt = evt.OccurredAt
+		}
+	}
+	if lastAt.IsZero() {
+		return defaultHeartbeatDeltaMinutes, nil
+	}
+	delta := int(now.Sub(lastAt).Minutes())
+	if delta < minHeartbeatDeltaMinutes {
+		return minHeartbeatDeltaMinutes, nil
+	}
+	if delta > maxHeartbeatDeltaMinutes {
+		return maxHeartbeatDeltaMinutes, nil
+	}
+	return delta, nil
 }
 
 func abs(v int) int {
