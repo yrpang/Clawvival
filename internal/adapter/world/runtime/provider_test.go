@@ -51,3 +51,32 @@ func TestProvider_WindowCenterAndTiles(t *testing.T) {
 		t.Fatalf("expected visible tiles")
 	}
 }
+
+func TestProvider_RefreshesResourceNodesOverTime(t *testing.T) {
+	start := time.Unix(0, 0)
+	now := start
+	p := NewProvider(Config{
+		Clock: world.NewClock(world.ClockConfig{
+			StartAt:       start,
+			DayDuration:   10 * time.Minute,
+			NightDuration: 5 * time.Minute,
+		}),
+		ViewRadius: 2,
+		Now:        func() time.Time { return now },
+	})
+
+	center := world.Point{X: 12, Y: 0}
+	first, err := p.SnapshotForAgent(context.Background(), "agent-1", center)
+	if err != nil {
+		t.Fatalf("first snapshot error: %v", err)
+	}
+	now = start.Add(6 * time.Minute)
+	second, err := p.SnapshotForAgent(context.Background(), "agent-1", center)
+	if err != nil {
+		t.Fatalf("second snapshot error: %v", err)
+	}
+
+	if first.NearbyResource["wood"] == second.NearbyResource["wood"] && first.NearbyResource["stone"] == second.NearbyResource["stone"] {
+		t.Fatalf("expected resource nodes to refresh over time, first=%v second=%v", first.NearbyResource, second.NearbyResource)
+	}
+}

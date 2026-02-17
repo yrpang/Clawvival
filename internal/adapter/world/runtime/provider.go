@@ -19,6 +19,7 @@ type Config struct {
 	Now             func() time.Time
 	ChunkStore      ChunkStore
 	ClockStateStore ClockStateStore
+	RefreshInterval time.Duration
 }
 
 type Provider struct {
@@ -65,6 +66,9 @@ func NewProvider(cfg Config) Provider {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.RefreshInterval <= 0 {
+		cfg.RefreshInterval = 5 * time.Minute
+	}
 	return Provider{cfg: cfg, chunkSize: 8}
 }
 
@@ -86,6 +90,7 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 
 	tiles := make([]world.Tile, 0, (p.cfg.ViewRadius*2+1)*(p.cfg.ViewRadius*2+1))
 	counts := map[string]int{}
+	refreshBucket := resourceRefreshBucket(p.cfg.Now(), p.cfg.RefreshInterval)
 	chunks, err := p.loadChunksForWindow(ctx, center, timeOfDay)
 	if err != nil {
 		return world.Snapshot{}, err
@@ -99,8 +104,8 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 				t.BaseThreat++
 			}
 			tiles = append(tiles, t)
-			if t.Resource != "" {
-				counts[t.Resource]++
+			if res := refreshedResource(t.Resource, refreshBucket); res != "" {
+				counts[res]++
 			}
 		}
 	}
@@ -312,6 +317,27 @@ func visibilityPenalty(isDay bool) int {
 		return 0
 	}
 	return 1
+}
+
+func resourceRefreshBucket(now time.Time, interval time.Duration) int64 {
+	if interval <= 0 {
+		return 0
+	}
+	return now.Unix() / int64(interval.Seconds())
+}
+
+func refreshedResource(resource string, bucket int64) string {
+	switch resource {
+	case "wood":
+		if bucket%2 == 1 {
+			return ""
+		}
+	case "stone":
+		if bucket%2 == 0 {
+			return ""
+		}
+	}
+	return resource
 }
 
 func marshalChunkTiles(tiles []world.Tile) ([]byte, error) {
