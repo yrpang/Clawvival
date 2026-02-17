@@ -21,6 +21,7 @@ type AgentStateAggregate struct {
 	Inventory         map[string]int     `json:"inventory"`
 	InventoryCapacity int                `json:"inventory_capacity"`
 	InventoryUsed     int                `json:"inventory_used"`
+	StatusEffects     []string           `json:"status_effects"`
 	Dead              bool               `json:"dead"`
 	DeathCause        DeathCause         `json:"death_cause"`
 	OngoingAction     *OngoingActionInfo `json:"ongoing_action,omitempty"`

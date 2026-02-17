@@ -12,8 +12,10 @@ import (
 
 func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	repo := statusStateRepo{state: survival.AgentStateAggregate{
-		AgentID:  "agent-1",
-		Position: survival.Position{X: 3, Y: 4},
+		AgentID:   "agent-1",
+		Position:  survival.Position{X: 3, Y: 4},
+		Vitals:    survival.Vitals{HP: 12, Hunger: 20, Energy: 5},
+		Inventory: map[string]int{"wood": 1, "seed": 2},
 	}}
 	worldProvider := statusWorldProvider{snapshot: world.Snapshot{
 		WorldTimeSeconds:   456,
@@ -37,6 +39,12 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	}
 	if resp.World.Rules.StandardTickMinutes != 30 {
 		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
+	}
+	if resp.State.InventoryUsed != 3 {
+		t.Fatalf("expected inventory_used=3, got=%d", resp.State.InventoryUsed)
+	}
+	if len(resp.State.StatusEffects) == 0 {
+		t.Fatalf("expected status effects for low hp/energy")
 	}
 }
 
