@@ -76,3 +76,31 @@ func TestSettlementService_CriticalHP(t *testing.T) {
 		t.Fatalf("expected critical_hp event")
 	}
 }
+
+func TestSettlementService_CriticalHPAutoRetreatsTowardHome(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 22, Hunger: -120, Energy: 10},
+		Position: Position{X: 5, Y: 5},
+		Home:     Position{X: 0, Y: 0},
+		Version:  1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{
+		TimeOfDay:   "night",
+		ThreatLevel: 3,
+	})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if out.ResultCode != ResultOK {
+		t.Fatalf("expected result ok, got %s", out.ResultCode)
+	}
+	if out.UpdatedState.Vitals.HP <= 0 || out.UpdatedState.Vitals.HP > 20 {
+		t.Fatalf("expected critical hp range, got %d", out.UpdatedState.Vitals.HP)
+	}
+	if out.UpdatedState.Position.X != 4 || out.UpdatedState.Position.Y != 4 {
+		t.Fatalf("expected auto retreat toward home to (4,4), got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
+	}
+}

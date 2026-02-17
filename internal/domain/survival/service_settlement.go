@@ -115,6 +115,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		events = append(events, DomainEvent{Type: "game_over", OccurredAt: now})
 		resultCode = ResultGameOver
 	} else if next.Vitals.HP <= 20 {
+		next.Position = moveToward(next.Position, next.Home)
 		events = append(events, DomainEvent{Type: "critical_hp", OccurredAt: now})
 		events = append(events, DomainEvent{Type: "force_retreat", OccurredAt: now})
 	}

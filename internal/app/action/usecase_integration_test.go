@@ -214,3 +214,90 @@ func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
 		t.Fatalf("stone gather mismatch: got=%d want=%d", got, want)
 	}
 }
+
+func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
+	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-critical-retreat"
+	ctx := context.Background()
+	if err := db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup action_executions: %v", err)
+	}
+	if err := db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup domain_events: %v", err)
+	}
+	if err := db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup agent_states: %v", err)
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	seed := survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 22, Hunger: -120, Energy: 10},
+		Position:  survival.Position{X: 5, Y: 5},
+		Home:      survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   1,
+	}
+	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:      "night",
+			ThreatLevel:    3,
+			NearbyResource: map[string]int{},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700002000, 0) },
+	}
+
+	resp, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "combat-critical-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
+		DeltaMinutes:   30,
+	})
+	if err != nil {
+		t.Fatalf("combat execute: %v", err)
+	}
+	if resp.UpdatedState.Position.X != 4 || resp.UpdatedState.Position.Y != 4 {
+		t.Fatalf("expected auto retreat position (4,4), got (%d,%d)", resp.UpdatedState.Position.X, resp.UpdatedState.Position.Y)
+	}
+
+	foundRetreat := false
+	for _, evt := range resp.Events {
+		if evt.Type == "force_retreat" {
+			foundRetreat = true
+			break
+		}
+	}
+	if !foundRetreat {
+		t.Fatalf("expected force_retreat event in response")
+	}
+
+	st, err := stateRepo.GetByAgentID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if st.Position.X != 4 || st.Position.Y != 4 {
+		t.Fatalf("expected persisted retreat position (4,4), got (%d,%d)", st.Position.X, st.Position.Y)
+	}
+}
