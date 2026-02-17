@@ -136,3 +136,81 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 		t.Fatalf("expected death cause recorded")
 	}
 }
+
+func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
+	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-gather-tools"
+	ctx := context.Background()
+	if err := db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup action_executions: %v", err)
+	}
+	if err := db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup domain_events: %v", err)
+	}
+	if err := db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup agent_states: %v", err)
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	seed := survival.AgentStateAggregate{
+		AgentID:  agentID,
+		Vitals:   survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Position: survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{
+			"tool_axe":     1,
+			"tool_pickaxe": 1,
+		},
+		Version: 1,
+	}
+	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:      "day",
+			ThreatLevel:    1,
+			NearbyResource: map[string]int{"wood": 2, "stone": 3},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700001000, 0) },
+	}
+
+	_, err = uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "gather-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		DeltaMinutes:   30,
+	})
+	if err != nil {
+		t.Fatalf("gather execute: %v", err)
+	}
+
+	st, err := stateRepo.GetByAgentID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if got, want := st.Inventory["wood"], 4; got != want {
+		t.Fatalf("wood gather mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := st.Inventory["stone"], 6; got != want {
+		t.Fatalf("stone gather mismatch: got=%d want=%d", got, want)
+	}
+}
