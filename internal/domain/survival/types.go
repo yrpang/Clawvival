@@ -35,16 +35,21 @@ type OngoingActionInfo struct {
 type ActionType string
 
 const (
-	ActionGather    ActionType = "gather"
-	ActionRest      ActionType = "rest"
-	ActionMove      ActionType = "move"
-	ActionCombat    ActionType = "combat"
-	ActionBuild     ActionType = "build"
-	ActionFarm      ActionType = "farm"
-	ActionRetreat   ActionType = "retreat"
-	ActionCraft     ActionType = "craft"
-	ActionEat       ActionType = "eat"
-	ActionTerminate ActionType = "terminate"
+	ActionGather            ActionType = "gather"
+	ActionRest              ActionType = "rest"
+	ActionSleep             ActionType = "sleep"
+	ActionMove              ActionType = "move"
+	ActionCombat            ActionType = "combat"
+	ActionBuild             ActionType = "build"
+	ActionFarm              ActionType = "farm"
+	ActionFarmPlant         ActionType = "farm_plant"
+	ActionFarmHarvest       ActionType = "farm_harvest"
+	ActionContainerDeposit  ActionType = "container_deposit"
+	ActionContainerWithdraw ActionType = "container_withdraw"
+	ActionRetreat           ActionType = "retreat"
+	ActionCraft             ActionType = "craft"
+	ActionEat               ActionType = "eat"
+	ActionTerminate         ActionType = "terminate"
 )
 
 type ActionIntent struct {

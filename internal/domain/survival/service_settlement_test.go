@@ -156,3 +156,48 @@ func TestSettlementService_EatRecoversHungerAndConsumesFood(t *testing.T) {
 		t.Fatalf("expected berry consumed by 1, got=%d want=%d", got, want)
 	}
 }
+
+func TestSettlementService_SleepRecoversEnergyAndHp(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 60, Hunger: 70, Energy: 20},
+		Position: Position{X: 0, Y: 0},
+		Version:  1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{
+		Type: ActionSleep,
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if out.UpdatedState.Vitals.Energy <= state.Vitals.Energy {
+		t.Fatalf("expected sleep to recover energy, before=%d after=%d", state.Vitals.Energy, out.UpdatedState.Vitals.Energy)
+	}
+	if out.UpdatedState.Vitals.HP <= state.Vitals.HP {
+		t.Fatalf("expected sleep to recover hp, before=%d after=%d", state.Vitals.HP, out.UpdatedState.Vitals.HP)
+	}
+}
+
+func TestSettlementService_FarmPlantConsumesSeed(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID: "a-1",
+		Vitals:  Vitals{HP: 100, Hunger: 90, Energy: 80},
+		Inventory: map[string]int{
+			"seed": 2,
+		},
+		Version: 1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{
+		Type: ActionFarmPlant,
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if got, want := out.UpdatedState.Inventory["seed"], 1; got != want {
+		t.Fatalf("expected seed consumed by 1, got=%d want=%d", got, want)
+	}
+}

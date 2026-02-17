@@ -276,7 +276,6 @@ func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
 	cases := []Request{
 		{AgentID: "agent-1", IdempotencyKey: "k0", Intent: survival.ActionIntent{Type: survival.ActionRest}},
 		{AgentID: "agent-1", IdempotencyKey: "k1", Intent: survival.ActionIntent{Type: survival.ActionMove}},
-		{AgentID: "agent-1", IdempotencyKey: "k2", Intent: survival.ActionIntent{Type: survival.ActionCombat}},
 		{AgentID: "agent-1", IdempotencyKey: "k3", Intent: survival.ActionIntent{Type: survival.ActionBuild}},
 		{AgentID: "agent-1", IdempotencyKey: "k4", Intent: survival.ActionIntent{Type: survival.ActionFarm}},
 		{AgentID: "agent-1", IdempotencyKey: "k5", Intent: survival.ActionIntent{Type: survival.ActionCraft}},
@@ -508,7 +507,7 @@ func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-expanded",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
+		Intent:         survival.ActionIntent{Type: survival.ActionSleep}})
 	if err != nil {
 		t.Fatalf("expected valid expanded action, got %v", err)
 	}
@@ -711,9 +710,9 @@ func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
 	eventRepo := &stubEventRepo{events: []survival.DomainEvent{
 		{
 			Type:       "action_settled",
-			OccurredAt: now.Add(-2 * time.Minute),
+			OccurredAt: now.Add(-30 * time.Second),
 			Payload: map[string]any{
-				"decision": map[string]any{"intent": "combat"},
+				"decision": map[string]any{"intent": "move"},
 			},
 		},
 	}}
@@ -726,6 +725,9 @@ func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
 		World: worldmock.Provider{Snapshot: world.Snapshot{
 			TimeOfDay:   "night",
 			ThreatLevel: 3,
+			VisibleTiles: []world.Tile{
+				{X: 1, Y: 0, Passable: true},
+			},
 		}},
 		Settle: survival.SettlementService{},
 		Now:    func() time.Time { return now },
@@ -733,8 +735,8 @@ func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
 
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
-		IdempotencyKey: "k-combat-cooldown",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
+		IdempotencyKey: "k-move-cooldown",
+		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}}})
 	if !errors.Is(err, ErrActionCooldownActive) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}
