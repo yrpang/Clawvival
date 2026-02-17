@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"clawverse/internal/app/ports"
 	"clawverse/internal/domain/survival"
@@ -23,9 +24,28 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	events = filterByTimeWindow(events, req.OccurredFrom, req.OccurredTo)
 	latest := reconstruct(events)
 	latest.AgentID = req.AgentID
 	return Response{Events: events, LatestState: latest}, nil
+}
+
+func filterByTimeWindow(events []survival.DomainEvent, from, to int64) []survival.DomainEvent {
+	if from <= 0 && to <= 0 {
+		return events
+	}
+	out := make([]survival.DomainEvent, 0, len(events))
+	for _, evt := range events {
+		ts := evt.OccurredAt.Unix()
+		if from > 0 && ts < from {
+			continue
+		}
+		if to > 0 && ts > to {
+			continue
+		}
+		out = append(out, evt)
+	}
+	return out
 }
 
 func reconstruct(events []survival.DomainEvent) survival.AgentStateAggregate {
@@ -55,6 +75,9 @@ func num(v any) float64 {
 	case int64:
 		return float64(n)
 	default:
+		if t, ok := v.(time.Time); ok {
+			return float64(t.Unix())
+		}
 		return 0
 	}
 }
