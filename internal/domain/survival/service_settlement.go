@@ -81,7 +81,12 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		applyContainerTransfer(&next, intent)
 	case ActionRetreat:
 		next.Vitals.Energy -= scaledInt(8, delta.Minutes)
-		next.Position = moveToward(next.Position, next.Home)
+		if intent.DX != 0 || intent.DY != 0 {
+			next.Position.X += clampStep(intent.DX)
+			next.Position.Y += clampStep(intent.DY)
+		} else {
+			next.Position = moveToward(next.Position, next.Home)
+		}
 	case ActionCraft:
 		next.Vitals.Energy -= scaledInt(12, delta.Minutes)
 		_ = Craft(&next, RecipeID(intent.RecipeID))
@@ -369,4 +374,14 @@ func mapDeathCauseForEvent(cause DeathCause) string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+func clampStep(v int) int {
+	if v > 0 {
+		return 1
+	}
+	if v < 0 {
+		return -1
+	}
+	return 0
 }

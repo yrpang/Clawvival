@@ -240,3 +240,25 @@ func TestSettlementService_ActionSettledIncludesWorldTimeFields(t *testing.T) {
 		t.Fatalf("expected settled_dt_minutes=30, got=%v", settled.Payload["settled_dt_minutes"])
 	}
 }
+
+func TestSettlementService_RetreatUsesExplicitDirectionWhenProvided(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Position: Position{X: 0, Y: 0},
+		Home:     Position{X: 5, Y: 5},
+		Version:  1,
+	}
+	out, err := svc.Settle(state, ActionIntent{
+		Type: ActionRetreat,
+		DX:   -1,
+		DY:   0,
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if out.UpdatedState.Position.X != -1 || out.UpdatedState.Position.Y != 0 {
+		t.Fatalf("expected retreat move to (-1,0), got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
+	}
+}

@@ -155,6 +155,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err != nil {
 			return err
 		}
+		req.Intent = resolveRetreatIntent(req.Intent, state.Position, snapshot.VisibleTiles)
 
 		result, err := u.Settle.Settle(
 			state,
@@ -975,6 +976,50 @@ func findActionSettledEvent(events []survival.DomainEvent) *survival.DomainEvent
 		}
 	}
 	return nil
+}
+
+func resolveRetreatIntent(intent survival.ActionIntent, pos survival.Position, tiles []world.Tile) survival.ActionIntent {
+	if intent.Type != survival.ActionRetreat {
+		return intent
+	}
+	target, ok := highestThreatTile(pos, tiles)
+	if !ok {
+		return intent
+	}
+	intent.DX = stepAway(pos.X, target.X)
+	intent.DY = stepAway(pos.Y, target.Y)
+	return intent
+}
+
+func highestThreatTile(pos survival.Position, tiles []world.Tile) (world.Tile, bool) {
+	best := world.Tile{}
+	bestFound := false
+	bestThreat := -1
+	bestDist := 0
+	for _, t := range tiles {
+		if t.BaseThreat <= 0 {
+			continue
+		}
+		dist := abs(t.X-pos.X) + abs(t.Y-pos.Y)
+		if !bestFound || t.BaseThreat > bestThreat || (t.BaseThreat == bestThreat && dist < bestDist) {
+			best = t
+			bestFound = true
+			bestThreat = t.BaseThreat
+			bestDist = dist
+		}
+	}
+	return best, bestFound
+}
+
+func stepAway(from, threat int) int {
+	switch {
+	case threat > from:
+		return -1
+	case threat < from:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func toNum(v any) float64 {
