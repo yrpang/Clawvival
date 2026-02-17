@@ -395,7 +395,7 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 		restMinutes := intent.RestMinutes
 		return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
 	case survival.ActionSleep:
-		return true
+		return strings.TrimSpace(intent.BedID) != ""
 	case survival.ActionMove:
 		return intent.DX != 0 || intent.DY != 0
 	case survival.ActionGather:

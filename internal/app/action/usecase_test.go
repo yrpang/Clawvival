@@ -507,7 +507,7 @@ func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-expanded",
-		Intent:         survival.ActionIntent{Type: survival.ActionSleep}})
+		Intent:         survival.ActionIntent{Type: survival.ActionSleep, BedID: "bed-1"}})
 	if err != nil {
 		t.Fatalf("expected valid expanded action, got %v", err)
 	}
