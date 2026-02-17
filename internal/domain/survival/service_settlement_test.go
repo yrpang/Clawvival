@@ -204,3 +204,39 @@ func TestSettlementService_FarmPlantConsumesSeed(t *testing.T) {
 		t.Fatalf("expected seed consumed by 1, got=%d want=%d", got, want)
 	}
 }
+
+func TestSettlementService_ActionSettledIncludesWorldTimeFields(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID: "a-1",
+		Vitals:  Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Version: 1,
+	}
+	out, err := svc.Settle(state, ActionIntent{
+		Type: ActionGather,
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{
+		WorldTimeSeconds: 1200,
+	})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	var settled *DomainEvent
+	for i := range out.Events {
+		if out.Events[i].Type == "action_settled" {
+			settled = &out.Events[i]
+			break
+		}
+	}
+	if settled == nil {
+		t.Fatalf("expected action_settled event")
+	}
+	if got, ok := settled.Payload["world_time_before_seconds"].(int64); !ok || got != 1200 {
+		t.Fatalf("expected world_time_before_seconds=1200, got=%v", settled.Payload["world_time_before_seconds"])
+	}
+	if got, ok := settled.Payload["world_time_after_seconds"].(int64); !ok || got != 3000 {
+		t.Fatalf("expected world_time_after_seconds=3000, got=%v", settled.Payload["world_time_after_seconds"])
+	}
+	if got, ok := settled.Payload["settled_dt_minutes"].(int); !ok || got != 30 {
+		t.Fatalf("expected settled_dt_minutes=30, got=%v", settled.Payload["settled_dt_minutes"])
+	}
+}

@@ -32,6 +32,7 @@ const (
 	maxRestMinutes               = 120
 	targetViewRadius             = 5
 	defaultFarmGrowMinutes       = 60
+	seedPityMaxFails             = 8
 )
 
 type UseCase struct {
@@ -181,6 +182,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				},
 			})
 		}
+		applySeedPityIfNeeded(txCtx, req.Intent, &result, state, u.EventRepo, req.AgentID)
 
 		if err := u.StateRepo.SaveWithVersion(txCtx, result.UpdatedState, state.Version); err != nil {
 			return err
@@ -889,6 +891,90 @@ func buildObjectDefaults(intentObjectType string) (objectType, quality string, c
 	default:
 		return strings.ToLower(strings.TrimSpace(intentObjectType)), "", 0, ""
 	}
+}
+
+func applySeedPityIfNeeded(ctx context.Context, intent survival.ActionIntent, result *survival.SettlementResult, before survival.AgentStateAggregate, repo ports.EventRepository, agentID string) {
+	if intent.Type != survival.ActionGather || result == nil {
+		return
+	}
+	beforeSeed := before.Inventory["seed"]
+	afterSeed := result.UpdatedState.Inventory["seed"]
+	seedGained := afterSeed > beforeSeed
+
+	if evt := findActionSettledEvent(result.Events); evt != nil {
+		if evt.Payload == nil {
+			evt.Payload = map[string]any{}
+		}
+		res, _ := evt.Payload["result"].(map[string]any)
+		if res == nil {
+			res = map[string]any{}
+		}
+		res["seed_gained"] = seedGained
+		res["seed_pity_triggered"] = false
+		evt.Payload["result"] = res
+	}
+	if seedGained || repo == nil {
+		return
+	}
+
+	fails := consecutiveGatherSeedFails(ctx, repo, agentID)
+	if fails < seedPityMaxFails-1 {
+		return
+	}
+
+	result.UpdatedState.AddItem("seed", 1)
+	if evt := findActionSettledEvent(result.Events); evt != nil {
+		res, _ := evt.Payload["result"].(map[string]any)
+		if res == nil {
+			res = map[string]any{}
+		}
+		res["seed_gained"] = true
+		res["seed_pity_triggered"] = true
+		evt.Payload["result"] = res
+	}
+	result.Events = append(result.Events, survival.DomainEvent{
+		Type:       "seed_pity_triggered",
+		OccurredAt: result.UpdatedState.UpdatedAt,
+		Payload: map[string]any{
+			"agent_id": agentID,
+			"granted":  1,
+		},
+	})
+}
+
+func consecutiveGatherSeedFails(ctx context.Context, repo ports.EventRepository, agentID string) int {
+	events, err := repo.ListByAgentID(ctx, agentID, 100)
+	if err != nil {
+		return 0
+	}
+	fails := 0
+	for _, evt := range events {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		decision, _ := evt.Payload["decision"].(map[string]any)
+		if decision == nil || strings.TrimSpace(fmt.Sprint(decision["intent"])) != string(survival.ActionGather) {
+			continue
+		}
+		result, _ := evt.Payload["result"].(map[string]any)
+		if result == nil {
+			break
+		}
+		if gained, ok := result["seed_gained"].(bool); ok && gained {
+			break
+		}
+		fails++
+	}
+	return fails
+}
+
+func findActionSettledEvent(events []survival.DomainEvent) *survival.DomainEvent {
+	for i := range events {
+		if events[i].Type == "action_settled" {
+			return &events[i]
+		}
+	}
+	return nil
 }
 
 func toNum(v any) float64 {

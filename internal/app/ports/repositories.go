@@ -53,6 +53,7 @@ type WorldObjectRecord struct {
 type WorldObjectRepository interface {
 	Save(ctx context.Context, agentID string, obj WorldObjectRecord) error
 	GetByObjectID(ctx context.Context, agentID, objectID string) (WorldObjectRecord, error)
+	ListByAgentID(ctx context.Context, agentID string) ([]WorldObjectRecord, error)
 	Update(ctx context.Context, agentID string, obj WorldObjectRecord) error
 }
 

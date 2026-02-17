@@ -112,6 +112,9 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		Type:       "action_settled",
 		OccurredAt: now,
 		Payload: map[string]any{
+			"world_time_before_seconds": snapshot.WorldTimeSeconds,
+			"world_time_after_seconds":  snapshot.WorldTimeSeconds + int64(delta.Minutes*60),
+			"settled_dt_minutes":        delta.Minutes,
 			"state_before": map[string]any{
 				"hp":     state.Vitals.HP,
 				"hunger": state.Vitals.Hunger,

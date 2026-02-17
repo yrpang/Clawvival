@@ -563,7 +563,7 @@ sequenceDiagram
 
 1. 观察与状态契约（P0，优先级最高）
 - [x] `observe` 升级为固定 11x11 窗口契约（`view` + 全量 `tiles[]`）
-- [ ] 增加 `is_lit/is_visible` 语义并约束实体仅在可见 tile 返回
+- [x] 增加 `is_lit/is_visible` 语义并约束实体仅在可见 tile 返回
 - [x] 增加 `objects/resources/threats/local_threat_level`
 - [x] 增加 `world.rules` 与 `action_costs` 显式暴露
 - [x] `status` 与 `observe` 对齐 `world_time_seconds/time_of_day/next_phase_in_seconds`
@@ -583,7 +583,7 @@ sequenceDiagram
 4. 资源-建造-农业闭环（P0）
 - [x] 对齐物品与配方最小集：`wood/stone/seed/berry/wheat` + `bed/box/farm_plot`
 - [x] 农田状态机：`farm_plant -> growing -> farm_harvest`
-- [ ] seed 保底机制（pity 或 seed_cache）避免 72h Gate 被随机性卡死
+- [x] seed 保底机制（pity 或 seed_cache）避免 72h Gate 被随机性卡死
 - [x] 容器存取链路：`container_deposit` / `container_withdraw`
 
 5. 错误模型与事件模型（P0）
@@ -592,7 +592,7 @@ sequenceDiagram
   `error{code,message,retryable,blocked_by,details}`
 - [x] 落地目标错误码：
   `TARGET_OUT_OF_VIEW`、`TARGET_NOT_VISIBLE`
-- [ ] `action_settled` 事件补齐：
+- [x] `action_settled` 事件补齐：
   `world_time_before_seconds/world_time_after_seconds/settled_dt_minutes`
 - [x] `game_over` 事件补齐最后可观测快照字段
 
