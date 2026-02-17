@@ -812,7 +812,7 @@ func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 				Y: 0,
 			},
 			Home:      survival.Position{X: 0, Y: 0},
-			Inventory: map[string]int{"plank": 6, "wood": 2, "seed": 2},
+			Inventory: map[string]int{"wood": 20, "stone": 3, "seed": 2},
 			Version:   1,
 		},
 	}}

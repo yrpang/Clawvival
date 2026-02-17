@@ -101,6 +101,7 @@ type WorldSnapshot struct {
 	ThreatLevel       int            `json:"threat_level"`
 	VisibilityPenalty int            `json:"visibility_penalty"`
 	NearbyResource    map[string]int `json:"nearby_resource"`
+	WorldTimeSeconds  int64          `json:"world_time_seconds"`
 }
 
 type SettlementResult struct {

@@ -1,5 +1,7 @@
 package survival
 
+import "strings"
+
 type RecipeID int
 
 const (
@@ -46,13 +48,28 @@ var recipeDefs = map[RecipeID]struct {
 }
 
 var buildCosts = map[BuildKind]map[string]int{
-	BuildBed:     {"plank": 4},
-	BuildBox:     {"plank": 2},
-	BuildFarm:    {"wood": 2, "seed": 1},
+	BuildBed:     {"wood": 8},
+	BuildBox:     {"wood": 4},
+	BuildFarm:    {"wood": 2, "stone": 2},
 	BuildTorch:   {"wood": 1},
 	BuildWall:    {"stone": 3},
-	BuildDoor:    {"plank": 2},
+	BuildDoor:    {"wood": 2},
 	BuildFurnace: {"stone": 6},
+}
+
+var buildDefsByObjectType = map[string]struct {
+	Kind BuildKind
+	Cost map[string]int
+}{
+	"bed":       {Kind: BuildBed, Cost: map[string]int{"wood": 8}},
+	"bed_rough": {Kind: BuildBed, Cost: map[string]int{"wood": 8}},
+	"bed_good":  {Kind: BuildBed, Cost: map[string]int{"wood": 6, "berry": 2}},
+	"box":       {Kind: BuildBox, Cost: map[string]int{"wood": 4}},
+	"farm_plot": {Kind: BuildFarm, Cost: map[string]int{"wood": 2, "stone": 2}},
+	"torch":     {Kind: BuildTorch, Cost: map[string]int{"wood": 1}},
+	"wall":      {Kind: BuildWall, Cost: map[string]int{"stone": 3}},
+	"door":      {Kind: BuildDoor, Cost: map[string]int{"wood": 2}},
+	"furnace":   {Kind: BuildFurnace, Cost: map[string]int{"stone": 6}},
 }
 
 var foodDefs = map[FoodID]struct {
@@ -109,15 +126,19 @@ func Craft(state *AgentStateAggregate, recipeID RecipeID) bool {
 }
 
 func Build(state *AgentStateAggregate, kind BuildKind, x, y int) (BuiltObject, bool) {
-	cost, ok := buildCosts[kind]
+	return BuildObject(state, kindToObjectType(kind), x, y)
+}
+
+func BuildObject(state *AgentStateAggregate, objectType string, x, y int) (BuiltObject, bool) {
+	def, ok := buildDefsByObjectType[strings.ToLower(strings.TrimSpace(objectType))]
 	if !ok {
 		return BuiltObject{}, false
 	}
-	if !hasEnough(state, cost) {
+	if !hasEnough(state, def.Cost) {
 		return BuiltObject{}, false
 	}
-	consume(state, cost)
-	return BuiltObject{Kind: kind, X: x, Y: y}, true
+	consume(state, def.Cost)
+	return BuiltObject{Kind: def.Kind, X: x, Y: y}, true
 }
 
 func CanCraft(state AgentStateAggregate, recipeID RecipeID) bool {
@@ -136,6 +157,14 @@ func CanBuild(state AgentStateAggregate, kind BuildKind) bool {
 	return hasEnough(&state, cost)
 }
 
+func CanBuildObjectType(state AgentStateAggregate, objectType string) bool {
+	def, ok := buildDefsByObjectType[strings.ToLower(strings.TrimSpace(objectType))]
+	if !ok {
+		return false
+	}
+	return hasEnough(&state, def.Cost)
+}
+
 func CanPlantSeed(state AgentStateAggregate) bool {
 	return state.Inventory["seed"] > 0
 }
@@ -152,7 +181,7 @@ func TickFarm(plot *FarmPlot, dtMinutes int) {
 		return
 	}
 	plot.GrowthMinutes += dtMinutes
-	if plot.GrowthMinutes >= 120 {
+	if plot.GrowthMinutes >= 60 {
 		plot.Ready = true
 	}
 }
@@ -208,5 +237,26 @@ func consume(state *AgentStateAggregate, required map[string]int) {
 func produce(state *AgentStateAggregate, out map[string]int) {
 	for item, qty := range out {
 		state.AddItem(item, qty)
+	}
+}
+
+func kindToObjectType(kind BuildKind) string {
+	switch kind {
+	case BuildBed:
+		return "bed_rough"
+	case BuildBox:
+		return "box"
+	case BuildFarm:
+		return "farm_plot"
+	case BuildTorch:
+		return "torch"
+	case BuildWall:
+		return "wall"
+	case BuildDoor:
+		return "door"
+	case BuildFurnace:
+		return "furnace"
+	default:
+		return ""
 	}
 }

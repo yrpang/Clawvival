@@ -96,6 +96,47 @@ func TestSettlementService_CombatAffectedByVisibilityPenalty(t *testing.T) {
 	}
 }
 
+func TestSettlementService_GameOverEventContainsLastObservableSnapshot(t *testing.T) {
+	svc := SettlementService{}
+	now := time.Unix(1700000000, 0)
+	state := AgentStateAggregate{
+		AgentID:   "a-1",
+		Vitals:    Vitals{HP: 1, Hunger: -200, Energy: -20},
+		Position:  Position{X: 2, Y: -1},
+		Home:      Position{X: 0, Y: 0},
+		Inventory: map[string]int{"wood": 4, "berry": 2},
+		Version:   1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{Type: ActionGather}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{WorldTimeSeconds: 1234})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	var gameOver *DomainEvent
+	for i := range out.Events {
+		if out.Events[i].Type == "game_over" {
+			gameOver = &out.Events[i]
+			break
+		}
+	}
+	if gameOver == nil {
+		t.Fatalf("expected game_over event")
+	}
+	if gameOver.Payload == nil {
+		t.Fatalf("expected game_over payload")
+	}
+	if got, ok := gameOver.Payload["death_cause"].(string); !ok || got == "" {
+		t.Fatalf("expected death_cause in payload, got=%v", gameOver.Payload["death_cause"])
+	}
+	before, ok := gameOver.Payload["state_before_last_action"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected state_before_last_action object")
+	}
+	if got, ok := before["world_time_seconds"].(int64); !ok || got != 1234 {
+		t.Fatalf("expected world_time_seconds=1234, got=%v", before["world_time_seconds"])
+	}
+}
+
 func abs(v int) int {
 	if v < 0 {
 		return -v
