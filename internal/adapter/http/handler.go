@@ -104,7 +104,7 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 		return
 	}
 	if hasJSONField(ctx.Request.Body(), "dt") {
-		writeErrorBody(ctx, consts.StatusBadRequest, "dt_managed_by_server", "dt is managed by server")
+		writeActionRejected(ctx, consts.StatusBadRequest, "dt_managed_by_server", "dt is managed by server", false, []string{"REQUIREMENT_NOT_MET"}, map[string]any{"field": "dt"})
 		return
 	}
 
@@ -118,6 +118,9 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 		StrategyHash: body.StrategyHash,
 	})
 	if err != nil {
+		if writeActionRejectedFromErr(ctx, err) {
+			return
+		}
 		writeError(ctx, err)
 		return
 	}
@@ -302,6 +305,51 @@ func writeErrorBody(ctx *app.RequestContext, status int, code, message string) {
 		"error": map[string]string{
 			"code":    code,
 			"message": message,
+		},
+	})
+}
+
+func writeActionRejectedFromErr(ctx *app.RequestContext, err error) bool {
+	switch {
+	case errors.Is(err, action.ErrActionInvalidPosition):
+		writeActionRejected(ctx, consts.StatusConflict, "action_invalid_position", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	case errors.Is(err, action.ErrActionCooldownActive):
+		writeActionRejected(ctx, consts.StatusConflict, "action_cooldown_active", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	case errors.Is(err, action.ErrActionInProgress):
+		writeActionRejected(ctx, consts.StatusConflict, "action_in_progress", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	case errors.Is(err, action.ErrActionPreconditionFailed):
+		writeActionRejected(ctx, consts.StatusConflict, "action_precondition_failed", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	case errors.Is(err, action.ErrInvalidActionParams):
+		writeActionRejected(ctx, consts.StatusBadRequest, "invalid_action_params", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	case errors.Is(err, action.ErrInvalidRequest):
+		writeActionRejected(ctx, consts.StatusBadRequest, "bad_request", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	default:
+		return false
+	}
+}
+
+func writeActionRejected(ctx *app.RequestContext, status int, code, message string, retryable bool, blockedBy []string, details map[string]any) {
+	ctx.JSON(status, map[string]any{
+		"result_code":               "REJECTED",
+		"settled_dt_minutes":        0,
+		"world_time_before_seconds": 0,
+		"world_time_after_seconds":  0,
+		"error": map[string]string{
+			"code":    code,
+			"message": message,
+		},
+		"action_error": map[string]any{
+			"code":       code,
+			"message":    message,
+			"retryable":  retryable,
+			"blocked_by": blockedBy,
+			"details":    details,
 		},
 	})
 }

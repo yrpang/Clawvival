@@ -189,12 +189,20 @@ func TestAction_RejectsClientDTField(t *testing.T) {
 	if got, want := ctx.Response.StatusCode(), consts.StatusBadRequest; got != want {
 		t.Fatalf("status mismatch: got=%d want=%d", got, want)
 	}
-	var body map[string]map[string]string
+	var body map[string]any
 	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-	if got, want := body["error"]["code"], "dt_managed_by_server"; got != want {
+	if got, want := body["result_code"], "REJECTED"; got != want {
+		t.Fatalf("result_code mismatch: got=%v want=%v", got, want)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if got, want := errObj["code"], "dt_managed_by_server"; got != want {
 		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
+	}
+	actionErr, _ := body["action_error"].(map[string]any)
+	if got, want := actionErr["retryable"], false; got != want {
+		t.Fatalf("action_error.retryable mismatch: got=%v want=%v", got, want)
 	}
 }
 
