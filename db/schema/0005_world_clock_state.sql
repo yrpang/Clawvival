@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS world_clock_state (
+  id BIGSERIAL PRIMARY KEY,
+  state_key TEXT NOT NULL UNIQUE,
+  phase TEXT NOT NULL,
+  switched_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

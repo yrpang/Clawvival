@@ -10,14 +10,15 @@ import (
 )
 
 type Config struct {
-	Clock          world.Clock
-	ThreatDay      int
-	ThreatNight    int
-	ResourcesDay   map[string]int
-	ResourcesNight map[string]int
-	ViewRadius     int
-	Now            func() time.Time
-	ChunkStore     ChunkStore
+	Clock           world.Clock
+	ThreatDay       int
+	ThreatNight     int
+	ResourcesDay    map[string]int
+	ResourcesNight  map[string]int
+	ViewRadius      int
+	Now             func() time.Time
+	ChunkStore      ChunkStore
+	ClockStateStore ClockStateStore
 }
 
 type Provider struct {
@@ -28,6 +29,11 @@ type Provider struct {
 type ChunkStore interface {
 	GetChunk(ctx context.Context, coord world.ChunkCoord, phase string) (world.Chunk, bool, error)
 	SaveChunk(ctx context.Context, coord world.ChunkCoord, phase string, chunk world.Chunk) error
+}
+
+type ClockStateStore interface {
+	Get(ctx context.Context) (phase string, switchedAt time.Time, ok bool, err error)
+	Save(ctx context.Context, phase string, switchedAt time.Time) error
 }
 
 func DefaultConfig() Config {
@@ -73,6 +79,9 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 		threat = p.cfg.ThreatDay
 		nearby = copyMap(p.cfg.ResourcesDay)
 	}
+	if err := p.persistPhase(ctx, timeOfDay, p.cfg.Now()); err != nil {
+		return world.Snapshot{}, err
+	}
 
 	tiles := make([]world.Tile, 0, (p.cfg.ViewRadius*2+1)*(p.cfg.ViewRadius*2+1))
 	counts := map[string]int{}
@@ -107,6 +116,20 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 		VisibleTiles:       tiles,
 		NextPhaseInSeconds: int(next.Seconds()),
 	}, nil
+}
+
+func (p Provider) persistPhase(ctx context.Context, phase string, now time.Time) error {
+	if p.cfg.ClockStateStore == nil {
+		return nil
+	}
+	current, _, ok, err := p.cfg.ClockStateStore.Get(ctx)
+	if err != nil {
+		return err
+	}
+	if ok && current == phase {
+		return nil
+	}
+	return p.cfg.ClockStateStore.Save(ctx, phase, now)
 }
 
 func (p Provider) loadChunksForWindow(ctx context.Context, center world.Point, phase string) ([]world.Chunk, error) {
@@ -155,7 +178,7 @@ func floorDiv(a, b int) int {
 	if a >= 0 {
 		return a / b
 	}
-	return -(((-a)+b-1)/b)
+	return -(((-a) + b - 1) / b)
 }
 
 func genTile(x, y int) world.Tile {

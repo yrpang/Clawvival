@@ -108,6 +108,7 @@ func buildWorldProviderFromEnv() ports.WorldProvider {
 	if dsn := strings.TrimSpace(os.Getenv("CLAWVERSE_DB_DSN")); dsn != "" {
 		if db, err := gormrepo.OpenPostgres(dsn); err == nil {
 			cfg.ChunkStore = worldruntime.NewGormChunkStore(db)
+			cfg.ClockStateStore = worldruntime.NewGormClockStateStore(db)
 		}
 	}
 
