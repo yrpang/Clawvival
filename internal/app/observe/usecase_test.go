@@ -51,6 +51,12 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if resp.View.Center.X != 7 || resp.View.Center.Y != -2 {
 		t.Fatalf("unexpected view center: %+v", resp.View.Center)
 	}
+	if resp.World.Rules.StandardTickMinutes != 30 {
+		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
+	}
+	if resp.ActionCosts["move"].BaseMinutes <= 0 {
+		t.Fatalf("expected move action cost configured, got=%+v", resp.ActionCosts["move"])
+	}
 }
 
 type observeStateRepo struct {

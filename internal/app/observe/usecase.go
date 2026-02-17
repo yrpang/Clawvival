@@ -42,5 +42,22 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			Center: world.Point{X: state.Position.X, Y: state.Position.Y},
 			Radius: fixedViewRadius,
 		},
+		World: WorldMeta{
+			Rules: Rules{StandardTickMinutes: 30},
+		},
+		ActionCosts: map[string]ActionCost{
+			"move":               {BaseMinutes: 1},
+			"gather":             {BaseMinutes: 5},
+			"craft":              {BaseMinutes: 2},
+			"build":              {BaseMinutes: 3},
+			"eat":                {BaseMinutes: 1},
+			"rest":               {BaseMinutes: 30},
+			"sleep":              {BaseMinutes: 60},
+			"farm_plant":         {BaseMinutes: 2},
+			"farm_harvest":       {BaseMinutes: 2},
+			"container_deposit":  {BaseMinutes: 1},
+			"container_withdraw": {BaseMinutes: 1},
+			"retreat":            {BaseMinutes: 1},
+		},
 	}, nil
 }
