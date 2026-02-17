@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"clawverse/internal/adapter/repo/gorm/model"
+	"clawverse/internal/app/ports"
 	"clawverse/internal/domain/survival"
 
 	"gorm.io/gorm"
@@ -33,4 +34,36 @@ func (r EventRepo) Append(ctx context.Context, agentID string, events []survival
 		})
 	}
 	return getDBFromCtx(ctx, r.db).Create(&rows).Error
+}
+
+func (r EventRepo) ListByAgentID(ctx context.Context, agentID string, limit int) ([]survival.DomainEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows := []model.DomainEvent{}
+	err := getDBFromCtx(ctx, r.db).
+		Where("agent_id = ?", agentID).
+		Order("occurred_at DESC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, ports.ErrNotFound
+	}
+
+	out := make([]survival.DomainEvent, 0, len(rows))
+	for _, row := range rows {
+		var payload map[string]any
+		if len(row.Payload) > 0 {
+			_ = json.Unmarshal(row.Payload, &payload)
+		}
+		out = append(out, survival.DomainEvent{
+			Type:       row.Type,
+			OccurredAt: row.OccurredAt,
+			Payload:    payload,
+		})
+	}
+	return out, nil
 }

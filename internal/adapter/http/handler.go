@@ -10,6 +10,7 @@ import (
 	"clawverse/internal/app/action"
 	"clawverse/internal/app/observe"
 	"clawverse/internal/app/ports"
+	"clawverse/internal/app/replay"
 	"clawverse/internal/app/skills"
 	"clawverse/internal/app/status"
 	"clawverse/internal/domain/survival"
@@ -17,6 +18,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"strconv"
 )
 
 const agentIDHeader = "X-Agent-ID"
@@ -25,6 +27,7 @@ type Handler struct {
 	ObserveUC observe.UseCase
 	ActionUC  action.UseCase
 	StatusUC  status.UseCase
+	ReplayUC  replay.UseCase
 	SkillsUC  skills.UseCase
 	KPI       kpiSnapshotProvider
 }
@@ -34,6 +37,7 @@ func (h Handler) RegisterRoutes(s *server.Hertz) {
 	agent.POST("/observe", h.observe)
 	agent.POST("/action", h.action)
 	agent.POST("/status", h.status)
+	agent.GET("/replay", h.replay)
 
 	s.GET("/skills/index.json", h.skillsIndex)
 	s.GET("/skills/*filepath", h.skillsFile)
@@ -136,6 +140,21 @@ func (h Handler) status(c context.Context, ctx *app.RequestContext) {
 	ctx.JSON(consts.StatusOK, resp)
 }
 
+func (h Handler) replay(c context.Context, ctx *app.RequestContext) {
+	agentID, err := requireAgentID(ctx)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	limit, _ := strconv.Atoi(string(ctx.Query("limit")))
+	resp, err := h.ReplayUC.Execute(c, replay.Request{AgentID: agentID, Limit: limit})
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.JSON(consts.StatusOK, resp)
+}
+
 func (h Handler) skillsIndex(c context.Context, ctx *app.RequestContext) {
 	b, err := h.SkillsUC.Index(c)
 	if err != nil {
@@ -195,6 +214,7 @@ func writeError(ctx *app.RequestContext, err error) {
 		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_id", err.Error())
 	case errors.Is(err, action.ErrInvalidRequest),
 		errors.Is(err, observe.ErrInvalidRequest),
+		errors.Is(err, replay.ErrInvalidRequest),
 		errors.Is(err, status.ErrInvalidRequest),
 		errors.Is(err, survival.ErrInvalidDelta):
 		writeErrorBody(ctx, consts.StatusBadRequest, "bad_request", err.Error())

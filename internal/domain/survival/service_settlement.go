@@ -71,12 +71,28 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		Type:       "action_settled",
 		OccurredAt: now,
 		Payload: map[string]any{
-			"intent":      string(intent.Type),
-			"dt_minutes":  delta.Minutes,
-			"hp_loss":     hpLoss,
-			"next_hp":     next.Vitals.HP,
-			"next_hunger": next.Vitals.Hunger,
-			"next_energy": next.Vitals.Energy,
+			"state_before": map[string]any{
+				"hp":     state.Vitals.HP,
+				"hunger": state.Vitals.Hunger,
+				"energy": state.Vitals.Energy,
+				"x":      state.Position.X,
+				"y":      state.Position.Y,
+			},
+			"decision": map[string]any{
+				"intent":     string(intent.Type),
+				"params":     intent.Params,
+				"dt_minutes": delta.Minutes,
+			},
+			"state_after": map[string]any{
+				"hp":     next.Vitals.HP,
+				"hunger": next.Vitals.Hunger,
+				"energy": next.Vitals.Energy,
+				"x":      next.Position.X,
+				"y":      next.Position.Y,
+			},
+			"result": map[string]any{
+				"hp_loss": hpLoss,
+			},
 		},
 	})
 
