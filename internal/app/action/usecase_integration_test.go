@@ -56,7 +56,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 		AgentID:   agentID,
 		Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
 		Position:  survival.Position{X: 0, Y: 0},
-		Inventory: map[string]int{"plank": 10},
+		Inventory: map[string]int{"wood": 10},
 		Version:   1,
 	}
 	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {

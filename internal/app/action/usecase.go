@@ -165,6 +165,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				ThreatLevel:       snapshot.ThreatLevel,
 				VisibilityPenalty: snapshot.VisibilityPenalty,
 				NearbyResource:    snapshot.NearbyResource,
+				WorldTimeSeconds:  snapshot.WorldTimeSeconds,
 			},
 		)
 		if err != nil {
@@ -273,8 +274,8 @@ func worldTimeWindow(beforeSeconds int64, dtMinutes int) (int64, int64) {
 func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
 	switch intent.Type {
 	case survival.ActionBuild:
-		kind, ok := buildKindFromObjectType(intent.ObjectType)
-		return ok && survival.CanBuild(state, kind)
+		_, ok := buildKindFromObjectType(intent.ObjectType)
+		return ok && survival.CanBuildObjectType(state, intent.ObjectType)
 	case survival.ActionCraft:
 		return survival.CanCraft(state, survival.RecipeID(intent.RecipeID))
 	case survival.ActionFarmPlant:
@@ -476,6 +477,7 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 				ThreatLevel:       snapshot.ThreatLevel,
 				VisibilityPenalty: snapshot.VisibilityPenalty,
 				NearbyResource:    snapshot.NearbyResource,
+				WorldTimeSeconds:  snapshot.WorldTimeSeconds,
 			},
 		)
 		if err != nil {

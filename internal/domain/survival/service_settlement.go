@@ -49,15 +49,14 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		next.Vitals.Hunger -= scaledInt(2, delta.Minutes)
 	case ActionBuild:
 		next.Vitals.Energy -= scaledInt(14, delta.Minutes)
-		kind, ok := buildKindFromIntent(intent.ObjectType)
-		if !ok {
+		if _, ok := buildKindFromIntent(intent.ObjectType); !ok {
 			break
 		}
 		buildX, buildY := next.Position.X, next.Position.Y
 		if intent.Pos != nil {
 			buildX, buildY = intent.Pos.X, intent.Pos.Y
 		}
-		obj, ok := Build(&next, kind, buildX, buildY)
+		obj, ok := BuildObject(&next, intent.ObjectType, buildX, buildY)
 		if ok {
 			actionEvents = append(actionEvents, DomainEvent{
 				Type:       "build_completed",
@@ -141,7 +140,36 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 	resultCode := ResultOK
 	if next.Vitals.HP <= 0 {
 		next.MarkDead(deriveDeathCause(next, intent))
-		events = append(events, DomainEvent{Type: "game_over", OccurredAt: now})
+		events = append(events, DomainEvent{
+			Type:       "game_over",
+			OccurredAt: now,
+			Payload: map[string]any{
+				"death_cause": mapDeathCauseForEvent(next.DeathCause),
+				"state_before_last_action": map[string]any{
+					"hp":                 state.Vitals.HP,
+					"hunger":             state.Vitals.Hunger,
+					"energy":             state.Vitals.Energy,
+					"position":           map[string]int{"x": state.Position.X, "y": state.Position.Y},
+					"inventory_used":     inventoryUsedCount(state.Inventory),
+					"world_time_seconds": snapshot.WorldTimeSeconds,
+					"inventory_summary":  inventorySummary(state.Inventory),
+				},
+				"state_after_last_action": map[string]any{
+					"hp":                 next.Vitals.HP,
+					"hunger":             next.Vitals.Hunger,
+					"energy":             next.Vitals.Energy,
+					"position":           map[string]int{"x": next.Position.X, "y": next.Position.Y},
+					"inventory_used":     inventoryUsedCount(next.Inventory),
+					"world_time_seconds": snapshot.WorldTimeSeconds + int64(delta.Minutes*60),
+					"inventory_summary":  inventorySummary(next.Inventory),
+				},
+				"last_safe_home": map[string]int{
+					"x": next.Home.X,
+					"y": next.Home.Y,
+				},
+				"last_known_threat": nil,
+			},
+		})
 		resultCode = ResultGameOver
 	} else if next.Vitals.HP <= 20 {
 		next.Position = moveToward(next.Position, next.Home)
@@ -297,5 +325,45 @@ func deriveDeathCause(state AgentStateAggregate, intent ActionIntent) DeathCause
 		return DeathCauseCombat
 	default:
 		return DeathCauseUnknown
+	}
+}
+
+func inventoryUsedCount(inventory map[string]int) int {
+	total := 0
+	for _, count := range inventory {
+		if count > 0 {
+			total += count
+		}
+	}
+	return total
+}
+
+func inventorySummary(inventory map[string]int) map[string]any {
+	top := make([]map[string]any, 0, len(inventory))
+	total := 0
+	for itemType, count := range inventory {
+		if count <= 0 {
+			continue
+		}
+		total += count
+		top = append(top, map[string]any{
+			"item_type": itemType,
+			"count":     count,
+		})
+	}
+	return map[string]any{
+		"total_items": total,
+		"top":         top,
+	}
+}
+
+func mapDeathCauseForEvent(cause DeathCause) string {
+	switch cause {
+	case DeathCauseStarvation:
+		return "STARVATION"
+	case DeathCauseCombat:
+		return "THREAT"
+	default:
+		return "UNKNOWN"
 	}
 }

@@ -48,9 +48,9 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 		Position: survival.Position{X: 0, Y: 0},
 		Home:     survival.Position{X: 0, Y: 0},
 		Inventory: map[string]int{
-			"plank": 4,
 			"seed":  2,
-			"wood":  2,
+			"wood":  16,
+			"stone": 2,
 		},
 		Version: 1,
 	}

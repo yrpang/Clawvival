@@ -562,51 +562,51 @@ sequenceDiagram
 ## MVP v1.0 对齐差距与完整 TODO
 
 1. 观察与状态契约（P0，优先级最高）
-- [ ] `observe` 升级为固定 11x11 窗口契约（`view` + 全量 `tiles[]`）
+- [x] `observe` 升级为固定 11x11 窗口契约（`view` + 全量 `tiles[]`）
 - [ ] 增加 `is_lit/is_visible` 语义并约束实体仅在可见 tile 返回
-- [ ] 增加 `objects/resources/threats/local_threat_level`
-- [ ] 增加 `world.rules` 与 `action_costs` 显式暴露
-- [ ] `status` 与 `observe` 对齐 `world_time_seconds/time_of_day/next_phase_in_seconds`
+- [x] 增加 `objects/resources/threats/local_threat_level`
+- [x] 增加 `world.rules` 与 `action_costs` 显式暴露
+- [x] `status` 与 `observe` 对齐 `world_time_seconds/time_of_day/next_phase_in_seconds`
 
 2. 动作系统重构（P0）
-- [ ] 移除 `combat` 主路径与相关契约/测试
-- [ ] 按 v1.0 实现 intents：
+- [x] 移除 `combat` 主路径与相关契约/测试
+- [x] 按 v1.0 实现 intents：
   `move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat`
-- [ ] 动作参数从“枚举数值参数”逐步迁移到“可解释参数”（`direction`、`*_id`、`pos`）
-- [ ] 响应补齐 `settled_dt_minutes` 与世界时间推进字段
+- [x] 动作参数从“枚举数值参数”逐步迁移到“可解释参数”（`direction`、`*_id`、`pos`）
+- [x] 响应补齐 `settled_dt_minutes` 与世界时间推进字段
 
 3. 生存规则与可见性（P0）
-- [ ] 固化 `HP/Hunger/Energy` 阈值并暴露 `status_effects`
-- [ ] 夜晚压力仅保留“可见度下降”，不引入夜晚伤害倍率
+- [x] 固化 `HP/Hunger/Energy` 阈值并暴露 `status_effects`
+- [x] 夜晚压力仅保留“可见度下降”，不引入夜晚伤害倍率
 - [ ] `retreat` 语义改为远离最近威胁/高风险方向移动（1~2 格）
 
 4. 资源-建造-农业闭环（P0）
-- [ ] 对齐物品与配方最小集：`wood/stone/seed/berry/wheat` + `bed/box/farm_plot`
-- [ ] 农田状态机：`farm_plant -> growing -> farm_harvest`
+- [x] 对齐物品与配方最小集：`wood/stone/seed/berry/wheat` + `bed/box/farm_plot`
+- [x] 农田状态机：`farm_plant -> growing -> farm_harvest`
 - [ ] seed 保底机制（pity 或 seed_cache）避免 72h Gate 被随机性卡死
-- [ ] 容器存取链路：`container_deposit` / `container_withdraw`
+- [x] 容器存取链路：`container_deposit` / `container_withdraw`
 
 5. 错误模型与事件模型（P0）
-- [ ] 统一动作响应 `result_code: OK|REJECTED|FAILED`
+- [x] 统一动作响应 `result_code: OK|REJECTED|FAILED`
 - [ ] 统一错误对象：
   `error{code,message,retryable,blocked_by,details}`
-- [ ] 落地目标错误码：
+- [x] 落地目标错误码：
   `TARGET_OUT_OF_VIEW`、`TARGET_NOT_VISIBLE`
 - [ ] `action_settled` 事件补齐：
   `world_time_before_seconds/world_time_after_seconds/settled_dt_minutes`
-- [ ] `game_over` 事件补齐最后可观测快照字段
+- [x] `game_over` 事件补齐最后可观测快照字段
 
 6. 数据与持久化（Schema-first，P0）
-- [ ] 迁移 `agent_states`：容量字段、状态效果支持字段（或可推导字段）
-- [ ] 迁移 `world_objects`：对象类型、质量、容器容量与农田状态字段
+- [x] 迁移 `agent_states`：容量字段、状态效果支持字段（或可推导字段）
+- [x] 迁移 `world_objects`：对象类型、质量、容器容量与农田状态字段
 - [ ] 新增/调整资源点与威胁实体表，保证稳定 `id` 和非复用约束
-- [ ] 更新 gorm 生成模型与 repo，实现对象式查询风格
+- [x] 更新 gorm 生成模型与 repo，实现对象式查询风格
 
 7. 测试与验收（P0）
-- [ ] 按 TDD 补 `observe/status/action` 契约测试
-- [ ] 补“去 combat”回归测试，确保 API 不再暴露可胜战斗路径
-- [ ] 补 72h Gate 集成测试：`bed + box + farm_plot + farm_plant 成功`
-- [ ] 每次迭代执行：变更包单测 -> 集成测试 -> `go test ./...`
+- [x] 按 TDD 补 `observe/status/action` 契约测试
+- [x] 补“去 combat”回归测试，确保 API 不再暴露可胜战斗路径
+- [x] 补 72h Gate 集成测试：`bed + box + farm_plot + farm_plant 成功`
+- [x] 每次迭代执行：变更包单测 -> 集成测试 -> `go test ./...`
 
 日志字段标准（MVP）：
 - 顶层必填：`event_type`、`occurred_at`、`agent_id`、`session_id`。

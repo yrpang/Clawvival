@@ -18,7 +18,7 @@ func TestProductionLoop_GatherCraftBuildFarm(t *testing.T) {
 		t.Fatalf("expected plank output")
 	}
 
-	state.AddItem("plank", 4)
+	state.AddItem("wood", 8)
 	if _, ok := Build(&state, BuildBed, 0, 0); !ok {
 		t.Fatalf("expected build bed success")
 	}
@@ -96,5 +96,32 @@ func TestEatAndCanEat(t *testing.T) {
 	}
 	if got, want := state.Vitals.Hunger, 100; got != want {
 		t.Fatalf("hunger should cap at 100: got=%d want=%d", got, want)
+	}
+}
+
+func TestBuildCosts_MVPv1MinimumSet(t *testing.T) {
+	state := AgentStateAggregate{Inventory: map[string]int{
+		"wood":  14,
+		"stone": 2,
+		"seed":  1,
+		"berry": 2,
+	}}
+	if _, ok := BuildObject(&state, "bed_rough", 0, 0); !ok {
+		t.Fatalf("expected bed_rough build success with wood cost")
+	}
+	if _, ok := BuildObject(&state, "box", 1, 0); !ok {
+		t.Fatalf("expected box build success with wood cost")
+	}
+	if _, ok := BuildObject(&state, "farm_plot", 1, 1); !ok {
+		t.Fatalf("expected farm_plot build success with wood+stone cost")
+	}
+	if got := state.Inventory["wood"]; got != 0 {
+		t.Fatalf("expected wood fully consumed, got=%d", got)
+	}
+	if got := state.Inventory["stone"]; got != 0 {
+		t.Fatalf("expected stone fully consumed, got=%d", got)
+	}
+	if got := state.Inventory["seed"]; got != 1 {
+		t.Fatalf("expected seed not consumed by build, got=%d", got)
 	}
 }
