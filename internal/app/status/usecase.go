@@ -36,7 +36,37 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		TimeOfDay:          snapshot.TimeOfDay,
 		NextPhaseInSeconds: snapshot.NextPhaseInSeconds,
 		World: WorldMeta{
-			Rules: Rules{StandardTickMinutes: 30},
+			Rules: defaultRules(),
 		},
 	}, nil
+}
+
+func defaultRules() Rules {
+	return Rules{
+		StandardTickMinutes: 30,
+		DrainsPer30m: DrainsPer30m{
+			HungerDrain:     5,
+			EnergyDrain:     4,
+			HPDrainStarving: 8,
+		},
+		Thresholds: Thresholds{
+			CriticalHP: 15,
+			LowEnergy:  20,
+		},
+		Visibility: Visibility{
+			VisionRadiusDay:   6,
+			VisionRadiusNight: 3,
+			TorchLightRadius:  3,
+		},
+		Farming: Farming{
+			FarmGrowMinutes:  60,
+			WheatYieldMin:    1,
+			WheatYieldMax:    3,
+			SeedReturnChance: 0.2,
+		},
+		Seed: Seed{
+			SeedDropChance:   0.2,
+			SeedPityMaxFails: 8,
+		},
+	}
 }
