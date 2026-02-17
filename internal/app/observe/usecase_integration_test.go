@@ -91,3 +91,60 @@ func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
 	}
 }
 
+func TestUseCase_E2E_ResourceNodesRefreshAcrossTimeBuckets(t *testing.T) {
+	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-observe-refresh"
+	ctx := context.Background()
+	if err := db.Exec("DELETE FROM world_chunks WHERE phase = 'day'").Error; err != nil {
+		t.Fatalf("cleanup world_chunks: %v", err)
+	}
+	if err := db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup agent_states: %v", err)
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	seed := survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 100, Energy: 100},
+		Position:  survival.Position{X: 12, Y: 0},
+		Inventory: map[string]int{},
+		Version:   1,
+	}
+	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	now := time.Unix(0, 0)
+	worldProvider := worldruntime.NewProvider(worldruntime.Config{
+		ViewRadius:      2,
+		Now:             func() time.Time { return now },
+		RefreshInterval: 5 * time.Minute,
+		ChunkStore:      worldruntime.NewGormChunkStore(db),
+		ClockStateStore: worldruntime.NewGormClockStateStore(db),
+	})
+	uc := UseCase{StateRepo: stateRepo, World: worldProvider}
+
+	first, err := uc.Execute(ctx, Request{AgentID: agentID})
+	if err != nil {
+		t.Fatalf("first observe execute: %v", err)
+	}
+	now = now.Add(6 * time.Minute)
+	second, err := uc.Execute(ctx, Request{AgentID: agentID})
+	if err != nil {
+		t.Fatalf("second observe execute: %v", err)
+	}
+
+	if first.Snapshot.NearbyResource["wood"] == second.Snapshot.NearbyResource["wood"] &&
+		first.Snapshot.NearbyResource["stone"] == second.Snapshot.NearbyResource["stone"] {
+		t.Fatalf("expected refreshed resources across buckets, first=%v second=%v", first.Snapshot.NearbyResource, second.Snapshot.NearbyResource)
+	}
+}
