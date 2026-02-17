@@ -38,15 +38,22 @@ type EventRepository interface {
 }
 
 type WorldObjectRecord struct {
-	ObjectID string
-	Kind     int
-	X        int
-	Y        int
-	HP       int
+	ObjectID      string
+	Kind          int
+	X             int
+	Y             int
+	HP            int
+	ObjectType    string
+	Quality       string
+	CapacitySlots int
+	UsedSlots     int
+	ObjectState   string
 }
 
 type WorldObjectRepository interface {
 	Save(ctx context.Context, agentID string, obj WorldObjectRecord) error
+	GetByObjectID(ctx context.Context, agentID, objectID string) (WorldObjectRecord, error)
+	Update(ctx context.Context, agentID string, obj WorldObjectRecord) error
 }
 
 type AgentSessionRepository interface {

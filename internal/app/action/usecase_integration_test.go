@@ -2,6 +2,7 @@ package action
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"testing"
@@ -270,10 +271,10 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 
 	resp, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
-		IdempotencyKey: "combat-critical-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat}})
+		IdempotencyKey: "gather-critical-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
 	if err != nil {
-		t.Fatalf("combat execute: %v", err)
+		t.Fatalf("gather execute: %v", err)
 	}
 	if resp.UpdatedState.Position.X != 4 || resp.UpdatedState.Position.Y != 4 {
 		t.Fatalf("expected auto retreat position (4,4), got (%d,%d)", resp.UpdatedState.Position.X, resp.UpdatedState.Position.Y)
@@ -546,7 +547,7 @@ func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
 	}
 }
 
-func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
+func TestUseCase_E2E_RejectsMoveDuringCooldown(t *testing.T) {
 	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
 		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
@@ -589,13 +590,13 @@ func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
 	if err := eventRepo.Append(ctx, agentID, []survival.DomainEvent{
 		{
 			Type:       "action_settled",
-			OccurredAt: now.Add(-2 * time.Minute),
+			OccurredAt: now.Add(-30 * time.Second),
 			Payload: map[string]any{
-				"decision": map[string]any{"intent": "combat", "dt_minutes": 30},
+				"decision": map[string]any{"intent": "move", "dt_minutes": 30},
 			},
 		},
 	}); err != nil {
-		t.Fatalf("seed recent combat event: %v", err)
+		t.Fatalf("seed recent move event: %v", err)
 	}
 
 	uc := UseCase{
@@ -606,6 +607,9 @@ func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
 		World: worldmock.Provider{Snapshot: world.Snapshot{
 			TimeOfDay:   "night",
 			ThreatLevel: 3,
+			VisibleTiles: []world.Tile{
+				{X: 1, Y: 0, Passable: true},
+			},
 		}},
 		Settle: survival.SettlementService{},
 		Now:    func() time.Time { return now },
@@ -613,8 +617,8 @@ func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
 
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
-		IdempotencyKey: "combat-cooldown-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat}})
+		IdempotencyKey: "move-cooldown-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionMove, Direction: "E"}})
 	if !errors.Is(err, ErrActionCooldownActive) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}
@@ -625,5 +629,219 @@ func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
 	}
 	if executionCount != 0 {
 		t.Fatalf("expected no persisted execution for cooldown failure, got=%d", executionCount)
+	}
+}
+
+func TestUseCase_E2E_ContainerDepositWithdraw_PersistsBoxState(t *testing.T) {
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-container-box-state"
+	containerID := "obj-box-it-1"
+	ctx := context.Background()
+	_ = db.Exec("DELETE FROM world_objects WHERE owner_agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	objRepo := gormrepo.NewWorldObjectRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	if err := stateRepo.SaveWithVersion(ctx, survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 90, Energy: 90},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{"wood": 6},
+		Version:   1,
+	}, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+	if err := db.Create(&model.WorldObject{
+		ObjectID:      containerID,
+		Kind:          "2",
+		X:             0,
+		Y:             0,
+		Hp:            100,
+		OwnerAgentID:  agentID,
+		ObjectType:    "box",
+		CapacitySlots: 60,
+		UsedSlots:     0,
+		ObjectState:   `{"inventory":{}}`,
+	}).Error; err != nil {
+		t.Fatalf("seed box object: %v", err)
+	}
+
+	now := time.Unix(1700010000, 0)
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	if _, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "box-deposit-1",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionContainerDeposit,
+			ContainerID: containerID,
+			Items:       []survival.ItemAmount{{ItemType: "wood", Count: 4}},
+		},
+	}); err != nil {
+		t.Fatalf("container deposit: %v", err)
+	}
+
+	now = now.Add(5 * time.Minute)
+	if _, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "box-withdraw-1",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionContainerWithdraw,
+			ContainerID: containerID,
+			Items:       []survival.ItemAmount{{ItemType: "wood", Count: 3}},
+		},
+	}); err != nil {
+		t.Fatalf("container withdraw: %v", err)
+	}
+
+	var box model.WorldObject
+	if err := db.Where("owner_agent_id = ? AND object_id = ?", agentID, containerID).First(&box).Error; err != nil {
+		t.Fatalf("query box object: %v", err)
+	}
+	if got, want := int(box.UsedSlots), 1; got != want {
+		t.Fatalf("expected box used_slots=%d, got %d", want, got)
+	}
+	var state map[string]map[string]int
+	if err := json.Unmarshal([]byte(box.ObjectState), &state); err != nil {
+		t.Fatalf("unmarshal box object_state: %v", err)
+	}
+	if got, want := state["inventory"]["wood"], 1; got != want {
+		t.Fatalf("expected box wood=%d, got %d", want, got)
+	}
+}
+
+func TestUseCase_E2E_FarmPlantHarvest_UsesFarmObjectStateMachine(t *testing.T) {
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-farm-object-state"
+	farmID := "obj-farm-it-1"
+	ctx := context.Background()
+	_ = db.Exec("DELETE FROM world_objects WHERE owner_agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	objRepo := gormrepo.NewWorldObjectRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	if err := stateRepo.SaveWithVersion(ctx, survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 90, Energy: 90},
+		Position:  survival.Position{X: 1, Y: 1},
+		Inventory: map[string]int{"seed": 1},
+		Version:   1,
+	}, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+	if err := db.Create(&model.WorldObject{
+		ObjectID:     farmID,
+		Kind:         "3",
+		X:            1,
+		Y:            1,
+		Hp:           100,
+		OwnerAgentID: agentID,
+		ObjectType:   "farm_plot",
+		ObjectState:  `{"state":"IDLE"}`,
+	}).Error; err != nil {
+		t.Fatalf("seed farm object: %v", err)
+	}
+
+	now := time.Unix(1700020000, 0)
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	if _, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "farm-plant-1",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionFarmPlant,
+			FarmID: farmID,
+		},
+	}); err != nil {
+		t.Fatalf("farm plant: %v", err)
+	}
+
+	if _, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "farm-harvest-too-early",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionFarmHarvest,
+			FarmID: farmID,
+		},
+	}); !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed for early harvest, got %v", err)
+	}
+
+	now = now.Add(61 * time.Minute)
+	if _, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "farm-harvest-1",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionFarmHarvest,
+			FarmID: farmID,
+		},
+	}); err != nil {
+		t.Fatalf("farm harvest: %v", err)
+	}
+
+	var farm model.WorldObject
+	if err := db.Where("owner_agent_id = ? AND object_id = ?", agentID, farmID).First(&farm).Error; err != nil {
+		t.Fatalf("query farm object: %v", err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal([]byte(farm.ObjectState), &state); err != nil {
+		t.Fatalf("unmarshal farm object_state: %v", err)
+	}
+	if got, ok := state["state"].(string); !ok || got != "IDLE" {
+		t.Fatalf("expected farm state IDLE after harvest, got %v", state["state"])
 	}
 }

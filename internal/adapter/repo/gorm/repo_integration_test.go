@@ -78,13 +78,35 @@ func TestWorldObjectAndSessionRepos_PersistLifecycle(t *testing.T) {
 	sessionRepo := NewAgentSessionRepo(db)
 
 	if err := objRepo.Save(ctx, agentID, ports.WorldObjectRecord{
-		ObjectID: "obj-2",
-		Kind:     1,
-		X:        7,
-		Y:        9,
-		HP:       100,
+		ObjectID:      "obj-2",
+		Kind:          1,
+		X:             7,
+		Y:             9,
+		HP:            100,
+		ObjectType:    "box",
+		CapacitySlots: 60,
+		ObjectState:   `{"inventory":{}}`,
 	}); err != nil {
 		t.Fatalf("save object: %v", err)
+	}
+	saved, err := objRepo.GetByObjectID(ctx, agentID, "obj-2")
+	if err != nil {
+		t.Fatalf("get object: %v", err)
+	}
+	if saved.ObjectType != "box" || saved.CapacitySlots != 60 {
+		t.Fatalf("unexpected object defaults: %+v", saved)
+	}
+	saved.UsedSlots = 5
+	saved.ObjectState = `{"inventory":{"wood":5}}`
+	if err := objRepo.Update(ctx, agentID, saved); err != nil {
+		t.Fatalf("update object: %v", err)
+	}
+	updated, err := objRepo.GetByObjectID(ctx, agentID, "obj-2")
+	if err != nil {
+		t.Fatalf("get updated object: %v", err)
+	}
+	if updated.UsedSlots != 5 || updated.ObjectState == "" {
+		t.Fatalf("unexpected updated object: %+v", updated)
 	}
 
 	if err := sessionRepo.EnsureActive(ctx, sessionID, agentID, 1); err != nil {
