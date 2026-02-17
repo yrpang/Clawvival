@@ -245,3 +245,50 @@ func TestUseCase_AppendsStrategyMetadataToEvents(t *testing.T) {
 		t.Fatalf("expected strategy hash in payload")
 	}
 }
+
+func TestUseCase_AppendsPhaseChangedEvent(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:    "night",
+			ThreatLevel:  3,
+			PhaseChanged: true,
+			PhaseFrom:    "day",
+			PhaseTo:      "night",
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-phase-switch",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		DeltaMinutes:   30,
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	found := false
+	for _, evt := range eventRepo.events {
+		if evt.Type != "world_phase_changed" {
+			continue
+		}
+		found = true
+		if evt.Payload["from"] != "day" || evt.Payload["to"] != "night" {
+			t.Fatalf("unexpected phase payload: %+v", evt.Payload)
+		}
+	}
+	if !found {
+		t.Fatalf("expected world_phase_changed event")
+	}
+}

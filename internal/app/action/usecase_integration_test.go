@@ -10,6 +10,7 @@ import (
 	gormrepo "clawverse/internal/adapter/repo/gorm"
 	"clawverse/internal/adapter/repo/gorm/model"
 	worldmock "clawverse/internal/adapter/world/mock"
+	worldruntime "clawverse/internal/adapter/world/runtime"
 	"clawverse/internal/domain/survival"
 	"clawverse/internal/domain/world"
 )
@@ -378,5 +379,107 @@ func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T)
 	}
 	if eventCount != 0 {
 		t.Fatalf("expected no persisted events for invalid params, got=%d", eventCount)
+	}
+}
+
+func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
+	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-world-phase-switch"
+	ctx := context.Background()
+	if err := db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup action_executions: %v", err)
+	}
+	if err := db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup domain_events: %v", err)
+	}
+	if err := db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup agent_states: %v", err)
+	}
+	if err := db.Exec("DELETE FROM world_clock_state").Error; err != nil {
+		t.Fatalf("cleanup world_clock_state: %v", err)
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	seed := survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   1,
+	}
+	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	now := time.Unix(0, 0).Add(9 * time.Minute)
+	worldProvider := worldruntime.NewProvider(worldruntime.Config{
+		Clock: world.NewClock(world.ClockConfig{
+			StartAt:       time.Unix(0, 0),
+			DayDuration:   10 * time.Minute,
+			NightDuration: 5 * time.Minute,
+		}),
+		Now:             func() time.Time { return now },
+		ClockStateStore: worldruntime.NewGormClockStateStore(db),
+	})
+
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldProvider,
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return now },
+	}
+
+	if _, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "phase-day",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		DeltaMinutes:   30,
+	}); err != nil {
+		t.Fatalf("first execute: %v", err)
+	}
+
+	now = time.Unix(0, 0).Add(11 * time.Minute)
+	if _, err := uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "phase-night",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		DeltaMinutes:   30,
+	}); err != nil {
+		t.Fatalf("second execute: %v", err)
+	}
+
+	events, err := eventRepo.ListByAgentID(ctx, agentID, 20)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	found := false
+	for _, evt := range events {
+		if evt.Type != "world_phase_changed" {
+			continue
+		}
+		found = true
+		if evt.Payload["from"] != "day" || evt.Payload["to"] != "night" {
+			t.Fatalf("unexpected phase payload: %+v", evt.Payload)
+		}
+		break
+	}
+	if !found {
+		t.Fatalf("expected world_phase_changed event")
 	}
 }

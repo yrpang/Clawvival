@@ -82,13 +82,24 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			survival.HeartbeatDelta{Minutes: req.DeltaMinutes},
 			nowFn(),
 			survival.WorldSnapshot{
-				TimeOfDay:      snapshot.TimeOfDay,
-				ThreatLevel:    snapshot.ThreatLevel,
-				NearbyResource: snapshot.NearbyResource,
+				TimeOfDay:         snapshot.TimeOfDay,
+				ThreatLevel:       snapshot.ThreatLevel,
+				VisibilityPenalty: snapshot.VisibilityPenalty,
+				NearbyResource:    snapshot.NearbyResource,
 			},
 		)
 		if err != nil {
 			return err
+		}
+		if snapshot.PhaseChanged {
+			result.Events = append(result.Events, survival.DomainEvent{
+				Type:       "world_phase_changed",
+				OccurredAt: nowFn(),
+				Payload: map[string]any{
+					"from": snapshot.PhaseFrom,
+					"to":   snapshot.PhaseTo,
+				},
+			})
 		}
 
 		if err := u.StateRepo.SaveWithVersion(txCtx, result.UpdatedState, state.Version); err != nil {
