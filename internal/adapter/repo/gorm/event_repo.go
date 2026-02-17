@@ -38,17 +38,16 @@ func (r EventRepo) Append(ctx context.Context, agentID string, events []survival
 }
 
 func (r EventRepo) ListByAgentID(ctx context.Context, agentID string, limit int) ([]survival.DomainEvent, error) {
-	if limit <= 0 {
-		limit = 100
-	}
 	rows := []model.DomainEvent{}
-	err := getDBFromCtx(ctx, r.db).
+	query := getDBFromCtx(ctx, r.db).
 		Where(&model.DomainEvent{AgentID: agentID}).
 		Clauses(clause.OrderBy{
 			Columns: []clause.OrderByColumn{{Column: clause.Column{Name: "occurred_at"}, Desc: true}},
-		}).
-		Limit(limit).
-		Find(&rows).Error
+		})
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	err := query.Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
