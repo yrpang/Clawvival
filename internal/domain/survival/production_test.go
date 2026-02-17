@@ -46,3 +46,23 @@ func TestCraftRejectsMissingInput(t *testing.T) {
 		t.Fatalf("expected craft fail when missing input")
 	}
 }
+
+func TestApplyGather_UsesToolEfficiency(t *testing.T) {
+	state := AgentStateAggregate{
+		Inventory: map[string]int{
+			"tool_axe":     1,
+			"tool_pickaxe": 1,
+		},
+	}
+	ApplyGather(&state, WorldSnapshot{NearbyResource: map[string]int{"wood": 2, "stone": 3, "berry": 1}})
+
+	if got, want := state.Inventory["wood"], 4; got != want {
+		t.Fatalf("wood gather mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := state.Inventory["stone"], 6; got != want {
+		t.Fatalf("stone gather mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := state.Inventory["berry"], 1; got != want {
+		t.Fatalf("berry gather mismatch: got=%d want=%d", got, want)
+	}
+}

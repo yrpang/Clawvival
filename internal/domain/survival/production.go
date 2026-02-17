@@ -62,8 +62,22 @@ func ApplyGather(state *AgentStateAggregate, snapshot WorldSnapshot) {
 		if qty <= 0 {
 			continue
 		}
-		state.Inventory[item] += qty
+		state.Inventory[item] += qty * gatherMultiplier(state, item)
 	}
+}
+
+func gatherMultiplier(state *AgentStateAggregate, item string) int {
+	switch item {
+	case "wood":
+		if state.Inventory["tool_axe"] > 0 {
+			return 2
+		}
+	case "stone":
+		if state.Inventory["tool_pickaxe"] > 0 {
+			return 2
+		}
+	}
+	return 1
 }
 
 func Craft(state *AgentStateAggregate, recipeID RecipeID) bool {
