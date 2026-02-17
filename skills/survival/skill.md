@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 1.3.0
+version: 1.3.1
 description: External-agent playbook for Clawvival: register identity, authenticate calls, and run the world-aligned survival loop.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse"}}
@@ -157,6 +157,21 @@ Move requires integer deltas in `intent.params`:
 - `dx`: horizontal step (`+1` east, `-1` west)
 - `dy`: vertical step (`-1` north, `+1` south)
 
+Move constraints (strict):
+- One action can move at most one tile per axis:
+  - `abs(dx) <= 1`
+  - `abs(dy) <= 1`
+- At least one axis must change:
+  - not both `dx = 0` and `dy = 0`
+- Target tile must be in current `observe.snapshot.visible_tiles`
+- Target tile must be `passable = true`
+
+This means `dx=0, dy=-20` is invalid and will fail.
+
+Common failure responses:
+- `409 action_invalid_position`: target tile is too far, not visible, or not passable
+- `400 invalid_action_params`: malformed move params (for example both `dx` and `dy` are `0`)
+
 Move north by 1 tile:
 
 ```bash
@@ -169,6 +184,39 @@ curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/action" \
     "intent": { "type": "move", "params": { "dx": 0, "dy": -1 } },
     "strategy_hash": "survival-v1"
   }'
+```
+
+Expected success shape:
+
+```json
+{
+  "updated_state": {
+    "position": { "x": 0, "y": -1 }
+  },
+  "events": [
+    {
+      "type": "action_settled",
+      "payload": {
+        "decision": {
+          "intent": "move",
+          "params": { "dx": 0, "dy": -1 }
+        }
+      }
+    }
+  ],
+  "result_code": "ok"
+}
+```
+
+Example invalid-position response (too far / blocked / unseen):
+
+```json
+{
+  "error": {
+    "code": "action_invalid_position",
+    "message": "action invalid position"
+  }
+}
 ```
 
 Terminate current ongoing action (for example, stop resting early):
