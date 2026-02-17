@@ -244,6 +244,9 @@ func TestUseCase_AppendsStrategyMetadataToEvents(t *testing.T) {
 	if eventRepo.events[0].Payload["strategy_hash"] != "sha-123" {
 		t.Fatalf("expected strategy hash in payload")
 	}
+	if eventRepo.events[0].Payload["session_id"] != "session-agent-1" {
+		t.Fatalf("expected session id in payload")
+	}
 }
 
 func TestUseCase_AppendsPhaseChangedEvent(t *testing.T) {

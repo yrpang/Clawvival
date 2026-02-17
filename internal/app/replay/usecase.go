@@ -25,6 +25,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		return Response{}, err
 	}
 	events = filterByTimeWindow(events, req.OccurredFrom, req.OccurredTo)
+	events = filterBySession(events, req.SessionID)
 	latest := reconstruct(events)
 	latest.AgentID = req.AgentID
 	return Response{Events: events, LatestState: latest}, nil
@@ -41,6 +42,25 @@ func filterByTimeWindow(events []survival.DomainEvent, from, to int64) []surviva
 			continue
 		}
 		if to > 0 && ts > to {
+			continue
+		}
+		out = append(out, evt)
+	}
+	return out
+}
+
+func filterBySession(events []survival.DomainEvent, sessionID string) []survival.DomainEvent {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return events
+	}
+	out := make([]survival.DomainEvent, 0, len(events))
+	for _, evt := range events {
+		if evt.Payload == nil {
+			continue
+		}
+		got, _ := evt.Payload["session_id"].(string)
+		if got != sessionID {
 			continue
 		}
 		out = append(out, evt)

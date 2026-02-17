@@ -7,6 +7,7 @@ type Request struct {
 	Limit        int
 	OccurredFrom int64
 	OccurredTo   int64
+	SessionID    string
 }
 
 type Response struct {
