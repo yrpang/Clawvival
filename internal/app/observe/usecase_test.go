@@ -62,8 +62,10 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 	uc := UseCase{
 		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
-			AgentID:  "agent-1",
-			Position: survival.Position{X: 0, Y: 0},
+			AgentID:   "agent-1",
+			Position:  survival.Position{X: 0, Y: 0},
+			Vitals:    survival.Vitals{HP: 10, Hunger: 0, Energy: 10},
+			Inventory: map[string]int{"wood": 2, "stone": 1},
 		}},
 		World: observeWorldProvider{snapshot: world.Snapshot{
 			TimeOfDay:    "day",
@@ -87,6 +89,12 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 	}
 	if len(resp.Threats) != 1 || resp.Threats[0].DangerScore <= 0 {
 		t.Fatalf("expected one threat with positive danger score, got %+v", resp.Threats)
+	}
+	if resp.State.InventoryUsed != 3 {
+		t.Fatalf("expected inventory_used=3, got %d", resp.State.InventoryUsed)
+	}
+	if len(resp.State.StatusEffects) == 0 {
+		t.Fatalf("expected derived status effects, got empty")
 	}
 }
 

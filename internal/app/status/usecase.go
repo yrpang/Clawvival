@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"clawvival/internal/app/ports"
+	"clawvival/internal/app/stateview"
 	"clawvival/internal/domain/world"
 )
 
@@ -28,6 +29,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	state = stateview.Enrich(state, snapshot.TimeOfDay)
 	return Response{
 		State:              state,
 		WorldTimeSeconds:   snapshot.WorldTimeSeconds,
