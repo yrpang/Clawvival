@@ -69,6 +69,33 @@ func TestSettlementService_GameOverMarksDeathCause(t *testing.T) {
 	}
 }
 
+func TestSettlementService_CombatAffectedByVisibilityPenalty(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{AgentID: "a-1", Vitals: Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1}
+	now := time.Now()
+
+	lowPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat, Params: map[string]int{"target_level": 1}}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
+		TimeOfDay:         "night",
+		ThreatLevel:       3,
+		VisibilityPenalty: 0,
+	})
+	if err != nil {
+		t.Fatalf("low penalty settle error: %v", err)
+	}
+	highPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat, Params: map[string]int{"target_level": 1}}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
+		TimeOfDay:         "night",
+		ThreatLevel:       3,
+		VisibilityPenalty: 2,
+	})
+	if err != nil {
+		t.Fatalf("high penalty settle error: %v", err)
+	}
+
+	if highPenalty.UpdatedState.Vitals.HP >= lowPenalty.UpdatedState.Vitals.HP {
+		t.Fatalf("expected visibility penalty to increase hp loss, low=%d high=%d", lowPenalty.UpdatedState.Vitals.HP, highPenalty.UpdatedState.Vitals.HP)
+	}
+}
+
 func abs(v int) int {
 	if v < 0 {
 		return -v

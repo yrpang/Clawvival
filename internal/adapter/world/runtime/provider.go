@@ -79,7 +79,8 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 		threat = p.cfg.ThreatDay
 		nearby = copyMap(p.cfg.ResourcesDay)
 	}
-	if err := p.persistPhase(ctx, timeOfDay, p.cfg.Now()); err != nil {
+	phaseChange, err := p.persistPhase(ctx, timeOfDay, p.cfg.Now())
+	if err != nil {
 		return world.Snapshot{}, err
 	}
 
@@ -110,26 +111,42 @@ func (p Provider) SnapshotForAgent(ctx context.Context, _ string, center world.P
 	return world.Snapshot{
 		TimeOfDay:          timeOfDay,
 		ThreatLevel:        threat,
+		VisibilityPenalty:  visibilityPenalty(isDay),
 		NearbyResource:     nearby,
 		Center:             center,
 		ViewRadius:         p.cfg.ViewRadius,
 		VisibleTiles:       tiles,
 		NextPhaseInSeconds: int(next.Seconds()),
+		PhaseChanged:       phaseChange.changed,
+		PhaseFrom:          phaseChange.from,
+		PhaseTo:            phaseChange.to,
 	}, nil
 }
 
-func (p Provider) persistPhase(ctx context.Context, phase string, now time.Time) error {
+type phaseChange struct {
+	changed bool
+	from    string
+	to      string
+}
+
+func (p Provider) persistPhase(ctx context.Context, phase string, now time.Time) (phaseChange, error) {
 	if p.cfg.ClockStateStore == nil {
-		return nil
+		return phaseChange{}, nil
 	}
 	current, _, ok, err := p.cfg.ClockStateStore.Get(ctx)
 	if err != nil {
-		return err
+		return phaseChange{}, err
 	}
 	if ok && current == phase {
-		return nil
+		return phaseChange{}, nil
 	}
-	return p.cfg.ClockStateStore.Save(ctx, phase, now)
+	if err := p.cfg.ClockStateStore.Save(ctx, phase, now); err != nil {
+		return phaseChange{}, err
+	}
+	if !ok {
+		return phaseChange{}, nil
+	}
+	return phaseChange{changed: true, from: current, to: phase}, nil
 }
 
 func (p Provider) loadChunksForWindow(ctx context.Context, center world.Point, phase string) ([]world.Chunk, error) {
@@ -288,6 +305,13 @@ func copyMap(in map[string]int) map[string]int {
 		out[k] = v
 	}
 	return out
+}
+
+func visibilityPenalty(isDay bool) int {
+	if isDay {
+		return 0
+	}
+	return 1
 }
 
 func marshalChunkTiles(tiles []world.Tile) ([]byte, error) {

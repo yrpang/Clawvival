@@ -61,9 +61,10 @@ type DomainEvent struct {
 }
 
 type WorldSnapshot struct {
-	TimeOfDay      string
-	ThreatLevel    int
-	NearbyResource map[string]int
+	TimeOfDay         string
+	ThreatLevel       int
+	VisibilityPenalty int
+	NearbyResource    map[string]int
 }
 
 type SettlementResult struct {

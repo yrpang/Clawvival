@@ -74,6 +74,9 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		} else {
 			hpLoss += scaledInt(maxInt(1, snapshot.ThreatLevel/2), delta.Minutes)
 		}
+		if snapshot.VisibilityPenalty > 0 {
+			hpLoss += scaledInt(snapshot.VisibilityPenalty, delta.Minutes)
+		}
 	}
 
 	next.Vitals.HP -= hpLoss
