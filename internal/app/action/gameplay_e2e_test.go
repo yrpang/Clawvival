@@ -139,10 +139,10 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	now = now.Add(11 * time.Minute)
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
-		IdempotencyKey: "loop-combat",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat}, StrategyHash: "sha-loop",
+		IdempotencyKey: "loop-retreat",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, StrategyHash: "sha-loop",
 	}); err != nil {
-		t.Fatalf("combat: %v", err)
+		t.Fatalf("retreat: %v", err)
 	}
 
 	st, err := statusUC.Execute(ctx, status.Request{AgentID: agentID})
@@ -422,7 +422,7 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	}
 }
 
-func TestGameplayLoop_E2E_NightCombatHigherRiskThanDay(t *testing.T) {
+func TestGameplayLoop_E2E_DayNightNonCombatHPLossConsistent(t *testing.T) {
 	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
 		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
@@ -526,26 +526,26 @@ func TestGameplayLoop_E2E_NightCombatHigherRiskThanDay(t *testing.T) {
 
 	dayOut, err := actionUCDay.Execute(ctx, Request{
 		AgentID:        dayAgent,
-		IdempotencyKey: "combat-day",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat}, StrategyHash: "sha-risk",
+		IdempotencyKey: "gather-day",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-risk",
 	})
 	if err != nil {
-		t.Fatalf("day combat: %v", err)
+		t.Fatalf("day gather: %v", err)
 	}
 
 	nightOut, err := actionUCNight.Execute(ctx, Request{
 		AgentID:        nightAgent,
-		IdempotencyKey: "combat-night",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat}, StrategyHash: "sha-risk",
+		IdempotencyKey: "gather-night",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-risk",
 	})
 	if err != nil {
-		t.Fatalf("night combat: %v", err)
+		t.Fatalf("night gather: %v", err)
 	}
 
 	dayLoss := seedDay.Vitals.HP - dayOut.UpdatedState.Vitals.HP
 	nightLoss := seedNight.Vitals.HP - nightOut.UpdatedState.Vitals.HP
-	if nightLoss <= dayLoss {
-		t.Fatalf("expected night hp loss > day hp loss, day=%d night=%d", dayLoss, nightLoss)
+	if nightLoss != dayLoss {
+		t.Fatalf("expected day/night non-combat hp loss equal, day=%d night=%d", dayLoss, nightLoss)
 	}
 }
 
@@ -694,11 +694,11 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
-		IdempotencyKey: "critical-combat",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat}, StrategyHash: "sha-critical",
+		IdempotencyKey: "critical-gather",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-critical",
 	})
 	if err != nil {
-		t.Fatalf("combat action: %v", err)
+		t.Fatalf("gather action: %v", err)
 	}
 
 	if out.ResultCode != survival.ResultOK {

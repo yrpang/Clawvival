@@ -2,6 +2,7 @@ package action
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -30,6 +31,7 @@ const (
 	minRestMinutes               = 1
 	maxRestMinutes               = 120
 	targetViewRadius             = 5
+	defaultFarmGrowMinutes       = 60
 )
 
 type UseCase struct {
@@ -138,6 +140,10 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err := validateTargetVisibility(state.Position, req.Intent, snapshot); err != nil {
 			return err
 		}
+		preparedObj, err := prepareObjectAction(txCtx, nowAt, state, req.Intent, u.ObjectRepo, req.AgentID)
+		if err != nil {
+			return err
+		}
 		if !positionPreconditionsSatisfied(state, req.Intent, snapshot) {
 			return ErrActionInvalidPosition
 		}
@@ -198,6 +204,10 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			return err
 		}
 
+		if err := persistObjectAction(txCtx, nowAt, req.Intent, preparedObj, u.ObjectRepo, req.AgentID); err != nil {
+			return err
+		}
+
 		if err := u.EventRepo.Append(txCtx, req.AgentID, result.Events); err != nil {
 			return err
 		}
@@ -216,6 +226,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				if obj.HP <= 0 {
 					obj.HP = 100
 				}
+				obj.ObjectType, obj.Quality, obj.CapacitySlots, obj.ObjectState = buildObjectDefaults(req.Intent.ObjectType)
 				if err := u.ObjectRepo.Save(txCtx, req.AgentID, obj); err != nil {
 					return err
 				}
@@ -668,6 +679,215 @@ func saveActionExecution(ctx context.Context, repo ports.ActionExecutionReposito
 		return err
 	}
 	return nil
+}
+
+type preparedObjectAction struct {
+	record ports.WorldObjectRecord
+	box    boxObjectState
+	farm   farmObjectState
+}
+
+type boxObjectState struct {
+	Inventory map[string]int `json:"inventory"`
+}
+
+type farmObjectState struct {
+	State         string `json:"state"`
+	PlantedAtUnix int64  `json:"planted_at_unix,omitempty"`
+	ReadyAtUnix   int64  `json:"ready_at_unix,omitempty"`
+}
+
+func prepareObjectAction(ctx context.Context, nowAt time.Time, state survival.AgentStateAggregate, intent survival.ActionIntent, repo ports.WorldObjectRepository, agentID string) (*preparedObjectAction, error) {
+	if repo == nil {
+		return nil, nil
+	}
+	switch intent.Type {
+	case survival.ActionContainerDeposit, survival.ActionContainerWithdraw:
+		obj, err := repo.GetByObjectID(ctx, agentID, intent.ContainerID)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				return nil, ErrActionPreconditionFailed
+			}
+			return nil, err
+		}
+		if !isBoxObject(obj) {
+			return nil, ErrActionPreconditionFailed
+		}
+		box, err := parseBoxObjectState(obj.ObjectState)
+		if err != nil {
+			return nil, ErrActionPreconditionFailed
+		}
+		total := 0
+		for _, item := range intent.Items {
+			total += item.Count
+			switch intent.Type {
+			case survival.ActionContainerDeposit:
+				if state.Inventory[item.ItemType] < item.Count {
+					return nil, ErrActionPreconditionFailed
+				}
+			case survival.ActionContainerWithdraw:
+				if box.Inventory[item.ItemType] < item.Count {
+					return nil, ErrActionPreconditionFailed
+				}
+			}
+		}
+		if intent.Type == survival.ActionContainerDeposit && obj.CapacitySlots > 0 && obj.UsedSlots+total > obj.CapacitySlots {
+			return nil, ErrActionPreconditionFailed
+		}
+		return &preparedObjectAction{record: obj, box: box}, nil
+	case survival.ActionFarmPlant, survival.ActionFarmHarvest:
+		obj, err := repo.GetByObjectID(ctx, agentID, intent.FarmID)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				return nil, ErrActionPreconditionFailed
+			}
+			return nil, err
+		}
+		if !isFarmObject(obj) {
+			return nil, ErrActionPreconditionFailed
+		}
+		farm, err := parseFarmObjectState(obj.ObjectState)
+		if err != nil {
+			return nil, ErrActionPreconditionFailed
+		}
+		switch intent.Type {
+		case survival.ActionFarmPlant:
+			if strings.ToUpper(strings.TrimSpace(farm.State)) != "IDLE" {
+				return nil, ErrActionPreconditionFailed
+			}
+		case survival.ActionFarmHarvest:
+			ready := strings.ToUpper(strings.TrimSpace(farm.State)) == "READY"
+			if strings.ToUpper(strings.TrimSpace(farm.State)) == "GROWING" && farm.ReadyAtUnix > 0 && nowAt.Unix() >= farm.ReadyAtUnix {
+				ready = true
+			}
+			if !ready {
+				return nil, ErrActionPreconditionFailed
+			}
+		}
+		return &preparedObjectAction{record: obj, farm: farm}, nil
+	default:
+		return nil, nil
+	}
+}
+
+func persistObjectAction(ctx context.Context, nowAt time.Time, intent survival.ActionIntent, prepared *preparedObjectAction, repo ports.WorldObjectRepository, agentID string) error {
+	if repo == nil || prepared == nil {
+		return nil
+	}
+	obj := prepared.record
+	switch intent.Type {
+	case survival.ActionContainerDeposit:
+		if prepared.box.Inventory == nil {
+			prepared.box.Inventory = map[string]int{}
+		}
+		for _, item := range intent.Items {
+			prepared.box.Inventory[item.ItemType] += item.Count
+			obj.UsedSlots += item.Count
+		}
+		encoded, err := json.Marshal(prepared.box)
+		if err != nil {
+			return err
+		}
+		obj.ObjectState = string(encoded)
+		return repo.Update(ctx, agentID, obj)
+	case survival.ActionContainerWithdraw:
+		if prepared.box.Inventory == nil {
+			prepared.box.Inventory = map[string]int{}
+		}
+		for _, item := range intent.Items {
+			prepared.box.Inventory[item.ItemType] -= item.Count
+			if prepared.box.Inventory[item.ItemType] <= 0 {
+				delete(prepared.box.Inventory, item.ItemType)
+			}
+			obj.UsedSlots -= item.Count
+		}
+		if obj.UsedSlots < 0 {
+			obj.UsedSlots = 0
+		}
+		encoded, err := json.Marshal(prepared.box)
+		if err != nil {
+			return err
+		}
+		obj.ObjectState = string(encoded)
+		return repo.Update(ctx, agentID, obj)
+	case survival.ActionFarmPlant:
+		prepared.farm.State = "GROWING"
+		prepared.farm.PlantedAtUnix = nowAt.Unix()
+		prepared.farm.ReadyAtUnix = nowAt.Add(defaultFarmGrowMinutes * time.Minute).Unix()
+		encoded, err := json.Marshal(prepared.farm)
+		if err != nil {
+			return err
+		}
+		obj.ObjectState = string(encoded)
+		return repo.Update(ctx, agentID, obj)
+	case survival.ActionFarmHarvest:
+		prepared.farm.State = "IDLE"
+		prepared.farm.PlantedAtUnix = 0
+		prepared.farm.ReadyAtUnix = 0
+		encoded, err := json.Marshal(prepared.farm)
+		if err != nil {
+			return err
+		}
+		obj.ObjectState = string(encoded)
+		return repo.Update(ctx, agentID, obj)
+	default:
+		return nil
+	}
+}
+
+func parseBoxObjectState(raw string) (boxObjectState, error) {
+	out := boxObjectState{Inventory: map[string]int{}}
+	if strings.TrimSpace(raw) == "" {
+		return out, nil
+	}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return boxObjectState{}, err
+	}
+	if out.Inventory == nil {
+		out.Inventory = map[string]int{}
+	}
+	return out, nil
+}
+
+func parseFarmObjectState(raw string) (farmObjectState, error) {
+	out := farmObjectState{State: "IDLE"}
+	if strings.TrimSpace(raw) == "" {
+		return out, nil
+	}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return farmObjectState{}, err
+	}
+	if strings.TrimSpace(out.State) == "" {
+		out.State = "IDLE"
+	}
+	return out, nil
+}
+
+func isBoxObject(obj ports.WorldObjectRecord) bool {
+	typ := strings.ToLower(strings.TrimSpace(obj.ObjectType))
+	return typ == "box" || obj.Kind == int(survival.BuildBox)
+}
+
+func isFarmObject(obj ports.WorldObjectRecord) bool {
+	typ := strings.ToLower(strings.TrimSpace(obj.ObjectType))
+	return typ == "farm_plot" || obj.Kind == int(survival.BuildFarm)
+}
+
+func buildObjectDefaults(intentObjectType string) (objectType, quality string, capacitySlots int, objectState string) {
+	switch strings.ToLower(strings.TrimSpace(intentObjectType)) {
+	case "box":
+		return "box", "", 60, `{"inventory":{}}`
+	case "farm_plot":
+		return "farm_plot", "", 0, `{"state":"IDLE"}`
+	case "bed_good":
+		return "bed", "GOOD", 0, ""
+	case "bed_rough":
+		return "bed", "ROUGH", 0, ""
+	case "bed":
+		return "bed", "ROUGH", 0, ""
+	default:
+		return strings.ToLower(strings.TrimSpace(intentObjectType)), "", 0, ""
+	}
 }
 
 func toNum(v any) float64 {
