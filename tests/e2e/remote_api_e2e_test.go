@@ -49,6 +49,19 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("action rejects client dt field", func(t *testing.T) {
+		status, body := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, map[string]any{
+			"idempotency_key": "reject-dt-" + time.Now().UTC().Format("150405"),
+			"intent": map[string]any{
+				"type": "gather",
+			},
+			"dt": 30,
+		})
+		if status != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", status, string(body))
+		}
+	})
+
 	t.Run("skills endpoints", func(t *testing.T) {
 		status, indexBody, err := doRequest(client, http.MethodGet, baseURL+"/skills/index.json", "", "", nil)
 		if err != nil {
@@ -133,7 +146,6 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 			"intent": map[string]any{
 				"type": "gather",
 			},
-			"dt":            30,
 			"strategy_hash": "remote-e2e",
 		}
 		status, firstActionBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, actionReq)

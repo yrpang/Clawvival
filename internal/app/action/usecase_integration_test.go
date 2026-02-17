@@ -85,9 +85,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 		Intent: survival.ActionIntent{
 			Type:   survival.ActionBuild,
 			Params: map[string]int{"kind": int(survival.BuildBed)},
-		},
-		DeltaMinutes: 30,
-	})
+		}})
 	if err != nil {
 		t.Fatalf("build execute: %v", err)
 	}
@@ -123,9 +121,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "die-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
 	if err != nil {
 		t.Fatalf("gameover execute: %v", err)
 	}
@@ -200,9 +196,7 @@ func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "gather-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
 	if err != nil {
 		t.Fatalf("gather execute: %v", err)
 	}
@@ -276,9 +270,7 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 	resp, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "combat-critical-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
 	if err != nil {
 		t.Fatalf("combat execute: %v", err)
 	}
@@ -361,9 +353,7 @@ func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T)
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "invalid-move-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionMove},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionMove}})
 	if !errors.Is(err, ErrInvalidActionParams) {
 		t.Fatalf("expected ErrInvalidActionParams, got %v", err)
 	}
@@ -450,9 +440,7 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 	if _, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-day",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-	}); err != nil {
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}}); err != nil {
 		t.Fatalf("first execute: %v", err)
 	}
 
@@ -460,9 +448,7 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 	if _, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-night",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-	}); err != nil {
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}}); err != nil {
 		t.Fatalf("second execute: %v", err)
 	}
 
@@ -544,9 +530,7 @@ func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
 		Intent: survival.ActionIntent{
 			Type:   survival.ActionBuild,
 			Params: map[string]int{"kind": int(survival.BuildBed)},
-		},
-		DeltaMinutes: 30,
-	})
+		}})
 	if !errors.Is(err, ErrActionPreconditionFailed) {
 		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
 	}
@@ -628,9 +612,7 @@ func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "combat-cooldown-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
 	if !errors.Is(err, ErrActionCooldownActive) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}

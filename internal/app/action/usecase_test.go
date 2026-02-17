@@ -40,9 +40,7 @@ func TestUseCase_Idempotency(t *testing.T) {
 	req := Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-	}
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}}
 
 	first, err := uc.Execute(context.Background(), req)
 	if err != nil {
@@ -78,8 +76,7 @@ func TestUseCase_DeltaUsesSystemTimeDefaultOnFirstAction(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-system-dt-default",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   1, // external value should be ignored
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // external value should be ignored
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
@@ -115,8 +112,7 @@ func TestUseCase_DeltaUsesElapsedSinceLastSettle(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-system-dt-elapsed",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   999, // external value should be ignored
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // external value should be ignored
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
@@ -157,9 +153,7 @@ func TestUseCase_RejectsMissingIntent(t *testing.T) {
 	uc := UseCase{}
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
-		IdempotencyKey: "k-1",
-		DeltaMinutes:   30,
-	})
+		IdempotencyKey: "k-1"})
 	if err == nil {
 		t.Fatalf("expected error for missing intent")
 	}
@@ -173,9 +167,7 @@ func TestUseCase_RejectsUnknownIntentType(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionType("unknown")},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionType("unknown")}})
 	if err == nil {
 		t.Fatalf("expected error for unknown intent type")
 	}
@@ -256,11 +248,11 @@ func (r *stubEventRepo) ListByAgentID(_ context.Context, _ string, limit int) ([
 
 func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
 	cases := []Request{
-		{AgentID: "agent-1", IdempotencyKey: "k1", Intent: survival.ActionIntent{Type: survival.ActionMove}, DeltaMinutes: 30},
-		{AgentID: "agent-1", IdempotencyKey: "k2", Intent: survival.ActionIntent{Type: survival.ActionCombat}, DeltaMinutes: 30},
-		{AgentID: "agent-1", IdempotencyKey: "k3", Intent: survival.ActionIntent{Type: survival.ActionBuild}, DeltaMinutes: 30},
-		{AgentID: "agent-1", IdempotencyKey: "k4", Intent: survival.ActionIntent{Type: survival.ActionFarm}, DeltaMinutes: 30},
-		{AgentID: "agent-1", IdempotencyKey: "k5", Intent: survival.ActionIntent{Type: survival.ActionCraft}, DeltaMinutes: 30},
+		{AgentID: "agent-1", IdempotencyKey: "k1", Intent: survival.ActionIntent{Type: survival.ActionMove}},
+		{AgentID: "agent-1", IdempotencyKey: "k2", Intent: survival.ActionIntent{Type: survival.ActionCombat}},
+		{AgentID: "agent-1", IdempotencyKey: "k3", Intent: survival.ActionIntent{Type: survival.ActionBuild}},
+		{AgentID: "agent-1", IdempotencyKey: "k4", Intent: survival.ActionIntent{Type: survival.ActionFarm}},
+		{AgentID: "agent-1", IdempotencyKey: "k5", Intent: survival.ActionIntent{Type: survival.ActionCraft}},
 	}
 
 	uc := UseCase{}
@@ -295,9 +287,7 @@ func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-expanded",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
 	if err != nil {
 		t.Fatalf("expected valid expanded action, got %v", err)
 	}
@@ -326,9 +316,7 @@ func TestUseCase_AppendsStrategyMetadataToEvents(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-strategy",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-123",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-123",
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
@@ -370,9 +358,7 @@ func TestUseCase_AppendsPhaseChangedEvent(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-phase-switch",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
 	}
@@ -417,9 +403,7 @@ func TestUseCase_RejectsBuildWhenInventoryInsufficient(t *testing.T) {
 		Intent: survival.ActionIntent{
 			Type:   survival.ActionBuild,
 			Params: map[string]int{"kind": int(survival.BuildBed)},
-		},
-		DeltaMinutes: 30,
-	})
+		}})
 	if !errors.Is(err, ErrActionPreconditionFailed) {
 		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
 	}
@@ -451,9 +435,7 @@ func TestUseCase_RejectsMoveWhenTargetTileBlocked(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-move-blocked",
-		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}}})
 	if !errors.Is(err, ErrActionInvalidPosition) {
 		t.Fatalf("expected ErrActionInvalidPosition, got %v", err)
 	}
@@ -491,9 +473,7 @@ func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-combat-cooldown",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}})
 	if !errors.Is(err, ErrActionCooldownActive) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}

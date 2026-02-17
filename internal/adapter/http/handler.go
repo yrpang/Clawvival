@@ -61,7 +61,6 @@ type actionRequest struct {
 	AgentID        string       `json:"agent_id"`
 	IdempotencyKey string       `json:"idempotency_key"`
 	Intent         actionIntent `json:"intent"`
-	DT             int          `json:"dt"`
 	StrategyHash   string       `json:"strategy_hash,omitempty"`
 }
 
@@ -104,6 +103,10 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
 		return
 	}
+	if hasJSONField(ctx.Request.Body(), "dt") {
+		writeErrorBody(ctx, consts.StatusBadRequest, "dt_managed_by_server", "dt is managed by server")
+		return
+	}
 
 	resp, err := h.ActionUC.Execute(c, action.Request{
 		AgentID:        agentID,
@@ -112,7 +115,6 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 			Type:   survival.ActionType(body.Intent.Type),
 			Params: body.Intent.Params,
 		},
-		DeltaMinutes: body.DT,
 		StrategyHash: body.StrategyHash,
 	})
 	if err != nil {
@@ -220,6 +222,18 @@ func decodeJSON(ctx *app.RequestContext, out any) error {
 		return nil
 	}
 	return json.Unmarshal(body, out)
+}
+
+func hasJSONField(body []byte, key string) bool {
+	if len(body) == 0 {
+		return false
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(body, &m); err != nil {
+		return false
+	}
+	_, ok := m[key]
+	return ok
 }
 
 var ErrMissingAgentIDHeader = errors.New("missing x-agent-id header")

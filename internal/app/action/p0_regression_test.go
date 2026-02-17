@@ -52,9 +52,7 @@ func TestP0_MainLoop_ObserveActionStatus(t *testing.T) {
 	act, err := actionUC.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "loop-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-	})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
 	if err != nil {
 		t.Fatalf("action error: %v", err)
 	}

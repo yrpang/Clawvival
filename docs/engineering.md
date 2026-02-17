@@ -28,6 +28,7 @@
 - Heartbeat：按 Agent 心跳触发观察与决策（默认可取 30 分钟，可配置）
 - Standard Tick：统一参数表达标尺（30 分钟）
 - 连续时间结算：`实际变化量 = 配置值(每30mins) * (dt / 30)`
+- `dt` 由服务端按同一 `agent_id` 的“上次成功结算时间 -> 当前时间”计算，客户端输入不参与结算。
 
 ### 生存模型
 
@@ -244,7 +245,7 @@ flowchart LR
 4. `ActionUseCase`
 - 对应：`POST /api/agent/action`
 - 输入要求：必须包含 `idempotency_key`
-- 职责：幂等校验 -> 载入状态 -> 结算 -> 事务提交（状态/动作/事件）-> 返回结果
+- 职责：幂等校验 -> 载入状态 -> 计算系统 `dt` -> 结算 -> 事务提交（状态/动作/事件）-> 返回结果
 
 5. `StatusUseCase`
 - 对应：`POST /api/agent/status`
@@ -294,7 +295,8 @@ flowchart LR
 ### Action 最小契约（冻结）
 
 请求（`POST /api/agent/action`）：
-- 必填：`idempotency_key`, `intent`, `dt`
+- 必填：`idempotency_key`, `intent`
+- 禁止字段：`dt`（由服务端计算，客户端提交将被拒绝）
 - 鉴权提供：`agent_id`（由身份上下文注入，不依赖客户端明文字段）
 - 可选观测：`strategy_hash`（只读元信息）
 
@@ -541,6 +543,7 @@ sequenceDiagram
 - [x] Action 写链路幂等与事务提交（state/action/events 同交易）
 - [x] 动作落库完整性（`intent_type`、`dt`、`domain_events.agent_id`）
 - [x] Action 最小契约加固（必填校验、允许动作类型、统一错误结构）
+- [x] `dt` 收敛为服务端时钟计算（按上次成功结算间隔，外部输入不生效）
 
 下一步 TODO（按优先级）：
 - [ ] 增加 Agent 注册与凭据签发（`POST /api/agent/register`）

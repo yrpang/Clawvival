@@ -6,7 +6,6 @@ type Request struct {
 	AgentID        string
 	IdempotencyKey string
 	Intent         survival.ActionIntent
-	DeltaMinutes   int
 	StrategyHash   string
 }
 

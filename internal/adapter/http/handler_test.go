@@ -166,6 +166,38 @@ func TestWriteError_InvalidCredentials(t *testing.T) {
 	}
 }
 
+func TestAction_RejectsClientDTField(t *testing.T) {
+	salt := []byte("salt")
+	key := "k1"
+	h := Handler{
+		AuthUC: auth.VerifyUseCase{Credentials: fakeCredentialStore{
+			cred: ports.AgentCredentialRecord{
+				AgentID: "agent-1",
+				KeySalt: salt,
+				KeyHash: hashForTest(salt, key),
+				Status:  auth.CredentialStatusActive,
+			},
+		}},
+	}
+	ctx := &app.RequestContext{}
+	ctx.Request.SetBody([]byte(`{"idempotency_key":"k1","intent":{"type":"gather"},"dt":30}`))
+	ctx.Request.Header.Set(agentIDHeader, "agent-1")
+	ctx.Request.Header.Set(agentKeyHeader, key)
+
+	h.action(context.Background(), ctx)
+
+	if got, want := ctx.Response.StatusCode(), consts.StatusBadRequest; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]map[string]string
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got, want := body["error"]["code"], "dt_managed_by_server"; got != want {
+		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
+	}
+}
+
 func TestSkillsIndex_OK(t *testing.T) {
 	h := Handler{
 		SkillsUC: skills.UseCase{Provider: fakeSkillsProvider{

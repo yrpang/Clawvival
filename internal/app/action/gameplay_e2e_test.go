@@ -97,9 +97,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "loop-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-loop",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-loop",
 	}); err != nil {
 		t.Fatalf("gather: %v", err)
 	}
@@ -108,9 +106,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "loop-move",
-		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-loop",
+		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}}, StrategyHash: "sha-loop",
 	}); err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -119,9 +115,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "loop-build",
-		Intent:         survival.ActionIntent{Type: survival.ActionBuild, Params: map[string]int{"kind": int(survival.BuildBed)}},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-loop",
+		Intent:         survival.ActionIntent{Type: survival.ActionBuild, Params: map[string]int{"kind": int(survival.BuildBed)}}, StrategyHash: "sha-loop",
 	}); err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -130,9 +124,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "loop-farm",
-		Intent:         survival.ActionIntent{Type: survival.ActionFarm, Params: map[string]int{"seed": 1}},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-loop",
+		Intent:         survival.ActionIntent{Type: survival.ActionFarm, Params: map[string]int{"seed": 1}}, StrategyHash: "sha-loop",
 	}); err != nil {
 		t.Fatalf("farm: %v", err)
 	}
@@ -141,9 +133,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "loop-combat",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-loop",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}, StrategyHash: "sha-loop",
 	}); err != nil {
 		t.Fatalf("combat: %v", err)
 	}
@@ -272,9 +262,7 @@ func TestGameplayLoop_E2E_AgentIsolationAndSharedWorldClock(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentA,
 		IdempotencyKey: "isolation-a-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-isolation",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-isolation",
 	}); err != nil {
 		t.Fatalf("action A gather: %v", err)
 	}
@@ -398,8 +386,7 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	out30, err := actionUC.Execute(ctx, Request{
 		AgentID:        agent30,
 		IdempotencyKey: "dt-30-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   5, // ignored: server derives dt from event timeline
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // ignored: server derives dt from event timeline
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {
@@ -408,8 +395,7 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	out60, err := actionUC.Execute(ctx, Request{
 		AgentID:        agent60,
 		IdempotencyKey: "dt-60-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   5, // ignored: server derives dt from event timeline
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // ignored: server derives dt from event timeline
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {
@@ -534,9 +520,7 @@ func TestGameplayLoop_E2E_NightCombatHigherRiskThanDay(t *testing.T) {
 	dayOut, err := actionUCDay.Execute(ctx, Request{
 		AgentID:        dayAgent,
 		IdempotencyKey: "combat-day",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-risk",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}, StrategyHash: "sha-risk",
 	})
 	if err != nil {
 		t.Fatalf("day combat: %v", err)
@@ -545,9 +529,7 @@ func TestGameplayLoop_E2E_NightCombatHigherRiskThanDay(t *testing.T) {
 	nightOut, err := actionUCNight.Execute(ctx, Request{
 		AgentID:        nightAgent,
 		IdempotencyKey: "combat-night",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-risk",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}, StrategyHash: "sha-risk",
 	})
 	if err != nil {
 		t.Fatalf("night combat: %v", err)
@@ -618,9 +600,7 @@ func TestGameplayLoop_E2E_StarvationTriggersGameOver(t *testing.T) {
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "starvation-rest",
-		Intent:         survival.ActionIntent{Type: survival.ActionRest},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-starve",
+		Intent:         survival.ActionIntent{Type: survival.ActionRest}, StrategyHash: "sha-starve",
 	})
 	if err != nil {
 		t.Fatalf("rest action: %v", err)
@@ -707,9 +687,7 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "critical-combat",
-		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-critical",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}}, StrategyHash: "sha-critical",
 	})
 	if err != nil {
 		t.Fatalf("combat action: %v", err)
@@ -798,9 +776,7 @@ func TestGameplayLoop_E2E_WorldPhaseChangedEvent(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-day-prime",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-phase",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-phase",
 	}); err != nil {
 		t.Fatalf("prime action: %v", err)
 	}
@@ -809,9 +785,7 @@ func TestGameplayLoop_E2E_WorldPhaseChangedEvent(t *testing.T) {
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-night-switch",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
-		DeltaMinutes:   30,
-		StrategyHash:   "sha-phase",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-phase",
 	})
 	if err != nil {
 		t.Fatalf("switch action: %v", err)
