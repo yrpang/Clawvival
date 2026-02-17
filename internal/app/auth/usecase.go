@@ -83,15 +83,17 @@ func (u RegisterUseCase) Execute(ctx context.Context, _ RegisterRequest) (Regist
 				return err
 			}
 			seed := survival.AgentStateAggregate{
-				AgentID:    agentID,
-				Vitals:     survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
-				Position:   survival.Position{X: 0, Y: 0},
-				Home:       survival.Position{X: 0, Y: 0},
-				Inventory:  map[string]int{},
-				Dead:       false,
-				DeathCause: survival.DeathCauseUnknown,
-				Version:    1,
-				UpdatedAt:  now,
+				AgentID:           agentID,
+				Vitals:            survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+				Position:          survival.Position{X: 0, Y: 0},
+				Home:              survival.Position{X: 0, Y: 0},
+				Inventory:         map[string]int{},
+				InventoryCapacity: 30,
+				InventoryUsed:     0,
+				Dead:              false,
+				DeathCause:        survival.DeathCauseUnknown,
+				Version:           1,
+				UpdatedAt:         now,
 			}
 			return u.StateRepo.SaveWithVersion(txCtx, seed, 0)
 		})

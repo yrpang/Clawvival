@@ -14,16 +14,18 @@ type Position struct {
 }
 
 type AgentStateAggregate struct {
-	AgentID       string             `json:"agent_id"`
-	Vitals        Vitals             `json:"vitals"`
-	Position      Position           `json:"position"`
-	Home          Position           `json:"home"`
-	Inventory     map[string]int     `json:"inventory"`
-	Dead          bool               `json:"dead"`
-	DeathCause    DeathCause         `json:"death_cause"`
-	OngoingAction *OngoingActionInfo `json:"ongoing_action,omitempty"`
-	Version       int64              `json:"version"`
-	UpdatedAt     time.Time          `json:"updated_at"`
+	AgentID           string             `json:"agent_id"`
+	Vitals            Vitals             `json:"vitals"`
+	Position          Position           `json:"position"`
+	Home              Position           `json:"home"`
+	Inventory         map[string]int     `json:"inventory"`
+	InventoryCapacity int                `json:"inventory_capacity"`
+	InventoryUsed     int                `json:"inventory_used"`
+	Dead              bool               `json:"dead"`
+	DeathCause        DeathCause         `json:"death_cause"`
+	OngoingAction     *OngoingActionInfo `json:"ongoing_action,omitempty"`
+	Version           int64              `json:"version"`
+	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
 type OngoingActionInfo struct {
