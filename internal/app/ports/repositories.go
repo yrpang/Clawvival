@@ -34,4 +34,5 @@ type ActionExecutionRepository interface {
 
 type EventRepository interface {
 	Append(ctx context.Context, agentID string, events []survival.DomainEvent) error
+	ListByAgentID(ctx context.Context, agentID string, limit int) ([]survival.DomainEvent, error)
 }

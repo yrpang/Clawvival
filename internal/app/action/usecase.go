@@ -83,6 +83,16 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			return err
 		}
 
+		for i := range result.Events {
+			if result.Events[i].Payload == nil {
+				result.Events[i].Payload = map[string]any{}
+			}
+			result.Events[i].Payload["agent_id"] = req.AgentID
+			if req.StrategyHash != "" {
+				result.Events[i].Payload["strategy_hash"] = req.StrategyHash
+			}
+		}
+
 		execution := ports.ActionExecutionRecord{
 			AgentID:        req.AgentID,
 			IdempotencyKey: req.IdempotencyKey,

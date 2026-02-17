@@ -17,6 +17,7 @@ import (
 	"clawverse/internal/app/action"
 	"clawverse/internal/app/observe"
 	"clawverse/internal/app/ports"
+	"clawverse/internal/app/replay"
 	"clawverse/internal/app/skills"
 	"clawverse/internal/app/status"
 	"clawverse/internal/domain/survival"
@@ -44,6 +45,7 @@ func main() {
 			Now:        time.Now,
 		},
 		StatusUC: status.UseCase{StateRepo: stateRepo, World: worldProvider},
+		ReplayUC: replay.UseCase{Events: eventRepo},
 		SkillsUC: skills.UseCase{Provider: skillsProvider},
 		KPI:      kpiRecorder,
 	}

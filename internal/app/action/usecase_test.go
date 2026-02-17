@@ -150,6 +150,15 @@ func (r *stubEventRepo) Append(_ context.Context, _ string, events []survival.Do
 	return nil
 }
 
+func (r *stubEventRepo) ListByAgentID(_ context.Context, _ string, limit int) ([]survival.DomainEvent, error) {
+	if limit <= 0 || limit > len(r.events) {
+		limit = len(r.events)
+	}
+	out := make([]survival.DomainEvent, limit)
+	copy(out, r.events[:limit])
+	return out, nil
+}
+
 func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
 	cases := []Request{
 		{AgentID: "agent-1", IdempotencyKey: "k1", Intent: survival.ActionIntent{Type: survival.ActionMove}, DeltaMinutes: 30},
@@ -196,5 +205,43 @@ func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("expected valid expanded action, got %v", err)
+	}
+}
+
+func TestUseCase_AppendsStrategyMetadataToEvents(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-strategy",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		DeltaMinutes:   30,
+		StrategyHash:   "sha-123",
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if len(eventRepo.events) == 0 {
+		t.Fatalf("expected events")
+	}
+	if eventRepo.events[0].Payload["strategy_hash"] != "sha-123" {
+		t.Fatalf("expected strategy hash in payload")
 	}
 }
