@@ -801,3 +801,77 @@ func TestUseCase_GatherRejectsTargetNotVisible(t *testing.T) {
 		t.Fatalf("expected ErrTargetNotVisible, got %v", err)
 	}
 }
+
+func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID: "agent-1",
+			Vitals:  survival.Vitals{HP: 100, Hunger: 90, Energy: 90},
+			Position: survival.Position{
+				X: 0,
+				Y: 0,
+			},
+			Home:      survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{"plank": 6, "wood": 2, "seed": 2},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 100,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+		}},
+		Settle: survival.SettlementService{},
+		Now: func() time.Time {
+			now = now.Add(6 * time.Minute)
+			return now
+		},
+	}
+
+	actions := []Request{
+		{
+			AgentID:        "agent-1",
+			IdempotencyKey: "gate-build-bed",
+			Intent:         survival.ActionIntent{Type: survival.ActionBuild, ObjectType: "bed_rough", Pos: &survival.Position{X: 0, Y: 1}},
+		},
+		{
+			AgentID:        "agent-1",
+			IdempotencyKey: "gate-build-box",
+			Intent:         survival.ActionIntent{Type: survival.ActionBuild, ObjectType: "box", Pos: &survival.Position{X: 1, Y: 0}},
+		},
+		{
+			AgentID:        "agent-1",
+			IdempotencyKey: "gate-build-farm",
+			Intent:         survival.ActionIntent{Type: survival.ActionBuild, ObjectType: "farm_plot", Pos: &survival.Position{X: 1, Y: 1}},
+		},
+		{
+			AgentID:        "agent-1",
+			IdempotencyKey: "gate-farm-plant",
+			Intent:         survival.ActionIntent{Type: survival.ActionFarmPlant, FarmID: "farm-1"},
+		},
+	}
+
+	var last Response
+	var err error
+	for _, req := range actions {
+		last, err = uc.Execute(context.Background(), req)
+		if err != nil {
+			t.Fatalf("action %s failed: %v", req.IdempotencyKey, err)
+		}
+		if last.ResultCode != survival.ResultOK {
+			t.Fatalf("expected OK for %s, got %s", req.IdempotencyKey, last.ResultCode)
+		}
+	}
+
+	if got := last.UpdatedState.Inventory["seed"]; got >= 2 {
+		t.Fatalf("expected seed consumed by farm_plant, got=%d", got)
+	}
+}
