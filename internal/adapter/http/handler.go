@@ -65,8 +65,19 @@ type actionRequest struct {
 }
 
 type actionIntent struct {
-	Type   string         `json:"type"`
-	Params map[string]int `json:"params,omitempty"`
+	Type        string               `json:"type"`
+	Direction   string               `json:"direction,omitempty"`
+	TargetID    string               `json:"target_id,omitempty"`
+	RecipeID    int                  `json:"recipe_id,omitempty"`
+	Count       int                  `json:"count,omitempty"`
+	ObjectType  string               `json:"object_type,omitempty"`
+	Pos         *survival.Position   `json:"pos,omitempty"`
+	ItemType    string               `json:"item_type,omitempty"`
+	RestMinutes int                  `json:"rest_minutes,omitempty"`
+	BedID       string               `json:"bed_id,omitempty"`
+	FarmID      string               `json:"farm_id,omitempty"`
+	ContainerID string               `json:"container_id,omitempty"`
+	Items       []survival.ItemAmount `json:"items,omitempty"`
 }
 
 func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
@@ -112,8 +123,19 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 		AgentID:        agentID,
 		IdempotencyKey: body.IdempotencyKey,
 		Intent: survival.ActionIntent{
-			Type:   survival.ActionType(body.Intent.Type),
-			Params: body.Intent.Params,
+			Type:        survival.ActionType(body.Intent.Type),
+			Direction:   body.Intent.Direction,
+			TargetID:    body.Intent.TargetID,
+			RecipeID:    body.Intent.RecipeID,
+			Count:       body.Intent.Count,
+			ObjectType:  body.Intent.ObjectType,
+			Pos:         body.Intent.Pos,
+			ItemType:    body.Intent.ItemType,
+			RestMinutes: body.Intent.RestMinutes,
+			BedID:       body.Intent.BedID,
+			FarmID:      body.Intent.FarmID,
+			ContainerID: body.Intent.ContainerID,
+			Items:       body.Intent.Items,
 		},
 		StrategyHash: body.StrategyHash,
 	})

@@ -56,8 +56,26 @@ const (
 )
 
 type ActionIntent struct {
-	Type   ActionType     `json:"type"`
-	Params map[string]int `json:"params,omitempty"`
+	Type        ActionType   `json:"type"`
+	Direction   string       `json:"direction,omitempty"`
+	TargetID    string       `json:"target_id,omitempty"`
+	RecipeID    int          `json:"recipe_id,omitempty"`
+	Count       int          `json:"count,omitempty"`
+	ObjectType  string       `json:"object_type,omitempty"`
+	Pos         *Position    `json:"pos,omitempty"`
+	ItemType    string       `json:"item_type,omitempty"`
+	RestMinutes int          `json:"rest_minutes,omitempty"`
+	BedID       string       `json:"bed_id,omitempty"`
+	FarmID      string       `json:"farm_id,omitempty"`
+	ContainerID string       `json:"container_id,omitempty"`
+	Items       []ItemAmount `json:"items,omitempty"`
+	DX          int          `json:"-"`
+	DY          int          `json:"-"`
+}
+
+type ItemAmount struct {
+	ItemType string `json:"item_type"`
+	Count    int    `json:"count"`
 }
 
 type HeartbeatDelta struct {

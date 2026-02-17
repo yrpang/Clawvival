@@ -330,8 +330,8 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 		AgentID:        "agent-1",
 		IdempotencyKey: "rest-1",
 		Intent: survival.ActionIntent{
-			Type:   survival.ActionRest,
-			Params: map[string]int{"rest_minutes": 30},
+			Type:        survival.ActionRest,
+			RestMinutes: 30,
 		},
 	})
 	if err != nil {
@@ -401,8 +401,8 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 		AgentID:        "agent-1",
 		IdempotencyKey: "rest-start",
 		Intent: survival.ActionIntent{
-			Type:   survival.ActionRest,
-			Params: map[string]int{"rest_minutes": 30},
+			Type:        survival.ActionRest,
+			RestMinutes: 30,
 		},
 	})
 	if err != nil {
@@ -621,8 +621,9 @@ func TestUseCase_RejectsBuildWhenInventoryInsufficient(t *testing.T) {
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-build-precheck",
 		Intent: survival.ActionIntent{
-			Type:   survival.ActionBuild,
-			Params: map[string]int{"kind": int(survival.BuildBed)},
+			Type:       survival.ActionBuild,
+			ObjectType: "bed_rough",
+			Pos:        &survival.Position{X: 0, Y: 0},
 		}})
 	if !errors.Is(err, ErrActionPreconditionFailed) {
 		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
@@ -657,8 +658,9 @@ func TestUseCase_RejectsEatWhenInventoryInsufficient(t *testing.T) {
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-eat-precheck",
 		Intent: survival.ActionIntent{
-			Type:   survival.ActionEat,
-			Params: map[string]int{"food": int(survival.FoodBerry)},
+			Type:     survival.ActionEat,
+			ItemType: "berry",
+			Count:    1,
 		},
 	})
 	if err == nil {
@@ -695,7 +697,7 @@ func TestUseCase_RejectsMoveWhenTargetTileBlocked(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-move-blocked",
-		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}}})
+		Intent:         survival.ActionIntent{Type: survival.ActionMove, Direction: "E"}})
 	if !errors.Is(err, ErrActionInvalidPosition) {
 		t.Fatalf("expected ErrActionInvalidPosition, got %v", err)
 	}
@@ -736,7 +738,7 @@ func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-move-cooldown",
-		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}}})
+		Intent:         survival.ActionIntent{Type: survival.ActionMove, Direction: "E"}})
 	if !errors.Is(err, ErrActionCooldownActive) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}
