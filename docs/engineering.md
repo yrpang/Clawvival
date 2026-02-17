@@ -578,7 +578,7 @@ sequenceDiagram
 3. 生存规则与可见性（P0）
 - [x] 固化 `HP/Hunger/Energy` 阈值并暴露 `status_effects`
 - [x] 夜晚压力仅保留“可见度下降”，不引入夜晚伤害倍率
-- [ ] `retreat` 语义改为远离最近威胁/高风险方向移动（1~2 格）
+- [x] `retreat` 语义改为远离最近威胁/高风险方向移动（1~2 格）
 
 4. 资源-建造-农业闭环（P0）
 - [x] 对齐物品与配方最小集：`wood/stone/seed/berry/wheat` + `bed/box/farm_plot`
