@@ -3,6 +3,7 @@ package action
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -18,6 +19,8 @@ var (
 	ErrActionInvalidPosition    = errors.New("action invalid position")
 	ErrActionCooldownActive     = errors.New("action cooldown active")
 	ErrActionInProgress         = errors.New("action in progress")
+	ErrTargetOutOfView          = errors.New("target out of view")
+	ErrTargetNotVisible         = errors.New("target not visible")
 )
 
 const (
@@ -26,6 +29,7 @@ const (
 	maxHeartbeatDeltaMinutes     = 120
 	minRestMinutes               = 1
 	maxRestMinutes               = 120
+	targetViewRadius             = 5
 )
 
 type UseCase struct {
@@ -129,6 +133,9 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 
 		snapshot, err := u.World.SnapshotForAgent(txCtx, req.AgentID, world.Point{X: state.Position.X, Y: state.Position.Y})
 		if err != nil {
+			return err
+		}
+		if err := validateTargetVisibility(state.Position, req.Intent, snapshot); err != nil {
 			return err
 		}
 		if !positionPreconditionsSatisfied(state, req.Intent, snapshot) {
@@ -578,6 +585,36 @@ func normalizeIntent(in survival.ActionIntent) survival.ActionIntent {
 		out.Count = 1
 	}
 	return out
+}
+
+func validateTargetVisibility(center survival.Position, intent survival.ActionIntent, snapshot world.Snapshot) error {
+	if intent.Type != survival.ActionGather || strings.TrimSpace(intent.TargetID) == "" {
+		return nil
+	}
+	tx, ty, _, ok := parseResourceTargetID(intent.TargetID)
+	if !ok {
+		return ErrActionPreconditionFailed
+	}
+	if tx < center.X-targetViewRadius || tx > center.X+targetViewRadius || ty < center.Y-targetViewRadius || ty > center.Y+targetViewRadius {
+		return ErrTargetOutOfView
+	}
+	for _, tile := range snapshot.VisibleTiles {
+		if tile.X == tx && tile.Y == ty {
+			return nil
+		}
+	}
+	return ErrTargetNotVisible
+}
+
+func parseResourceTargetID(targetID string) (x int, y int, resource string, ok bool) {
+	var prefix string
+	if _, err := fmt.Sscanf(strings.TrimSpace(targetID), "%3s_%d_%d_%s", &prefix, &x, &y, &resource); err != nil {
+		return 0, 0, "", false
+	}
+	if prefix != "res" {
+		return 0, 0, "", false
+	}
+	return x, y, resource, true
 }
 
 func buildKindFromObjectType(objectType string) (survival.BuildKind, bool) {

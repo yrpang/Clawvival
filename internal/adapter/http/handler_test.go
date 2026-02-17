@@ -150,6 +150,27 @@ func TestWriteError_ActionCooldownActive(t *testing.T) {
 	}
 }
 
+func TestWriteActionRejectedFromErr_TargetNotVisible(t *testing.T) {
+	ctx := &app.RequestContext{}
+	if ok := writeActionRejectedFromErr(ctx, action.ErrTargetNotVisible); !ok {
+		t.Fatalf("expected handled error")
+	}
+	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got, want := body["result_code"], "REJECTED"; got != want {
+		t.Fatalf("result_code mismatch: got=%v want=%v", got, want)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if got, want := errObj["code"], "TARGET_NOT_VISIBLE"; got != want {
+		t.Fatalf("error code mismatch: got=%v want=%v", got, want)
+	}
+}
+
 func TestWriteError_InvalidCredentials(t *testing.T) {
 	ctx := &app.RequestContext{}
 	writeError(ctx, auth.ErrInvalidCredentials)

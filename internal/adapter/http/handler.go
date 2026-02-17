@@ -65,18 +65,18 @@ type actionRequest struct {
 }
 
 type actionIntent struct {
-	Type        string               `json:"type"`
-	Direction   string               `json:"direction,omitempty"`
-	TargetID    string               `json:"target_id,omitempty"`
-	RecipeID    int                  `json:"recipe_id,omitempty"`
-	Count       int                  `json:"count,omitempty"`
-	ObjectType  string               `json:"object_type,omitempty"`
-	Pos         *survival.Position   `json:"pos,omitempty"`
-	ItemType    string               `json:"item_type,omitempty"`
-	RestMinutes int                  `json:"rest_minutes,omitempty"`
-	BedID       string               `json:"bed_id,omitempty"`
-	FarmID      string               `json:"farm_id,omitempty"`
-	ContainerID string               `json:"container_id,omitempty"`
+	Type        string                `json:"type"`
+	Direction   string                `json:"direction,omitempty"`
+	TargetID    string                `json:"target_id,omitempty"`
+	RecipeID    int                   `json:"recipe_id,omitempty"`
+	Count       int                   `json:"count,omitempty"`
+	ObjectType  string                `json:"object_type,omitempty"`
+	Pos         *survival.Position    `json:"pos,omitempty"`
+	ItemType    string                `json:"item_type,omitempty"`
+	RestMinutes int                   `json:"rest_minutes,omitempty"`
+	BedID       string                `json:"bed_id,omitempty"`
+	FarmID      string                `json:"farm_id,omitempty"`
+	ContainerID string                `json:"container_id,omitempty"`
 	Items       []survival.ItemAmount `json:"items,omitempty"`
 }
 
@@ -341,6 +341,12 @@ func writeActionRejectedFromErr(ctx *app.RequestContext, err error) bool {
 		return true
 	case errors.Is(err, action.ErrActionInProgress):
 		writeActionRejected(ctx, consts.StatusConflict, "action_in_progress", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	case errors.Is(err, action.ErrTargetOutOfView):
+		writeActionRejected(ctx, consts.StatusConflict, "TARGET_OUT_OF_VIEW", err.Error(), false, []string{"NOT_VISIBLE"}, nil)
+		return true
+	case errors.Is(err, action.ErrTargetNotVisible):
+		writeActionRejected(ctx, consts.StatusConflict, "TARGET_NOT_VISIBLE", err.Error(), false, []string{"NOT_VISIBLE"}, nil)
 		return true
 	case errors.Is(err, action.ErrActionPreconditionFailed):
 		writeActionRejected(ctx, consts.StatusConflict, "action_precondition_failed", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)

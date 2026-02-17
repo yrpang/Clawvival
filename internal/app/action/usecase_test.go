@@ -743,3 +743,61 @@ func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}
 }
+
+func TestUseCase_GatherRejectsTargetOutOfView(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-oov",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_20_20_wood"},
+	})
+	if !errors.Is(err, ErrTargetOutOfView) {
+		t.Fatalf("expected ErrTargetOutOfView, got %v", err)
+	}
+}
+
+func TestUseCase_GatherRejectsTargetNotVisible(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-hidden",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_1_0_wood"},
+	})
+	if !errors.Is(err, ErrTargetNotVisible) {
+		t.Fatalf("expected ErrTargetNotVisible, got %v", err)
+	}
+}
