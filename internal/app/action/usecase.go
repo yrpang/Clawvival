@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	ErrInvalidRequest = errors.New("invalid action request")
+	ErrInvalidRequest      = errors.New("invalid action request")
+	ErrInvalidActionParams = errors.New("invalid action params")
 )
 
 type UseCase struct {
@@ -32,8 +33,11 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	req.AgentID = strings.TrimSpace(req.AgentID)
 	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
 	req.Intent.Type = survival.ActionType(strings.TrimSpace(string(req.Intent.Type)))
-	if req.AgentID == "" || req.IdempotencyKey == "" || req.DeltaMinutes <= 0 || !isSupportedActionType(req.Intent.Type) || !hasValidActionParams(req.Intent) {
+	if req.AgentID == "" || req.IdempotencyKey == "" || req.DeltaMinutes <= 0 || !isSupportedActionType(req.Intent.Type) {
 		return Response{}, ErrInvalidRequest
+	}
+	if !hasValidActionParams(req.Intent) {
+		return Response{}, ErrInvalidActionParams
 	}
 
 	nowFn := u.Now
