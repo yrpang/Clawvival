@@ -588,7 +588,7 @@ sequenceDiagram
 
 5. 错误模型与事件模型（P0）
 - [x] 统一动作响应 `result_code: OK|REJECTED|FAILED`
-- [ ] 统一错误对象：
+- [x] 统一错误对象：
   `error{code,message,retryable,blocked_by,details}`
 - [x] 落地目标错误码：
   `TARGET_OUT_OF_VIEW`、`TARGET_NOT_VISIBLE`

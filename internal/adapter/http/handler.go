@@ -368,9 +368,12 @@ func writeActionRejected(ctx *app.RequestContext, status int, code, message stri
 		"settled_dt_minutes":        0,
 		"world_time_before_seconds": 0,
 		"world_time_after_seconds":  0,
-		"error": map[string]string{
-			"code":    code,
-			"message": message,
+		"error": map[string]any{
+			"code":       code,
+			"message":    message,
+			"retryable":  retryable,
+			"blocked_by": blockedBy,
+			"details":    details,
 		},
 		"action_error": map[string]any{
 			"code":       code,
