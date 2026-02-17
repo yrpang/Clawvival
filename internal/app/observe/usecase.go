@@ -3,6 +3,7 @@ package observe
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"clawvival/internal/app/ports"
@@ -59,5 +60,64 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			"container_withdraw": {BaseMinutes: 1},
 			"retreat":            {BaseMinutes: 1},
 		},
+		Tiles:            projectTiles(snapshot.VisibleTiles, snapshot.TimeOfDay),
+		Objects:          []ObservedObject{},
+		Resources:        projectResources(snapshot.VisibleTiles),
+		Threats:          projectThreats(snapshot.VisibleTiles),
+		LocalThreatLevel: snapshot.ThreatLevel,
 	}, nil
+}
+
+func projectTiles(tiles []world.Tile, timeOfDay string) []ObservedTile {
+	isLit := timeOfDay == "day"
+	out := make([]ObservedTile, 0, len(tiles))
+	for _, t := range tiles {
+		out = append(out, ObservedTile{
+			Pos:         world.Point{X: t.X, Y: t.Y},
+			TerrainType: string(t.Kind),
+			IsWalkable:  t.Passable,
+			IsLit:       isLit,
+			IsVisible:   true,
+		})
+	}
+	return out
+}
+
+func projectResources(tiles []world.Tile) []ObservedResource {
+	out := make([]ObservedResource, 0, len(tiles))
+	for _, t := range tiles {
+		if t.Resource == "" {
+			continue
+		}
+		out = append(out, ObservedResource{
+			ID:         fmt.Sprintf("res_%d_%d_%s", t.X, t.Y, t.Resource),
+			Type:       t.Resource,
+			Pos:        world.Point{X: t.X, Y: t.Y},
+			IsDepleted: false,
+		})
+	}
+	return out
+}
+
+func projectThreats(tiles []world.Tile) []ObservedThreat {
+	out := make([]ObservedThreat, 0, len(tiles))
+	for _, t := range tiles {
+		if t.BaseThreat <= 0 {
+			continue
+		}
+		out = append(out, ObservedThreat{
+			ID:          fmt.Sprintf("thr_%d_%d", t.X, t.Y),
+			Type:        "wild",
+			Pos:         world.Point{X: t.X, Y: t.Y},
+			DangerScore: min(100, t.BaseThreat*25),
+		})
+	}
+	return out
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

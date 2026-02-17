@@ -59,6 +59,37 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	}
 }
 
+func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
+	uc := UseCase{
+		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+			AgentID:  "agent-1",
+			Position: survival.Position{X: 0, Y: 0},
+		}},
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay:    "day",
+			ThreatLevel:  2,
+			VisibleTiles: []world.Tile{{X: 0, Y: 0, Kind: world.TileTree, Passable: false, Resource: "wood", BaseThreat: 2}},
+		}},
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if resp.LocalThreatLevel != 2 {
+		t.Fatalf("expected local threat level 2, got %d", resp.LocalThreatLevel)
+	}
+	if len(resp.Tiles) != 1 || !resp.Tiles[0].IsVisible {
+		t.Fatalf("expected one visible tile, got %+v", resp.Tiles)
+	}
+	if len(resp.Resources) != 1 || resp.Resources[0].ID == "" {
+		t.Fatalf("expected one resource with stable id, got %+v", resp.Resources)
+	}
+	if len(resp.Threats) != 1 || resp.Threats[0].DangerScore <= 0 {
+		t.Fatalf("expected one threat with positive danger score, got %+v", resp.Threats)
+	}
+}
+
 type observeStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error
