@@ -39,7 +39,7 @@
 ### 主循环
 
 - `观察 -> 评估 -> 决策 -> 执行 -> 结算 -> 复盘`
-- MVP 闭环：`采集 -> 合成 -> 建造 -> 种植 -> 防御 -> 扩张 -> 再探索`
+- MVP 闭环：`采集 -> 建造 -> 种植 -> 休整 -> 存取管理 -> 再探索`
 - 每次循环前必须先读取“当前有效策略”。
 
 ### 人类引导与策略记忆
@@ -90,8 +90,8 @@ Skills 静态资源读取接口（只读）：
 5. 迁移上线前完成演练（含失败回滚演练）。
 
 当前状态：
-- 迁移目录 `db/schema/` 尚未创建。
-- 建议下一步先建立 `db/schema/` 并提交首批 migration。
+- 迁移目录 `db/schema/` 已建立并纳入版本管理。
+- 当前重点是按 MVP v1.0 契约继续补齐增量 migration（对象/资源/威胁/容器/农田语义）。
 
 ## 架构约束（DDD-lite，MVP）
 
@@ -292,19 +292,35 @@ flowchart LR
    - 落事件：`Append(events...)`
 3. 任一步失败，整笔回滚；成功后再异步发送指标/通知。
 
-### Action 最小契约（冻结）
+### API 最小契约（冻结，MVP v1.0）
 
-请求（`POST /api/agent/action`）：
+`POST /api/agent/observe` 必返语义：
+- 固定窗口：`view.width=11`、`view.height=11`、`view.radius=5`，中心为 Agent 当前位置
+- `agent_state`：`hp/hunger/energy/position/inventory/inventory_capacity/inventory_used/session_id/status_effects`
+- `world`：`world_time_seconds/time_of_day/next_phase_in_seconds/rules`
+- `action_costs`：各 `intent` 的 `base_minutes` 与增量成本
+- `tiles[]`：窗口内全部 tile（含 `is_walkable/is_lit/is_visible`）
+- `objects/resources/threats`：仅返回位于可见 tile 上的实体
+- `local_threat_level`
+
+`POST /api/agent/action` 约束：
 - 必填：`idempotency_key`, `intent`
-- 禁止字段：`dt`（由服务端计算，客户端提交将被拒绝）
-- `rest` 特殊参数：`intent.params.rest_minutes`（`1..120`），表示进入持续休息窗口
-- 鉴权提供：`agent_id`（由身份上下文注入，不依赖客户端明文字段）
-- 可选观测：`strategy_hash`（只读元信息）
+- 禁止字段：`dt`（服务端计算）
+- intent 集：`move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat`
+- 引用规则：交互类动作优先使用 `*_id`，放置类使用 `pos`
+- 鉴权上下文注入：`agent_id`（不依赖 body 明文字段）
+- 可选只读元信息：`strategy_hash`
 
-响应：
-- `updated_state`：最新 `HP/Hunger/Energy` 与位置等快照
-- `events`：本次结算产生的领域事件列表
-- `result_code`：动作结果码（成功/失败/拒绝）
+`POST /api/agent/action` 响应语义：
+- `result_code`：`OK | REJECTED | FAILED`
+- `settled_dt_minutes`
+- `world_time_before_seconds` / `world_time_after_seconds`
+- `updated_state`
+- `events`
+- 当 `result_code != OK`：返回
+  `error{code,message,retryable,blocked_by,details}`
+  并包含最小错误码：
+  `TARGET_OUT_OF_VIEW`、`TARGET_NOT_VISIBLE`
 
 ### 建议目录骨架（Go）
 
@@ -527,83 +543,70 @@ sequenceDiagram
 - 指标事件从同一结算链路产出，避免统计与业务脱节。
 - 策略仅作为 Agent 本地输入上下文，不作为服务端持久化对象。
 
-## 里程碑（与 world.md 对齐）
+## 里程碑（与 word.md / MVP v1.0 对齐）
 
 - P0：可玩闭环（24h 生存可运行、72h 可定居、闭环可复盘）
+- P0 验收硬门槛：同一 `session_id` 达成 `bed + box + farm_plot`，且至少一次 `farm_plant` 成功
 - P1：稳定与可观测（KPI 日级可追溯、调参可验证、连续达标）
 - P2：内容扩展（不破坏 P0/P1 指标前提下扩展区域与生态）
 
 ## 当前执行清单（MVP）
 
-已完成：
-- [x] 单一 Agent API 路径确定（`/api/agent/*`）
-- [x] 融合状态模型确定（`HP/Hunger/Energy`）
-- [x] 世界观与范围文档收敛到 `word.md`
-- [x] Schema First 落地（`db/schema/` + 手动迁移脚本）
-- [x] PostgreSQL + GORM 仓储与事务抽象（`TxManager`）
-- [x] Action 写链路幂等与事务提交（state/action/events 同交易）
-- [x] 动作落库完整性（`intent_type`、`dt`、`domain_events.agent_id`）
-- [x] Action 最小契约加固（必填校验、允许动作类型、统一错误结构）
-- [x] `dt` 收敛为服务端时钟计算（按上次成功结算间隔，外部输入不生效）
+已完成（架构与基础能力）：
+- [x] 单一 Agent API 路径（`/api/agent/*`）与鉴权链路
+- [x] `dt` 服务端结算与动作幂等（`idempotency_key`）
+- [x] Schema-first + PostgreSQL/GORM + 事务抽象
+- [x] 世界时钟（10 分钟白天 / 5 分钟夜晚）与基础窗口化观察
+- [x] 事件落库、回放接口、KPI 基础观测接口（`GET /ops/kpi`）
 
-下一步 TODO（按优先级）：
-- [ ] 增加 Agent 注册与凭据签发（`POST /api/agent/register`）
-- [ ] 增加统一鉴权中间层（`agent_id + credential`）
-- [ ] 身份边界升级：从 `X-Agent-ID` 迁移到“注册身份 + 凭据校验”
-- [x] World Provider 最小可配置化：支持昼夜与威胁动态，不再固定 mock 常量
-- [x] 完成 P0 回归测试：主循环、死亡/濒死、幂等重复请求、昼夜切换
-- [x] 建立 KPI 计算任务与看板（MVP：进程内统计 + `GET /ops/kpi`）
+## MVP v1.0 对齐差距与完整 TODO
 
-## World.md 对齐差距与完整 TODO
+1. 观察与状态契约（P0，优先级最高）
+- [ ] `observe` 升级为固定 11x11 窗口契约（`view` + 全量 `tiles[]`）
+- [ ] 增加 `is_lit/is_visible` 语义并约束实体仅在可见 tile 返回
+- [ ] 增加 `objects/resources/threats/local_threat_level`
+- [ ] 增加 `world.rules` 与 `action_costs` 显式暴露
+- [ ] `status` 与 `observe` 对齐 `world_time_seconds/time_of_day/next_phase_in_seconds`
 
-1. 世界地图核心（P0）
-- [x] 定义世界数据模型：`Tile/Chunk/Zone/Biome`
-- [x] 实现无限网格坐标与分块加载（chunk）
-- [x] 实现基础分区：安全区/森林/矿区/荒野
-- [x] 实现区域风险-收益梯度
-- [x] `observe` 返回当前位置周边窗口而非固定快照
+2. 动作系统重构（P0）
+- [ ] 移除 `combat` 主路径与相关契约/测试
+- [ ] 按 v1.0 实现 intents：
+  `move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat`
+- [ ] 动作参数从“枚举数值参数”逐步迁移到“可解释参数”（`direction`、`*_id`、`pos`）
+- [ ] 响应补齐 `settled_dt_minutes` 与世界时间推进字段
 
-2. 世界时钟与昼夜系统（P0）
-- [x] 实现独立世界时钟（不依赖本地小时）
-- [x] 落地白天 10 分钟 / 黑夜 5 分钟循环
-- [ ] 昼夜切换事件（供策略与日志使用）
-- [ ] 夜晚威胁提升与可见度惩罚接入结算
-- [x] `status/observe` 暴露当前时段与切换倒计时
+3. 生存规则与可见性（P0）
+- [ ] 固化 `HP/Hunger/Energy` 阈值并暴露 `status_effects`
+- [ ] 夜晚压力仅保留“可见度下降”，不引入夜晚伤害倍率
+- [ ] `retreat` 语义改为远离最近威胁/高风险方向移动（1~2 格）
 
-3. 状态与实体扩展（P0）
-- [x] 增加 `Inventory`（资源、食物、工具）
-- [x] 增加 `WorldObject`（建筑、农田、火把等）
-- [x] 增加 `AgentSession`（会话起止、死亡原因）
-- [x] 增加 `DeathCause` 与濒死状态标记
-- [x] 完成 schema-first 迁移与模型生成
+4. 资源-建造-农业闭环（P0）
+- [ ] 对齐物品与配方最小集：`wood/stone/seed/berry/wheat` + `bed/box/farm_plot`
+- [ ] 农田状态机：`farm_plant -> growing -> farm_harvest`
+- [ ] seed 保底机制（pity 或 seed_cache）避免 72h Gate 被随机性卡死
+- [ ] 容器存取链路：`container_deposit` / `container_withdraw`
 
-4. 行动系统补全（P0）
-- [x] 扩展动作：`gather/move/combat/build/farm/rest/retreat/craft`
-- [x] 为每个动作定义输入参数与失败码
-- [x] 实现动作前置校验（资源、位置、冷却）
-- [x] 实现动作结果标准化（收益、消耗、事件）
-- [x] 实现动作拒绝策略（无效动作快速返回）
+5. 错误模型与事件模型（P0）
+- [ ] 统一动作响应 `result_code: OK|REJECTED|FAILED`
+- [ ] 统一错误对象：
+  `error{code,message,retryable,blocked_by,details}`
+- [ ] 落地目标错误码：
+  `TARGET_OUT_OF_VIEW`、`TARGET_NOT_VISIBLE`
+- [ ] `action_settled` 事件补齐：
+  `world_time_before_seconds/world_time_after_seconds/settled_dt_minutes`
+- [ ] `game_over` 事件补齐最后可观测快照字段
 
-5. 资源生产闭环（P0）
-- [x] 资源节点刷新逻辑（森林木材、矿区石矿等）
-- [x] 采集产出与工具效率倍率
-- [x] 配方系统（craft recipes）
-- [x] 建筑系统最小集：`bed/box/farm/torch/wall/door/furnace`
-- [x] 农田生长与收获循环（seed -> wheat -> food）
+6. 数据与持久化（Schema-first，P0）
+- [ ] 迁移 `agent_states`：容量字段、状态效果支持字段（或可推导字段）
+- [ ] 迁移 `world_objects`：对象类型、质量、容器容量与农田状态字段
+- [ ] 新增/调整资源点与威胁实体表，保证稳定 `id` 和非复用约束
+- [ ] 更新 gorm 生成模型与 repo，实现对象式查询风格
 
-6. 生存与战斗规则（P0）
-- [x] 饥饿/精力/生命衰减与恢复参数表
-- [x] 濒死强制保命策略钩子
-- [x] 夜晚战斗压力模型
-- [x] 撤离/回家判定逻辑
-- [x] `GameOver` 终局与会话封存
-
-7. 可解释与复盘链路（P0/P1）
-- [x] 统一事件模型：`state_before/decision/action/result/state_after`
-- [x] 每次 action 记录策略元信息（`strategy_hash` 等）
-- [x] 事件查询接口（按 agent、时间、会话）
-- [x] 最小回放接口（按事件重建关键状态）
-- [x] 日志字段标准化文档
+7. 测试与验收（P0）
+- [ ] 按 TDD 补 `observe/status/action` 契约测试
+- [ ] 补“去 combat”回归测试，确保 API 不再暴露可胜战斗路径
+- [ ] 补 72h Gate 集成测试：`bed + box + farm_plot + farm_plant 成功`
+- [ ] 每次迭代执行：变更包单测 -> 集成测试 -> `go test ./...`
 
 日志字段标准（MVP）：
 - 顶层必填：`event_type`、`occurred_at`、`agent_id`、`session_id`。
@@ -618,7 +621,7 @@ sequenceDiagram
 - [ ] 从进程内计数升级为持久化指标流水
 - [ ] 日级聚合任务（cron/worker）
 - [ ] 落地 `24h 生存率`
-- [ ] 落地 `72h 定居成功率（床+箱子+农田）`
+- [ ] 落地 `72h 定居成功率（bed + box + farm_plot + 首次 farm_plant）`
 - [ ] 落地 `夜晚死亡率`
 - [ ] 落地 `资源闭环达成率`
 - [ ] 落地 `行为可解释率`
@@ -647,10 +650,10 @@ sequenceDiagram
 - [ ] 调参结果关联 KPI 变化
 
 12. 测试体系补全
-- [ ] 地图与分区单元测试
-- [ ] 昼夜切换与威胁变化测试
-- [ ] 资源闭环集成测试
-- [ ] 72h 定居模拟测试
+- [ ] 窗口可见性与实体可见性规则测试（11x11 + is_visible）
+- [ ] 昼夜切换与 next_phase_in_seconds 测试
+- [ ] 资源-建造-农业闭环集成测试
+- [ ] 72h Gate 模拟测试
 - [ ] 压测/混沌测试（冲突、重复、异常恢复）
 
 13. 文档与工程同步
@@ -661,15 +664,16 @@ sequenceDiagram
 - [ ] 发布检查清单（P0/P1 Gate）
 
 14. 建议里程碑顺序
-- [ ] M1：地图 + 世界时钟 + observe 窗口化
-- [ ] M2：资源闭环（采集/合成/建造/种植）
-- [ ] M3：战斗压力 + 定居判定 + 72h 验收脚本
+- [ ] M1：契约对齐（observe/status/action + 错误模型 + 事件模型）
+- [ ] M2：资源闭环（采集/建造/种植/容器）
+- [ ] M3：72h Gate 验收脚本与 KPI 对齐
 - [ ] M4：持久化 KPI + 日级聚合 + 看板
 - [ ] M5：并发治理 + 调参系统 + P1 Gate 验收
 
 M1 首批改动文件（建议）：
-- `internal/domain/world/`：新增 `tile.go`、`chunk.go`、`zone.go`、`clock.go`
-- `internal/app/observe/usecase.go`：改为返回“周边窗口 + 世界时钟信息”
-- `internal/adapter/world/runtime/`：新增 map generator 与 chunk cache
-- `internal/app/status/dto.go`：增加 `time_of_day`、`next_phase_in_seconds`
-- `db/schema/`：新增地图与会话基础表迁移
+- `internal/app/observe/dto.go`：升级为 `view/agent_state/world/action_costs/tiles/objects/resources/threats`
+- `internal/app/status/dto.go`：补齐 `world_time_seconds/time_of_day/next_phase_in_seconds/world.rules`
+- `internal/app/action/dto.go`：对齐 `result_code` 与统一 error 对象
+- `internal/domain/survival/`：去 `combat`，补新 intents 与状态效果规则
+- `internal/adapter/world/runtime/`：补 11x11 可见性与 threat/resource 实体化输出
+- `db/schema/`：补对象/资源/威胁/农田/容器相关迁移

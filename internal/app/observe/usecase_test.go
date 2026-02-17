@@ -32,6 +32,27 @@ func TestUseCase_PropagatesWorldError(t *testing.T) {
 	}
 }
 
+func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
+	uc := UseCase{
+		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+			AgentID:  "agent-1",
+			Position: survival.Position{X: 7, Y: -2},
+		}},
+		World: observeWorldProvider{snapshot: world.Snapshot{}},
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if resp.View.Width != 11 || resp.View.Height != 11 || resp.View.Radius != 5 {
+		t.Fatalf("unexpected view shape: %+v", resp.View)
+	}
+	if resp.View.Center.X != 7 || resp.View.Center.Y != -2 {
+		t.Fatalf("unexpected view center: %+v", resp.View.Center)
+	}
+}
+
 type observeStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error

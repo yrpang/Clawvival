@@ -16,6 +16,7 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 		Position: survival.Position{X: 3, Y: 4},
 	}}
 	worldProvider := statusWorldProvider{snapshot: world.Snapshot{
+		WorldTimeSeconds:   456,
 		TimeOfDay:          "night",
 		NextPhaseInSeconds: 123,
 	}}
@@ -27,6 +28,9 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	}
 	if resp.TimeOfDay != "night" {
 		t.Fatalf("expected night, got %s", resp.TimeOfDay)
+	}
+	if resp.WorldTimeSeconds != 456 {
+		t.Fatalf("expected world time 456, got %d", resp.WorldTimeSeconds)
 	}
 	if resp.NextPhaseInSeconds != 123 {
 		t.Fatalf("expected next phase 123, got %d", resp.NextPhaseInSeconds)

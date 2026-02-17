@@ -30,6 +30,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	}
 	return Response{
 		State:              state,
+		WorldTimeSeconds:   snapshot.WorldTimeSeconds,
 		TimeOfDay:          snapshot.TimeOfDay,
 		NextPhaseInSeconds: snapshot.NextPhaseInSeconds,
 	}, nil
