@@ -85,8 +85,9 @@ type HeartbeatDelta struct {
 type ResultCode string
 
 const (
-	ResultOK       ResultCode = "ok"
-	ResultGameOver ResultCode = "game_over"
+	ResultOK       ResultCode = "OK"
+	ResultFailed   ResultCode = "FAILED"
+	ResultGameOver ResultCode = "FAILED"
 )
 
 type DomainEvent struct {
