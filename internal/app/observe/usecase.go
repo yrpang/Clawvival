@@ -2,6 +2,7 @@ package observe
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -19,8 +20,9 @@ const (
 )
 
 type UseCase struct {
-	StateRepo ports.AgentStateRepository
-	World     ports.WorldProvider
+	StateRepo  ports.AgentStateRepository
+	ObjectRepo ports.WorldObjectRepository
+	World      ports.WorldProvider
 }
 
 func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
@@ -37,6 +39,14 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	}
 	state = stateview.Enrich(state, snapshot.TimeOfDay)
 	tiles := buildWindowTiles(world.Point{X: state.Position.X, Y: state.Position.Y}, snapshot.TimeOfDay, snapshot.VisibleTiles)
+	objects := []ObservedObject{}
+	if u.ObjectRepo != nil {
+		rows, err := u.ObjectRepo.ListByAgentID(ctx, req.AgentID)
+		if err != nil {
+			return Response{}, err
+		}
+		objects = projectObjects(tiles, rows)
+	}
 	return Response{
 		State:    state,
 		Snapshot: snapshot,
@@ -64,7 +74,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			"retreat":            {BaseMinutes: 1},
 		},
 		Tiles:            tiles,
-		Objects:          []ObservedObject{},
+		Objects:          objects,
 		Resources:        projectResources(tiles),
 		Threats:          projectThreats(tiles),
 		LocalThreatLevel: snapshot.ThreatLevel,
@@ -148,6 +158,62 @@ func projectThreats(tiles []ObservedTile) []ObservedThreat {
 		})
 	}
 	return out
+}
+
+func projectObjects(tiles []ObservedTile, objects []ports.WorldObjectRecord) []ObservedObject {
+	visible := map[string]bool{}
+	for _, t := range tiles {
+		if t.IsVisible {
+			visible[posKey(t.Pos.X, t.Pos.Y)] = true
+		}
+	}
+	out := make([]ObservedObject, 0, len(objects))
+	for _, obj := range objects {
+		if !visible[posKey(obj.X, obj.Y)] {
+			continue
+		}
+		entry := ObservedObject{
+			ID:            obj.ObjectID,
+			Type:          normalizeObjectType(obj),
+			Quality:       strings.ToUpper(strings.TrimSpace(obj.Quality)),
+			Pos:           world.Point{X: obj.X, Y: obj.Y},
+			CapacitySlots: obj.CapacitySlots,
+			UsedSlots:     obj.UsedSlots,
+		}
+		if state := extractObjectState(obj); state != "" {
+			entry.State = state
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func normalizeObjectType(obj ports.WorldObjectRecord) string {
+	if t := strings.TrimSpace(obj.ObjectType); t != "" {
+		return t
+	}
+	switch obj.Kind {
+	case 1:
+		return "bed"
+	case 2:
+		return "box"
+	case 3:
+		return "farm_plot"
+	default:
+		return "unknown"
+	}
+}
+
+func extractObjectState(obj ports.WorldObjectRecord) string {
+	if strings.TrimSpace(obj.ObjectState) == "" {
+		return ""
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(obj.ObjectState), &raw); err != nil {
+		return ""
+	}
+	state, _ := raw["state"].(string)
+	return strings.ToUpper(strings.TrimSpace(state))
 }
 
 func buildWindowTiles(center world.Point, timeOfDay string, visible []world.Tile) []ObservedTile {

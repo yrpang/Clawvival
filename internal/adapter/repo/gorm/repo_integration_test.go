@@ -108,6 +108,13 @@ func TestWorldObjectAndSessionRepos_PersistLifecycle(t *testing.T) {
 	if updated.UsedSlots != 5 || updated.ObjectState == "" {
 		t.Fatalf("unexpected updated object: %+v", updated)
 	}
+	list, err := objRepo.ListByAgentID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("list objects: %v", err)
+	}
+	if len(list) != 1 || list[0].ObjectID != "obj-2" {
+		t.Fatalf("unexpected object list: %+v", list)
+	}
 
 	if err := sessionRepo.EnsureActive(ctx, sessionID, agentID, 1); err != nil {
 		t.Fatalf("ensure active: %v", err)

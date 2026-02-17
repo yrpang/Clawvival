@@ -86,9 +86,13 @@ type ObservedTile struct {
 }
 
 type ObservedObject struct {
-	ID   string      `json:"id"`
-	Type string      `json:"type"`
-	Pos  world.Point `json:"pos"`
+	ID            string      `json:"id"`
+	Type          string      `json:"type"`
+	Quality       string      `json:"quality,omitempty"`
+	Pos           world.Point `json:"pos"`
+	CapacitySlots int         `json:"capacity_slots,omitempty"`
+	UsedSlots     int         `json:"used_slots,omitempty"`
+	State         string      `json:"state,omitempty"`
 }
 
 type ObservedResource struct {

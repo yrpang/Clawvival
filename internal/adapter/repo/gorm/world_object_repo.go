@@ -66,6 +66,30 @@ func (r WorldObjectRepo) GetByObjectID(ctx context.Context, agentID, objectID st
 	}, nil
 }
 
+func (r WorldObjectRepo) ListByAgentID(ctx context.Context, agentID string) ([]ports.WorldObjectRecord, error) {
+	var rows []model.WorldObject
+	if err := getDBFromCtx(ctx, r.db).Where(&model.WorldObject{OwnerAgentID: agentID}).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]ports.WorldObjectRecord, 0, len(rows))
+	for _, m := range rows {
+		kind, _ := strconv.Atoi(m.Kind)
+		out = append(out, ports.WorldObjectRecord{
+			ObjectID:      m.ObjectID,
+			Kind:          kind,
+			X:             int(m.X),
+			Y:             int(m.Y),
+			HP:            int(m.Hp),
+			ObjectType:    m.ObjectType,
+			Quality:       m.Quality,
+			CapacitySlots: int(m.CapacitySlots),
+			UsedSlots:     int(m.UsedSlots),
+			ObjectState:   m.ObjectState,
+		})
+	}
+	return out, nil
+}
+
 func (r WorldObjectRepo) Update(ctx context.Context, agentID string, obj ports.WorldObjectRecord) error {
 	updates := map[string]any{
 		"hp":             obj.HP,

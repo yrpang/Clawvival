@@ -874,3 +874,69 @@ func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 		t.Fatalf("expected seed consumed by farm_plant, got=%d", got)
 	}
 }
+
+func TestUseCase_GatherTriggersSeedPityAfterConsecutiveFails(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	for i := 0; i < 7; i++ {
+		eventRepo.events = append(eventRepo.events, survival.DomainEvent{
+			Type:       "action_settled",
+			OccurredAt: time.Unix(1700000000+int64(i*60), 0),
+			Payload: map[string]any{
+				"decision": map[string]any{"intent": "gather"},
+				"result":   map[string]any{"seed_gained": false},
+			},
+		})
+	}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 100,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700003600, 0) },
+	}
+
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-seed-pity",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if got := out.UpdatedState.Inventory["seed"]; got != 1 {
+		t.Fatalf("expected pity seed +1, got=%d", got)
+	}
+	foundSettled := false
+	for _, evt := range out.Events {
+		if evt.Type != "action_settled" {
+			continue
+		}
+		foundSettled = true
+		result, ok := evt.Payload["result"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected result payload map")
+		}
+		if got, ok := result["seed_pity_triggered"].(bool); !ok || !got {
+			t.Fatalf("expected seed_pity_triggered=true, got=%v", result["seed_pity_triggered"])
+		}
+	}
+	if !foundSettled {
+		t.Fatalf("expected action_settled event")
+	}
+}

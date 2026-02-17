@@ -107,6 +107,36 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 	}
 }
 
+func TestUseCase_ProjectsVisibleObjectsOnly(t *testing.T) {
+	uc := UseCase{
+		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+			AgentID:  "agent-1",
+			Position: survival.Position{X: 0, Y: 0},
+		}},
+		ObjectRepo: observeObjectRepo{objects: []ports.WorldObjectRecord{
+			{ObjectID: "obj-visible-box", ObjectType: "box", X: 0, Y: 0, CapacitySlots: 60, UsedSlots: 5},
+			{ObjectID: "obj-hidden-farm", ObjectType: "farm_plot", X: 2, Y: 2, ObjectState: `{"state":"growing"}`},
+		}},
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay: "day",
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Kind: world.TileGrass, Passable: true},
+			},
+		}},
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if len(resp.Objects) != 1 {
+		t.Fatalf("expected one visible object, got %+v", resp.Objects)
+	}
+	if resp.Objects[0].ID != "obj-visible-box" || resp.Objects[0].CapacitySlots != 60 || resp.Objects[0].UsedSlots != 5 {
+		t.Fatalf("unexpected projected object: %+v", resp.Objects[0])
+	}
+}
+
 type observeStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error
@@ -128,6 +158,30 @@ type observeWorldProvider struct {
 	err      error
 }
 
+type observeObjectRepo struct {
+	objects []ports.WorldObjectRecord
+	err     error
+}
+
+func (r observeObjectRepo) Save(_ context.Context, _ string, _ ports.WorldObjectRecord) error {
+	return nil
+}
+
+func (r observeObjectRepo) GetByObjectID(_ context.Context, _ string, _ string) (ports.WorldObjectRecord, error) {
+	return ports.WorldObjectRecord{}, ports.ErrNotFound
+}
+
+func (r observeObjectRepo) ListByAgentID(_ context.Context, _ string) ([]ports.WorldObjectRecord, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return r.objects, nil
+}
+
+func (r observeObjectRepo) Update(_ context.Context, _ string, _ ports.WorldObjectRecord) error {
+	return nil
+}
+
 func (p observeWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ world.Point) (world.Snapshot, error) {
 	if p.err != nil {
 		return world.Snapshot{}, p.err
@@ -137,3 +191,4 @@ func (p observeWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ wo
 
 var _ ports.AgentStateRepository = observeStateRepo{}
 var _ ports.WorldProvider = observeWorldProvider{}
+var _ ports.WorldObjectRepository = observeObjectRepo{}

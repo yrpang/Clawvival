@@ -39,7 +39,7 @@ func main() {
 			Now:         time.Now,
 		},
 		AuthUC:    auth.VerifyUseCase{Credentials: credRepo},
-		ObserveUC: observe.UseCase{StateRepo: stateRepo, World: worldProvider},
+		ObserveUC: observe.UseCase{StateRepo: stateRepo, ObjectRepo: worldObjectRepo, World: worldProvider},
 		ActionUC: action.UseCase{
 			TxManager:   txManager,
 			StateRepo:   stateRepo,
