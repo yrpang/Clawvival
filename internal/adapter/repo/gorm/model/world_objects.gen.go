@@ -12,15 +12,20 @@ const TableNameWorldObject = "world_objects"
 
 // WorldObject mapped from table <world_objects>
 type WorldObject struct {
-	ID           int64     `gorm:"column:id;primaryKey;autoIncrement:true" json:"id"`
-	ObjectID     string    `gorm:"column:object_id;not null" json:"object_id"`
-	Kind         string    `gorm:"column:kind;not null" json:"kind"`
-	X            int32     `gorm:"column:x;not null" json:"x"`
-	Y            int32     `gorm:"column:y;not null" json:"y"`
-	Hp           int32     `gorm:"column:hp;not null" json:"hp"`
-	OwnerAgentID string    `gorm:"column:owner_agent_id" json:"owner_agent_id"`
-	CreatedAt    time.Time `gorm:"column:created_at;not null;default:now()" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"column:updated_at;not null;default:now()" json:"updated_at"`
+	ID            int64     `gorm:"column:id;primaryKey;autoIncrement:true" json:"id"`
+	ObjectID      string    `gorm:"column:object_id;not null" json:"object_id"`
+	Kind          string    `gorm:"column:kind;not null" json:"kind"`
+	X             int32     `gorm:"column:x;not null" json:"x"`
+	Y             int32     `gorm:"column:y;not null" json:"y"`
+	Hp            int32     `gorm:"column:hp;not null" json:"hp"`
+	OwnerAgentID  string    `gorm:"column:owner_agent_id" json:"owner_agent_id"`
+	CreatedAt     time.Time `gorm:"column:created_at;not null;default:now()" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at;not null;default:now()" json:"updated_at"`
+	ObjectType    string    `gorm:"column:object_type" json:"object_type"`
+	Quality       string    `gorm:"column:quality" json:"quality"`
+	CapacitySlots int32     `gorm:"column:capacity_slots" json:"capacity_slots"`
+	UsedSlots     int32     `gorm:"column:used_slots" json:"used_slots"`
+	ObjectState   string    `gorm:"column:object_state" json:"object_state"`
 }
 
 // TableName WorldObject's table name

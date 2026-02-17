@@ -34,13 +34,15 @@ func TestAgentStateRepo_RoundTripInventoryAndDeath(t *testing.T) {
 
 	repo := NewAgentStateRepo(db)
 	seed := survival.AgentStateAggregate{
-		AgentID:    agentID,
-		Vitals:     survival.Vitals{HP: 88, Hunger: 55, Energy: 44},
-		Position:   survival.Position{X: 2, Y: 3},
-		Inventory:  map[string]int{"wood": 3, "stone": 1},
-		Dead:       true,
-		DeathCause: survival.DeathCauseCombat,
-		Version:    1,
+		AgentID:           agentID,
+		Vitals:            survival.Vitals{HP: 88, Hunger: 55, Energy: 44},
+		Position:          survival.Position{X: 2, Y: 3},
+		Inventory:         map[string]int{"wood": 3, "stone": 1},
+		InventoryCapacity: 40,
+		InventoryUsed:     4,
+		Dead:              true,
+		DeathCause:        survival.DeathCauseCombat,
+		Version:           1,
 	}
 	if err := repo.SaveWithVersion(ctx, seed, 0); err != nil {
 		t.Fatalf("save: %v", err)
@@ -51,6 +53,9 @@ func TestAgentStateRepo_RoundTripInventoryAndDeath(t *testing.T) {
 	}
 	if got.Inventory["wood"] != 3 {
 		t.Fatalf("expected wood=3, got %d", got.Inventory["wood"])
+	}
+	if got.InventoryCapacity != 40 || got.InventoryUsed != 4 {
+		t.Fatalf("expected inventory cap/used 40/4, got %d/%d", got.InventoryCapacity, got.InventoryUsed)
 	}
 	if !got.Dead || got.DeathCause != survival.DeathCauseCombat {
 		t.Fatalf("expected dead combat, got dead=%v cause=%s", got.Dead, got.DeathCause)
