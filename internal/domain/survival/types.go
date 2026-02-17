@@ -14,15 +14,22 @@ type Position struct {
 }
 
 type AgentStateAggregate struct {
-	AgentID    string         `json:"agent_id"`
-	Vitals     Vitals         `json:"vitals"`
-	Position   Position       `json:"position"`
-	Home       Position       `json:"home"`
-	Inventory  map[string]int `json:"inventory"`
-	Dead       bool           `json:"dead"`
-	DeathCause DeathCause     `json:"death_cause"`
-	Version    int64          `json:"version"`
-	UpdatedAt  time.Time      `json:"updated_at"`
+	AgentID       string             `json:"agent_id"`
+	Vitals        Vitals             `json:"vitals"`
+	Position      Position           `json:"position"`
+	Home          Position           `json:"home"`
+	Inventory     map[string]int     `json:"inventory"`
+	Dead          bool               `json:"dead"`
+	DeathCause    DeathCause         `json:"death_cause"`
+	OngoingAction *OngoingActionInfo `json:"ongoing_action,omitempty"`
+	Version       int64              `json:"version"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+}
+
+type OngoingActionInfo struct {
+	Type    ActionType `json:"type"`
+	Minutes int        `json:"minutes"`
+	EndAt   time.Time  `json:"end_at"`
 }
 
 type ActionType string
@@ -36,6 +43,7 @@ const (
 	ActionFarm    ActionType = "farm"
 	ActionRetreat ActionType = "retreat"
 	ActionCraft   ActionType = "craft"
+	ActionEat     ActionType = "eat"
 )
 
 type ActionIntent struct {

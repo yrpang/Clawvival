@@ -24,6 +24,13 @@ type FarmPlot struct {
 	Ready         bool
 }
 
+type FoodID int
+
+const (
+	FoodBerry FoodID = 1
+	FoodBread FoodID = 2
+)
+
 var recipeDefs = map[RecipeID]struct {
 	In  map[string]int
 	Out map[string]int
@@ -46,6 +53,14 @@ var buildCosts = map[BuildKind]map[string]int{
 	BuildWall:    {"stone": 3},
 	BuildDoor:    {"plank": 2},
 	BuildFurnace: {"stone": 6},
+}
+
+var foodDefs = map[FoodID]struct {
+	ItemName      string
+	HungerRecover int
+}{
+	FoodBerry: {ItemName: "berry", HungerRecover: 12},
+	FoodBread: {ItemName: "bread", HungerRecover: 28},
 }
 
 type BuiltObject struct {
@@ -149,6 +164,29 @@ func HarvestFarm(state *AgentStateAggregate, plot *FarmPlot) bool {
 	state.AddItem("wheat", 2)
 	plot.Ready = false
 	plot.GrowthMinutes = 0
+	return true
+}
+
+func CanEat(state AgentStateAggregate, foodID FoodID) bool {
+	food, ok := foodDefs[foodID]
+	if !ok {
+		return false
+	}
+	return state.Inventory[food.ItemName] > 0
+}
+
+func Eat(state *AgentStateAggregate, foodID FoodID) bool {
+	food, ok := foodDefs[foodID]
+	if !ok {
+		return false
+	}
+	if !state.ConsumeItem(food.ItemName, 1) {
+		return false
+	}
+	state.Vitals.Hunger += food.HungerRecover
+	if state.Vitals.Hunger > 100 {
+		state.Vitals.Hunger = 100
+	}
 	return true
 }
 

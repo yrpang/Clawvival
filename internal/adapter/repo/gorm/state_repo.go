@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"clawvival/internal/adapter/repo/gorm/model"
 	"clawvival/internal/app/ports"
@@ -39,7 +40,12 @@ func (r AgentStateRepo) GetByAgentID(ctx context.Context, agentID string) (survi
 		Inventory:  decodeInventory(m.Inventory),
 		Dead:       m.Dead,
 		DeathCause: survival.DeathCause(m.DeathCause),
-		Version:    m.Version,
+		OngoingAction: decodeOngoingAction(
+			m.OngoingActionType,
+			m.OngoingActionMins,
+			m.OngoingActionEnd,
+		),
+		Version: m.Version,
 	}, nil
 }
 
@@ -58,6 +64,7 @@ func (r AgentStateRepo) SaveWithVersion(ctx context.Context, state survival.Agen
 			Dead:       state.Dead,
 			DeathCause: string(state.DeathCause),
 		}
+		applyOngoingActionModel(&m, state.OngoingAction)
 		if err := db.Create(&m).Error; err != nil {
 			return err
 		}
@@ -74,6 +81,15 @@ func (r AgentStateRepo) SaveWithVersion(ctx context.Context, state survival.Agen
 		"inventory":   encodeInventory(state.Inventory),
 		"dead":        state.Dead,
 		"death_cause": string(state.DeathCause),
+	}
+	if state.OngoingAction == nil {
+		updates["ongoing_action_type"] = ""
+		updates["ongoing_action_end_at"] = nil
+		updates["ongoing_action_minutes"] = 0
+	} else {
+		updates["ongoing_action_type"] = string(state.OngoingAction.Type)
+		updates["ongoing_action_end_at"] = state.OngoingAction.EndAt
+		updates["ongoing_action_minutes"] = state.OngoingAction.Minutes
 	}
 
 	res := db.Model(&model.AgentState{}).
@@ -103,4 +119,31 @@ func decodeInventory(raw string) map[string]int {
 	out := map[string]int{}
 	_ = json.Unmarshal([]byte(raw), &out)
 	return out
+}
+
+func decodeOngoingAction(actionType string, minutes int32, endAt *time.Time) *survival.OngoingActionInfo {
+	if actionType == "" || endAt == nil {
+		return nil
+	}
+	if minutes <= 0 {
+		return nil
+	}
+	return &survival.OngoingActionInfo{
+		Type:    survival.ActionType(actionType),
+		Minutes: int(minutes),
+		EndAt:   *endAt,
+	}
+}
+
+func applyOngoingActionModel(m *model.AgentState, ongoing *survival.OngoingActionInfo) {
+	if ongoing == nil {
+		m.OngoingActionType = ""
+		m.OngoingActionEnd = nil
+		m.OngoingActionMins = 0
+		return
+	}
+	endAt := ongoing.EndAt
+	m.OngoingActionType = string(ongoing.Type)
+	m.OngoingActionEnd = &endAt
+	m.OngoingActionMins = int32(ongoing.Minutes)
 }

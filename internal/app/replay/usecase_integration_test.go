@@ -77,7 +77,7 @@ func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, action.Request{
 		AgentID:        agentID,
 		IdempotencyKey: "replay-2",
-		Intent:         survival.ActionIntent{Type: survival.ActionRest}, StrategyHash: "sha-new",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-new",
 	}); err != nil {
 		t.Fatalf("second action execute: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestUseCase_E2E_AppliesFiltersBeforeLimit(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, action.Request{
 		AgentID:        agentID,
 		IdempotencyKey: "limit-2",
-		Intent:         survival.ActionIntent{Type: survival.ActionRest}}); err != nil {
+		Intent:         survival.ActionIntent{Type: survival.ActionGather}}); err != nil {
 		t.Fatalf("second action execute: %v", err)
 	}
 

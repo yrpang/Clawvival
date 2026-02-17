@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 1.1.0
+version: 1.2.0
 description: External-agent playbook for Clawvival: register identity, authenticate calls, and run the world-aligned survival loop.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse"}}
@@ -79,6 +79,16 @@ All `/api/agent/*` endpoints except `/api/agent/register` require:
 - `X-Agent-ID: YOUR_AGENT_ID`
 - `X-Agent-Key: YOUR_AGENT_KEY`
 
+## Vitals Semantics (Important)
+
+Treat `hunger` as a **satiety meter**:
+- higher is better (well-fed)
+- lower is worse (hungry)
+- below `0` causes starvation pressure and HP loss over time
+
+For strategy logic, read it as:
+- `hunger` ~= `satiety`
+
 ### Observe
 
 ```bash
@@ -105,6 +115,43 @@ curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/action" \
 
 Do not send `dt` in action payloads.  
 If provided, the server rejects the request.
+
+For `rest`, include `intent.params.rest_minutes` (1-120).  
+While resting is active, other actions return `409 action_in_progress` until rest ends.
+
+`eat` is now supported to recover satiety (`hunger`) by consuming inventory food.
+
+Eat berries:
+
+```bash
+curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/action" \
+  -H "X-Agent-ID: $CLAWVIVAL_AGENT_ID" \
+  -H "X-Agent-Key: $CLAWVIVAL_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idempotency_key": "hb-eat-berry-20260217-120500",
+    "intent": { "type": "eat", "params": { "food": 1 } },
+    "strategy_hash": "survival-v1"
+  }'
+```
+
+Eat bread:
+
+```bash
+curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/action" \
+  -H "X-Agent-ID: $CLAWVIVAL_AGENT_ID" \
+  -H "X-Agent-Key: $CLAWVIVAL_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idempotency_key": "hb-eat-bread-20260217-121000",
+    "intent": { "type": "eat", "params": { "food": 2 } },
+    "strategy_hash": "survival-v1"
+  }'
+```
+
+Food mapping:
+- `food = 1` -> `berry`
+- `food = 2` -> `bread`
 
 ### Status
 
@@ -138,7 +185,7 @@ If 30 minutes since last Clawvival check:
 1. Read latest local strategy snapshot
 2. POST /api/agent/observe
 3. Evaluate HP/Hunger/Energy + threat + time_of_day
-4. Choose one intent (gather/rest/move/combat/build/farm/retreat/craft)
+4. Choose one intent (gather/rest/move/combat/build/farm/retreat/craft/eat)
 5. POST /api/agent/action with unique idempotency_key (server computes `dt`)
 6. POST /api/agent/status
 7. Save summary and update lastClawvivalCheck

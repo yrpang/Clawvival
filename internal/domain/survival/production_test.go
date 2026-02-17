@@ -66,3 +66,35 @@ func TestApplyGather_UsesToolEfficiency(t *testing.T) {
 		t.Fatalf("berry gather mismatch: got=%d want=%d", got, want)
 	}
 }
+
+func TestEatAndCanEat(t *testing.T) {
+	state := AgentStateAggregate{
+		Vitals: Vitals{Hunger: 70},
+		Inventory: map[string]int{
+			"berry": 1,
+			"bread": 1,
+		},
+	}
+	if !CanEat(state, FoodBerry) {
+		t.Fatalf("expected CanEat berry true")
+	}
+	if ok := Eat(&state, FoodBerry); !ok {
+		t.Fatalf("expected Eat berry success")
+	}
+	if got, want := state.Inventory["berry"], 0; got != want {
+		t.Fatalf("berry consume mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := state.Vitals.Hunger, 82; got != want {
+		t.Fatalf("hunger recover mismatch: got=%d want=%d", got, want)
+	}
+
+	if ok := Eat(&state, FoodBread); !ok {
+		t.Fatalf("expected Eat bread success")
+	}
+	if got, want := state.Inventory["bread"], 0; got != want {
+		t.Fatalf("bread consume mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := state.Vitals.Hunger, 100; got != want {
+		t.Fatalf("hunger should cap at 100: got=%d want=%d", got, want)
+	}
+}

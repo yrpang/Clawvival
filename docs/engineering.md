@@ -297,6 +297,7 @@ flowchart LR
 请求（`POST /api/agent/action`）：
 - 必填：`idempotency_key`, `intent`
 - 禁止字段：`dt`（由服务端计算，客户端提交将被拒绝）
+- `rest` 特殊参数：`intent.params.rest_minutes`（`1..120`），表示进入持续休息窗口
 - 鉴权提供：`agent_id`（由身份上下文注入，不依赖客户端明文字段）
 - 可选观测：`strategy_hash`（只读元信息）
 
@@ -501,7 +502,7 @@ sequenceDiagram
   API-->>A: Observation
 
   A->>A: Evaluate risk & choose intent
-  A->>API: POST /api/agent/action(intent, dt)
+  A->>API: POST /api/agent/action(intent[, rest_minutes])
   API->>AUTH: Verify agent_id + credential
   AUTH-->>API: IdentityContext
   API->>E: Execute + settle(HP/Hunger/Energy)

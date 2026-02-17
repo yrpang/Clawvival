@@ -17,12 +17,15 @@ var (
 	ErrActionPreconditionFailed = errors.New("action precondition failed")
 	ErrActionInvalidPosition    = errors.New("action invalid position")
 	ErrActionCooldownActive     = errors.New("action cooldown active")
+	ErrActionInProgress         = errors.New("action in progress")
 )
 
 const (
 	defaultHeartbeatDeltaMinutes = 30
 	minHeartbeatDeltaMinutes     = 1
 	maxHeartbeatDeltaMinutes     = 120
+	minRestMinutes               = 1
+	maxRestMinutes               = 120
 )
 
 type UseCase struct {
@@ -73,6 +76,18 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err != nil {
 			return err
 		}
+		nowAt := nowFn()
+		state, err = finalizeOngoingActionIfDue(txCtx, u, req.AgentID, state, nowAt)
+		if err != nil {
+			return err
+		}
+		if state.OngoingAction != nil {
+			return ErrActionInProgress
+		}
+		if req.Intent.Type == survival.ActionRest {
+			out, err = startRestAction(txCtx, u, req, state, nowAt)
+			return err
+		}
 		if !resourcePreconditionsSatisfied(state, req.Intent) {
 			return ErrActionPreconditionFailed
 		}
@@ -90,7 +105,6 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if !positionPreconditionsSatisfied(state, req.Intent, snapshot) {
 			return ErrActionInvalidPosition
 		}
-		nowAt := nowFn()
 		if err := ensureCooldownReady(txCtx, u.EventRepo, req.AgentID, req.Intent.Type, nowAt); err != nil {
 			return err
 		}
@@ -220,6 +234,8 @@ func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 			return survival.CanPlantSeed(state)
 		}
 		return true
+	case survival.ActionEat:
+		return survival.CanEat(state, survival.FoodID(intent.Params["food"]))
 	default:
 		return true
 	}
@@ -331,7 +347,7 @@ func isSupportedActionType(t survival.ActionType) bool {
 	switch t {
 	case survival.ActionGather, survival.ActionRest, survival.ActionMove:
 		return true
-	case survival.ActionCombat, survival.ActionBuild, survival.ActionFarm, survival.ActionRetreat, survival.ActionCraft:
+	case survival.ActionCombat, survival.ActionBuild, survival.ActionFarm, survival.ActionRetreat, survival.ActionCraft, survival.ActionEat:
 		return true
 	default:
 		return false
@@ -340,6 +356,9 @@ func isSupportedActionType(t survival.ActionType) bool {
 
 func hasValidActionParams(intent survival.ActionIntent) bool {
 	switch intent.Type {
+	case survival.ActionRest:
+		restMinutes := intent.Params["rest_minutes"]
+		return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
 	case survival.ActionMove:
 		return intent.Params["dx"] != 0 || intent.Params["dy"] != 0
 	case survival.ActionCombat:
@@ -350,9 +369,110 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 		return intent.Params["seed"] > 0
 	case survival.ActionCraft:
 		return intent.Params["recipe"] > 0
+	case survival.ActionEat:
+		return intent.Params["food"] > 0
 	default:
 		return true
 	}
+}
+
+func finalizeOngoingActionIfDue(ctx context.Context, u UseCase, agentID string, state survival.AgentStateAggregate, nowAt time.Time) (survival.AgentStateAggregate, error) {
+	ongoing := state.OngoingAction
+	if ongoing == nil {
+		return state, nil
+	}
+	if nowAt.Before(ongoing.EndAt) {
+		return state, nil
+	}
+
+	snapshot, err := u.World.SnapshotForAgent(ctx, agentID, world.Point{X: state.Position.X, Y: state.Position.Y})
+	if err != nil {
+		return survival.AgentStateAggregate{}, err
+	}
+	result, err := u.Settle.Settle(
+		state,
+		survival.ActionIntent{Type: ongoing.Type},
+		survival.HeartbeatDelta{Minutes: ongoing.Minutes},
+		ongoing.EndAt,
+		survival.WorldSnapshot{
+			TimeOfDay:         snapshot.TimeOfDay,
+			ThreatLevel:       snapshot.ThreatLevel,
+			VisibilityPenalty: snapshot.VisibilityPenalty,
+			NearbyResource:    snapshot.NearbyResource,
+		},
+	)
+	if err != nil {
+		return survival.AgentStateAggregate{}, err
+	}
+	result.UpdatedState.OngoingAction = nil
+
+	sessionID := "session-" + agentID
+	for i := range result.Events {
+		if result.Events[i].Payload == nil {
+			result.Events[i].Payload = map[string]any{}
+		}
+		result.Events[i].Payload["agent_id"] = agentID
+		result.Events[i].Payload["session_id"] = sessionID
+	}
+	if err := u.StateRepo.SaveWithVersion(ctx, result.UpdatedState, state.Version); err != nil {
+		return survival.AgentStateAggregate{}, err
+	}
+	if err := u.EventRepo.Append(ctx, agentID, result.Events); err != nil {
+		return survival.AgentStateAggregate{}, err
+	}
+	return result.UpdatedState, nil
+}
+
+func startRestAction(ctx context.Context, u UseCase, req Request, state survival.AgentStateAggregate, nowAt time.Time) (Response, error) {
+	restMinutes := req.Intent.Params["rest_minutes"]
+	next := state
+	next.OngoingAction = &survival.OngoingActionInfo{
+		Type:    survival.ActionRest,
+		Minutes: restMinutes,
+		EndAt:   nowAt.Add(time.Duration(restMinutes) * time.Minute),
+	}
+	next.Version++
+	next.UpdatedAt = nowAt
+
+	event := survival.DomainEvent{
+		Type:       "rest_started",
+		OccurredAt: nowAt,
+		Payload: map[string]any{
+			"agent_id":     req.AgentID,
+			"session_id":   "session-" + req.AgentID,
+			"rest_minutes": restMinutes,
+			"end_at":       next.OngoingAction.EndAt,
+		},
+	}
+	if req.StrategyHash != "" {
+		event.Payload["strategy_hash"] = req.StrategyHash
+	}
+	if err := u.StateRepo.SaveWithVersion(ctx, next, state.Version); err != nil {
+		return Response{}, err
+	}
+	execution := ports.ActionExecutionRecord{
+		AgentID:        req.AgentID,
+		IdempotencyKey: req.IdempotencyKey,
+		IntentType:     string(req.Intent.Type),
+		DT:             0,
+		Result: ports.ActionResult{
+			UpdatedState: next,
+			Events:       []survival.DomainEvent{event},
+			ResultCode:   survival.ResultOK,
+		},
+		AppliedAt: nowAt,
+	}
+	if err := u.ActionRepo.SaveExecution(ctx, execution); err != nil {
+		return Response{}, err
+	}
+	if err := u.EventRepo.Append(ctx, req.AgentID, []survival.DomainEvent{event}); err != nil {
+		return Response{}, err
+	}
+	return Response{
+		UpdatedState: next,
+		Events:       []survival.DomainEvent{event},
+		ResultCode:   survival.ResultOK,
+	}, nil
 }
 
 func toNum(v any) float64 {

@@ -104,3 +104,55 @@ func TestSettlementService_CriticalHPAutoRetreatsTowardHome(t *testing.T) {
 		t.Fatalf("expected auto retreat toward home to (4,4), got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
 	}
 }
+
+func TestSettlementService_MoveChangesPositionAndConsumesEnergy(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Position: Position{X: 2, Y: -1},
+		Version:  1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{
+		Type:   ActionMove,
+		Params: map[string]int{"dx": 1, "dy": -1},
+	}, HeartbeatDelta{Minutes: 1}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+
+	if out.UpdatedState.Position.X != 3 || out.UpdatedState.Position.Y != -2 {
+		t.Fatalf("expected moved position (3,-2), got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
+	}
+	if out.UpdatedState.Vitals.Energy >= state.Vitals.Energy {
+		t.Fatalf("expected move to consume energy, before=%d after=%d", state.Vitals.Energy, out.UpdatedState.Vitals.Energy)
+	}
+}
+
+func TestSettlementService_EatRecoversHungerAndConsumesFood(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID: "a-1",
+		Vitals:  Vitals{HP: 100, Hunger: 40, Energy: 60},
+		Inventory: map[string]int{
+			"berry": 2,
+		},
+		Version: 1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{
+		Type:   ActionEat,
+		Params: map[string]int{"food": int(FoodBerry)},
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+
+	if out.UpdatedState.Vitals.Hunger <= state.Vitals.Hunger {
+		t.Fatalf("expected hunger recover, before=%d after=%d", state.Vitals.Hunger, out.UpdatedState.Vitals.Hunger)
+	}
+	if got, want := out.UpdatedState.Inventory["berry"], 1; got != want {
+		t.Fatalf("expected berry consumed by 1, got=%d want=%d", got, want)
+	}
+}

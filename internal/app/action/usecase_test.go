@@ -248,11 +248,13 @@ func (r *stubEventRepo) ListByAgentID(_ context.Context, _ string, limit int) ([
 
 func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
 	cases := []Request{
+		{AgentID: "agent-1", IdempotencyKey: "k0", Intent: survival.ActionIntent{Type: survival.ActionRest}},
 		{AgentID: "agent-1", IdempotencyKey: "k1", Intent: survival.ActionIntent{Type: survival.ActionMove}},
 		{AgentID: "agent-1", IdempotencyKey: "k2", Intent: survival.ActionIntent{Type: survival.ActionCombat}},
 		{AgentID: "agent-1", IdempotencyKey: "k3", Intent: survival.ActionIntent{Type: survival.ActionBuild}},
 		{AgentID: "agent-1", IdempotencyKey: "k4", Intent: survival.ActionIntent{Type: survival.ActionFarm}},
 		{AgentID: "agent-1", IdempotencyKey: "k5", Intent: survival.ActionIntent{Type: survival.ActionCraft}},
+		{AgentID: "agent-1", IdempotencyKey: "k6", Intent: survival.ActionIntent{Type: survival.ActionEat}},
 	}
 
 	uc := UseCase{}
@@ -264,6 +266,77 @@ func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
 		if !errors.Is(err, ErrInvalidActionParams) {
 			t.Fatalf("expected ErrInvalidActionParams for intent=%s, got %v", req.Intent.Type, err)
 		}
+	}
+}
+
+func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:      "day",
+			ThreatLevel:    1,
+			NearbyResource: map[string]int{"wood": 1},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true},
+				{X: 1, Y: 0, Passable: true},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	restOut, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "rest-1",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionRest,
+			Params: map[string]int{"rest_minutes": 30},
+		},
+	})
+	if err != nil {
+		t.Fatalf("start rest: %v", err)
+	}
+	if restOut.UpdatedState.OngoingAction == nil {
+		t.Fatalf("expected ongoing rest after start")
+	}
+
+	now = now.Add(10 * time.Minute)
+	_, err = uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "gather-during-rest",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+	})
+	if !errors.Is(err, ErrActionInProgress) {
+		t.Fatalf("expected ErrActionInProgress, got %v", err)
+	}
+
+	now = now.Add(21 * time.Minute)
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "gather-after-rest",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+	})
+	if err != nil {
+		t.Fatalf("gather after rest: %v", err)
+	}
+	if out.UpdatedState.OngoingAction != nil {
+		t.Fatalf("expected ongoing action cleared after due")
 	}
 }
 
@@ -404,6 +477,46 @@ func TestUseCase_RejectsBuildWhenInventoryInsufficient(t *testing.T) {
 			Type:   survival.ActionBuild,
 			Params: map[string]int{"kind": int(survival.BuildBed)},
 		}})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
+func TestUseCase_RejectsEatWhenInventoryInsufficient(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-eat-precheck",
+		Intent: survival.ActionIntent{
+			Type:   survival.ActionEat,
+			Params: map[string]int{"food": int(survival.FoodBerry)},
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected precondition error for eat without food")
+	}
 	if !errors.Is(err, ErrActionPreconditionFailed) {
 		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
 	}

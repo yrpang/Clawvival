@@ -103,12 +103,19 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	}
 
 	now = now.Add(2 * time.Minute)
-	if _, err := actionUC.Execute(ctx, Request{
+	moveOut, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "loop-move",
 		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}}, StrategyHash: "sha-loop",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("move: %v", err)
+	}
+	if moveOut.UpdatedState.Position.X != 1 || moveOut.UpdatedState.Position.Y != 0 {
+		t.Fatalf("expected move to update position to (1,0), got (%d,%d)", moveOut.UpdatedState.Position.X, moveOut.UpdatedState.Position.Y)
+	}
+	if moveOut.UpdatedState.Vitals.Energy >= 42 {
+		t.Fatalf("expected move to consume energy, got energy=%d", moveOut.UpdatedState.Vitals.Energy)
 	}
 
 	now = now.Add(6 * time.Minute)
@@ -600,10 +607,11 @@ func TestGameplayLoop_E2E_StarvationTriggersGameOver(t *testing.T) {
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "starvation-rest",
-		Intent:         survival.ActionIntent{Type: survival.ActionRest}, StrategyHash: "sha-starve",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		StrategyHash:   "sha-starve",
 	})
 	if err != nil {
-		t.Fatalf("rest action: %v", err)
+		t.Fatalf("gather action: %v", err)
 	}
 	if out.ResultCode != survival.ResultGameOver {
 		t.Fatalf("expected game over, got %s", out.ResultCode)
