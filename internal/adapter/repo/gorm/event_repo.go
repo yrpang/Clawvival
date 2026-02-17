@@ -9,6 +9,7 @@ import (
 	"clawverse/internal/domain/survival"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type EventRepo struct {
@@ -42,8 +43,10 @@ func (r EventRepo) ListByAgentID(ctx context.Context, agentID string, limit int)
 	}
 	rows := []model.DomainEvent{}
 	err := getDBFromCtx(ctx, r.db).
-		Where("agent_id = ?", agentID).
-		Order("occurred_at DESC").
+		Where(&model.DomainEvent{AgentID: agentID}).
+		Clauses(clause.OrderBy{
+			Columns: []clause.OrderByColumn{{Column: clause.Column{Name: "occurred_at"}, Desc: true}},
+		}).
 		Limit(limit).
 		Find(&rows).Error
 	if err != nil {

@@ -23,7 +23,7 @@ func NewActionExecutionRepo(db *gorm.DB) ActionExecutionRepo {
 func (r ActionExecutionRepo) GetByIdempotencyKey(ctx context.Context, agentID, key string) (*ports.ActionExecutionRecord, error) {
 	var m model.ActionExecution
 	err := getDBFromCtx(ctx, r.db).
-		Where("agent_id = ? AND idempotency_key = ?", agentID, key).
+		Where(&model.ActionExecution{AgentID: agentID, IdempotencyKey: key}).
 		First(&m).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

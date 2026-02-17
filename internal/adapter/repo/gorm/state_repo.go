@@ -22,7 +22,7 @@ func NewAgentStateRepo(db *gorm.DB) AgentStateRepo {
 
 func (r AgentStateRepo) GetByAgentID(ctx context.Context, agentID string) (survival.AgentStateAggregate, error) {
 	var m model.AgentState
-	if err := getDBFromCtx(ctx, r.db).Where("agent_id = ?", agentID).First(&m).Error; err != nil {
+	if err := getDBFromCtx(ctx, r.db).Where(&model.AgentState{AgentID: agentID}).First(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return survival.AgentStateAggregate{}, ports.ErrNotFound
 		}
@@ -77,7 +77,7 @@ func (r AgentStateRepo) SaveWithVersion(ctx context.Context, state survival.Agen
 	}
 
 	res := db.Model(&model.AgentState{}).
-		Where("agent_id = ? AND version = ?", state.AgentID, expectedVersion).
+		Where(&model.AgentState{AgentID: state.AgentID, Version: expectedVersion}).
 		Updates(updates)
 	if res.Error != nil {
 		return res.Error

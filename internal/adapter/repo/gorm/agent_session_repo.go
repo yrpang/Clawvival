@@ -37,7 +37,7 @@ func (r AgentSessionRepo) Close(ctx context.Context, sessionID string, cause sur
 	}
 	res := getDBFromCtx(ctx, r.db).
 		Model(&model.AgentSession{}).
-		Where("session_id = ?", sessionID).
+		Where(&model.AgentSession{SessionID: sessionID}).
 		Updates(updates)
 	return res.Error
 }
