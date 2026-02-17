@@ -44,7 +44,7 @@ func DefaultConfig() Config {
 		ThreatNight:    3,
 		ResourcesDay:   map[string]int{"wood": 10, "stone": 5},
 		ResourcesNight: map[string]int{"wood": 6, "stone": 3},
-		ViewRadius:     3,
+		ViewRadius:     5,
 		Now:            time.Now,
 	}
 }
