@@ -9,6 +9,7 @@ import (
 	"clawverse/internal/adapter/repo/gorm/model"
 	"clawverse/internal/app/ports"
 	"clawverse/internal/domain/survival"
+	"clawverse/internal/domain/world"
 )
 
 func requireDSN(t *testing.T) string {
@@ -101,5 +102,53 @@ func TestWorldObjectAndSessionRepos_PersistLifecycle(t *testing.T) {
 	}
 	if s.Status != "dead" || s.DeathCause == "" {
 		t.Fatalf("expected dead session with cause, got status=%s cause=%s", s.Status, s.DeathCause)
+	}
+}
+
+func TestWorldChunkRepo_ZeroCoordinateRoundTrip(t *testing.T) {
+	dsn := requireDSN(t)
+	db, err := OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	ctx := context.Background()
+	_ = db.Exec("DELETE FROM world_chunks").Error
+
+	repo := NewWorldChunkRepo(db)
+	otherCoord := world.ChunkCoord{X: 1, Y: -1}
+	otherChunk := world.Chunk{
+		Coord: otherCoord,
+		Tiles: []world.Tile{
+			{X: 8, Y: -8, Passable: true, Kind: world.TileGrass},
+		},
+	}
+	if err := repo.SaveChunk(ctx, otherCoord, "day", otherChunk); err != nil {
+		t.Fatalf("save other chunk: %v", err)
+	}
+
+	coord := world.ChunkCoord{X: 0, Y: -1}
+	chunk := world.Chunk{
+		Coord: coord,
+		Tiles: []world.Tile{
+			{X: 0, Y: -8, Passable: true, Kind: world.TileGrass},
+			{X: 1, Y: -8, Passable: false, Kind: world.TileTree, Resource: "wood"},
+		},
+	}
+	if err := repo.SaveChunk(ctx, coord, "day", chunk); err != nil {
+		t.Fatalf("save chunk: %v", err)
+	}
+
+	got, ok, err := repo.GetChunk(ctx, coord, "day")
+	if err != nil {
+		t.Fatalf("get chunk: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected chunk found")
+	}
+	if got.Coord.X != 0 || got.Coord.Y != -1 {
+		t.Fatalf("unexpected coord: %+v", got.Coord)
+	}
+	if len(got.Tiles) != 2 {
+		t.Fatalf("expected 2 tiles, got %d", len(got.Tiles))
 	}
 }

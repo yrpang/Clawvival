@@ -23,7 +23,11 @@ func NewWorldChunkRepo(db *gorm.DB) WorldChunkRepo {
 func (r WorldChunkRepo) GetChunk(ctx context.Context, coord world.ChunkCoord, phase string) (world.Chunk, bool, error) {
 	var row model.WorldChunk
 	err := r.db.WithContext(ctx).
-		Where(&model.WorldChunk{ChunkX: int32(coord.X), ChunkY: int32(coord.Y), Phase: phase}).
+		Where(map[string]any{
+			"chunk_x": int32(coord.X),
+			"chunk_y": int32(coord.Y),
+			"phase":   phase,
+		}).
 		First(&row).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
