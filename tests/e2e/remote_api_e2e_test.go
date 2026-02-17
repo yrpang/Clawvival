@@ -61,6 +61,34 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 		if err := json.Unmarshal(indexBody, &index); err != nil {
 			t.Fatalf("unmarshal skills index: %v body=%s", err, string(indexBody))
 		}
+		skills := asSlice(index["skills"])
+		if len(skills) == 0 {
+			t.Fatalf("expected skills array in index")
+		}
+		survival := map[string]any{}
+		for _, item := range skills {
+			m := asMap(item)
+			if m["name"] == "survival" {
+				survival = m
+				break
+			}
+		}
+		if len(survival) == 0 {
+			t.Fatalf("expected survival skill in index, got=%v", index)
+		}
+		files := asSlice(survival["files"])
+		expectedFiles := []string{
+			"survival/skill.md",
+			"survival/HEARTBEAT.md",
+			"survival/MESSAGING.md",
+			"survival/RULES.md",
+			"survival/package.json",
+		}
+		for _, f := range expectedFiles {
+			if !containsString(files, f) {
+				t.Fatalf("expected file %q in skills index files=%v", f, files)
+			}
+		}
 
 		status, fileBody, err := doRequest(client, http.MethodGet, baseURL+"/skills/survival/skill.md", "", "", nil)
 		if err != nil {
@@ -71,6 +99,24 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 		}
 		if len(fileBody) == 0 {
 			t.Fatalf("skills file empty")
+		}
+
+		for _, p := range []string{
+			"/skills/survival/HEARTBEAT.md",
+			"/skills/survival/MESSAGING.md",
+			"/skills/survival/RULES.md",
+			"/skills/survival/package.json",
+		} {
+			status, body, err := doRequest(client, http.MethodGet, baseURL+p, "", "", nil)
+			if err != nil {
+				t.Fatalf("skills file request %s: %v", p, err)
+			}
+			if status != http.StatusOK {
+				t.Fatalf("skills file %s status=%d body=%s", p, status, string(body))
+			}
+			if len(body) == 0 {
+				t.Fatalf("skills file %s is empty", p)
+			}
 		}
 	})
 
@@ -243,4 +289,13 @@ func asSlice(v any) []any {
 		return s
 	}
 	return nil
+}
+
+func containsString(in []any, want string) bool {
+	for _, v := range in {
+		if s, ok := v.(string); ok && s == want {
+			return true
+		}
+	}
+	return false
 }

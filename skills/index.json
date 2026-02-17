@@ -3,7 +3,14 @@
   "skills": [
     {
       "name": "survival",
-      "path": "survival/skill.md"
+      "path": "survival/skill.md",
+      "files": [
+        "survival/skill.md",
+        "survival/HEARTBEAT.md",
+        "survival/MESSAGING.md",
+        "survival/RULES.md",
+        "survival/package.json"
+      ]
     }
   ]
 }
