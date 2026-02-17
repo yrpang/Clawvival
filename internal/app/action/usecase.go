@@ -15,6 +15,8 @@ var (
 	ErrInvalidRequest           = errors.New("invalid action request")
 	ErrInvalidActionParams      = errors.New("invalid action params")
 	ErrActionPreconditionFailed = errors.New("action precondition failed")
+	ErrActionInvalidPosition    = errors.New("action invalid position")
+	ErrActionCooldownActive     = errors.New("action cooldown active")
 )
 
 type UseCase struct {
@@ -65,7 +67,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err != nil {
 			return err
 		}
-		if !actionPreconditionsSatisfied(state, req.Intent) {
+		if !resourcePreconditionsSatisfied(state, req.Intent) {
 			return ErrActionPreconditionFailed
 		}
 		sessionID := "session-" + req.AgentID
@@ -79,12 +81,19 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err != nil {
 			return err
 		}
+		if !positionPreconditionsSatisfied(state, req.Intent, snapshot) {
+			return ErrActionInvalidPosition
+		}
+		nowAt := nowFn()
+		if err := ensureCooldownReady(txCtx, u.EventRepo, req.AgentID, req.Intent.Type, nowAt); err != nil {
+			return err
+		}
 
 		result, err := u.Settle.Settle(
 			state,
 			req.Intent,
 			survival.HeartbeatDelta{Minutes: req.DeltaMinutes},
-			nowFn(),
+			nowAt,
 			survival.WorldSnapshot{
 				TimeOfDay:         snapshot.TimeOfDay,
 				ThreatLevel:       snapshot.ThreatLevel,
@@ -98,7 +107,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if snapshot.PhaseChanged {
 			result.Events = append(result.Events, survival.DomainEvent{
 				Type:       "world_phase_changed",
-				OccurredAt: nowFn(),
+				OccurredAt: nowAt,
 				Payload: map[string]any{
 					"from": snapshot.PhaseFrom,
 					"to":   snapshot.PhaseTo,
@@ -131,7 +140,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				Events:       result.Events,
 				ResultCode:   result.ResultCode,
 			},
-			AppliedAt: nowFn(),
+			AppliedAt: nowAt,
 		}
 		if err := u.ActionRepo.SaveExecution(txCtx, execution); err != nil {
 			return err
@@ -161,7 +170,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			}
 		}
 		if u.SessionRepo != nil && result.ResultCode == survival.ResultGameOver {
-			if err := u.SessionRepo.Close(txCtx, sessionID, result.UpdatedState.DeathCause, nowFn()); err != nil {
+			if err := u.SessionRepo.Close(txCtx, sessionID, result.UpdatedState.DeathCause, nowAt); err != nil {
 				return err
 			}
 		}
@@ -190,7 +199,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	return out, nil
 }
 
-func actionPreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
+func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
 	switch intent.Type {
 	case survival.ActionBuild:
 		return survival.CanBuild(state, survival.BuildKind(intent.Params["kind"]))
@@ -204,6 +213,75 @@ func actionPreconditionsSatisfied(state survival.AgentStateAggregate, intent sur
 	default:
 		return true
 	}
+}
+
+func positionPreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent, snapshot world.Snapshot) bool {
+	if intent.Type != survival.ActionMove {
+		return true
+	}
+	dx := intent.Params["dx"]
+	dy := intent.Params["dy"]
+	if abs(dx) > 1 || abs(dy) > 1 {
+		return false
+	}
+	targetX := state.Position.X + dx
+	targetY := state.Position.Y + dy
+	for _, tile := range snapshot.VisibleTiles {
+		if tile.X == targetX && tile.Y == targetY {
+			return tile.Passable
+		}
+	}
+	return false
+}
+
+var actionCooldowns = map[survival.ActionType]time.Duration{
+	survival.ActionCombat: 10 * time.Minute,
+	survival.ActionBuild:  5 * time.Minute,
+	survival.ActionCraft:  5 * time.Minute,
+	survival.ActionFarm:   3 * time.Minute,
+	survival.ActionMove:   1 * time.Minute,
+}
+
+func ensureCooldownReady(ctx context.Context, repo ports.EventRepository, agentID string, intentType survival.ActionType, now time.Time) error {
+	cooldown, ok := actionCooldowns[intentType]
+	if !ok || repo == nil {
+		return nil
+	}
+	events, err := repo.ListByAgentID(ctx, agentID, 50)
+	if err != nil && !errors.Is(err, ports.ErrNotFound) {
+		return err
+	}
+	lastAt := time.Time{}
+	for _, evt := range events {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		decision, ok := evt.Payload["decision"].(map[string]any)
+		if !ok {
+			continue
+		}
+		intent, _ := decision["intent"].(string)
+		if intent != string(intentType) {
+			continue
+		}
+		if evt.OccurredAt.After(lastAt) {
+			lastAt = evt.OccurredAt
+		}
+	}
+	if lastAt.IsZero() {
+		return nil
+	}
+	if now.Sub(lastAt) < cooldown {
+		return ErrActionCooldownActive
+	}
+	return nil
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 func isSupportedActionType(t survival.ActionType) bool {

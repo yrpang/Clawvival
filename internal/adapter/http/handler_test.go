@@ -68,3 +68,35 @@ func TestWriteError_ActionPreconditionFailed(t *testing.T) {
 		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
 	}
 }
+
+func TestWriteError_ActionInvalidPosition(t *testing.T) {
+	ctx := &app.RequestContext{}
+	writeError(ctx, action.ErrActionInvalidPosition)
+
+	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]map[string]string
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got, want := body["error"]["code"], "action_invalid_position"; got != want {
+		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
+	}
+}
+
+func TestWriteError_ActionCooldownActive(t *testing.T) {
+	ctx := &app.RequestContext{}
+	writeError(ctx, action.ErrActionCooldownActive)
+
+	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]map[string]string
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got, want := body["error"]["code"], "action_cooldown_active"; got != want {
+		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
+	}
+}

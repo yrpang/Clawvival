@@ -221,6 +221,10 @@ func writeError(ctx *app.RequestContext, err error) {
 	switch {
 	case errors.Is(err, ErrMissingAgentIDHeader):
 		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_id", err.Error())
+	case errors.Is(err, action.ErrActionInvalidPosition):
+		writeErrorBody(ctx, consts.StatusConflict, "action_invalid_position", err.Error())
+	case errors.Is(err, action.ErrActionCooldownActive):
+		writeErrorBody(ctx, consts.StatusConflict, "action_cooldown_active", err.Error())
 	case errors.Is(err, action.ErrActionPreconditionFailed):
 		writeErrorBody(ctx, consts.StatusConflict, "action_precondition_failed", err.Error())
 	case errors.Is(err, action.ErrInvalidActionParams):

@@ -329,3 +329,77 @@ func TestUseCase_RejectsBuildWhenInventoryInsufficient(t *testing.T) {
 		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
 	}
 }
+
+func TestUseCase_RejectsMoveWhenTargetTileBlocked(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+			VisibleTiles: []world.Tile{
+				{X: 1, Y: 0, Passable: false},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-move-blocked",
+		Intent:         survival.ActionIntent{Type: survival.ActionMove, Params: map[string]int{"dx": 1, "dy": 0}},
+		DeltaMinutes:   30,
+	})
+	if !errors.Is(err, ErrActionInvalidPosition) {
+		t.Fatalf("expected ErrActionInvalidPosition, got %v", err)
+	}
+}
+
+func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{events: []survival.DomainEvent{
+		{
+			Type:       "action_settled",
+			OccurredAt: now.Add(-2 * time.Minute),
+			Payload: map[string]any{
+				"decision": map[string]any{"intent": "combat"},
+			},
+		},
+	}}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "night",
+			ThreatLevel: 3,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-combat-cooldown",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
+		DeltaMinutes:   30,
+	})
+	if !errors.Is(err, ErrActionCooldownActive) {
+		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
+	}
+}

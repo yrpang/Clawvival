@@ -557,3 +557,87 @@ func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
 		t.Fatalf("expected no persisted execution for precheck failure, got=%d", executionCount)
 	}
 }
+
+func TestUseCase_E2E_RejectsCombatDuringCooldown(t *testing.T) {
+	dsn := os.Getenv("CLAWVERSE_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVERSE_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-cooldown-precheck"
+	ctx := context.Background()
+	if err := db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup action_executions: %v", err)
+	}
+	if err := db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup domain_events: %v", err)
+	}
+	if err := db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error; err != nil {
+		t.Fatalf("cleanup agent_states: %v", err)
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+	now := time.Unix(1700006000, 0)
+
+	seed := survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   1,
+	}
+	if err := stateRepo.SaveWithVersion(ctx, seed, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	if err := eventRepo.Append(ctx, agentID, []survival.DomainEvent{
+		{
+			Type:       "action_settled",
+			OccurredAt: now.Add(-2 * time.Minute),
+			Payload: map[string]any{
+				"decision": map[string]any{"intent": "combat", "dt_minutes": 30},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("seed recent combat event: %v", err)
+	}
+
+	uc := UseCase{
+		TxManager:  txManager,
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "night",
+			ThreatLevel: 3,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	_, err = uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "combat-cooldown-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionCombat, Params: map[string]int{"target_level": 1}},
+		DeltaMinutes:   30,
+	})
+	if !errors.Is(err, ErrActionCooldownActive) {
+		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
+	}
+
+	var executionCount int64
+	if err := db.Table("action_executions").Where("agent_id = ?", agentID).Count(&executionCount).Error; err != nil {
+		t.Fatalf("count action_executions: %v", err)
+	}
+	if executionCount != 0 {
+		t.Fatalf("expected no persisted execution for cooldown failure, got=%d", executionCount)
+	}
+}
