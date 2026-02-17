@@ -12,14 +12,17 @@ const TableNameAgentState = "agent_states"
 
 // AgentState mapped from table <agent_states>
 type AgentState struct {
-	AgentID   string    `gorm:"column:agent_id;primaryKey" json:"agent_id"`
-	Hp        int32     `gorm:"column:hp;not null" json:"hp"`
-	Hunger    int32     `gorm:"column:hunger;not null" json:"hunger"`
-	Energy    int32     `gorm:"column:energy;not null" json:"energy"`
-	X         int32     `gorm:"column:x;not null" json:"x"`
-	Y         int32     `gorm:"column:y;not null" json:"y"`
-	Version   int64     `gorm:"column:version;not null" json:"version"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+	AgentID    string    `gorm:"column:agent_id;primaryKey" json:"agent_id"`
+	Hp         int32     `gorm:"column:hp;not null" json:"hp"`
+	Hunger     int32     `gorm:"column:hunger;not null" json:"hunger"`
+	Energy     int32     `gorm:"column:energy;not null" json:"energy"`
+	X          int32     `gorm:"column:x;not null" json:"x"`
+	Y          int32     `gorm:"column:y;not null" json:"y"`
+	Version    int64     `gorm:"column:version;not null" json:"version"`
+	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
+	Inventory  string    `gorm:"column:inventory" json:"inventory"`
+	Dead       bool      `gorm:"column:dead;not null" json:"dead"`
+	DeathCause string    `gorm:"column:death_cause" json:"death_cause"`
 }
 
 // TableName AgentState's table name

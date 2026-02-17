@@ -16,14 +16,16 @@ var (
 )
 
 type UseCase struct {
-	TxManager  ports.TxManager
-	StateRepo  ports.AgentStateRepository
-	ActionRepo ports.ActionExecutionRepository
-	EventRepo  ports.EventRepository
-	World      ports.WorldProvider
-	Metrics    ports.ActionMetrics
-	Settle     survival.SettlementService
-	Now        func() time.Time
+	TxManager   ports.TxManager
+	StateRepo   ports.AgentStateRepository
+	ActionRepo  ports.ActionExecutionRepository
+	EventRepo   ports.EventRepository
+	ObjectRepo  ports.WorldObjectRepository
+	SessionRepo ports.AgentSessionRepository
+	World       ports.WorldProvider
+	Metrics     ports.ActionMetrics
+	Settle      survival.SettlementService
+	Now         func() time.Time
 }
 
 func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
@@ -57,6 +59,12 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		state, err := u.StateRepo.GetByAgentID(txCtx, req.AgentID)
 		if err != nil {
 			return err
+		}
+		sessionID := "session-" + req.AgentID
+		if u.SessionRepo != nil {
+			if err := u.SessionRepo.EnsureActive(txCtx, sessionID, req.AgentID, state.Version); err != nil {
+				return err
+			}
 		}
 
 		snapshot, err := u.World.SnapshotForAgent(txCtx, req.AgentID, world.Point{X: state.Position.X, Y: state.Position.Y})
@@ -112,6 +120,31 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err := u.EventRepo.Append(txCtx, req.AgentID, result.Events); err != nil {
 			return err
 		}
+		if u.ObjectRepo != nil {
+			for _, evt := range result.Events {
+				if evt.Type != "build_completed" || evt.Payload == nil {
+					continue
+				}
+				obj := ports.WorldObjectRecord{
+					ObjectID: "obj-" + req.AgentID + "-" + req.IdempotencyKey,
+					Kind:     int(toNum(evt.Payload["kind"])),
+					X:        int(toNum(evt.Payload["x"])),
+					Y:        int(toNum(evt.Payload["y"])),
+					HP:       int(toNum(evt.Payload["hp"])),
+				}
+				if obj.HP <= 0 {
+					obj.HP = 100
+				}
+				if err := u.ObjectRepo.Save(txCtx, req.AgentID, obj); err != nil {
+					return err
+				}
+			}
+		}
+		if u.SessionRepo != nil && result.ResultCode == survival.ResultGameOver {
+			if err := u.SessionRepo.Close(txCtx, sessionID, result.UpdatedState.DeathCause, nowFn()); err != nil {
+				return err
+			}
+		}
 
 		out = Response{
 			UpdatedState: result.UpdatedState,
@@ -162,5 +195,22 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 		return intent.Params["recipe"] > 0
 	default:
 		return true
+	}
+}
+
+func toNum(v any) float64 {
+	switch n := v.(type) {
+	case int:
+		return float64(n)
+	case int32:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case float32:
+		return float64(n)
+	case float64:
+		return n
+	default:
+		return 0
 	}
 }

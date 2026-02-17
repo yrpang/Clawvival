@@ -17,6 +17,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 
 	next := state
 	next.UpdatedAt = now
+	actionEvents := make([]DomainEvent, 0, 2)
 
 	// Baseline drains per 30 mins.
 	next.Vitals.Hunger -= scaledInt(4, delta.Minutes)
@@ -36,7 +37,19 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		next.Vitals.Hunger -= scaledInt(2, delta.Minutes)
 	case ActionBuild:
 		next.Vitals.Energy -= scaledInt(14, delta.Minutes)
-		_, _ = Build(&next, BuildKind(intent.Params["kind"]), next.Position.X, next.Position.Y)
+		obj, ok := Build(&next, BuildKind(intent.Params["kind"]), next.Position.X, next.Position.Y)
+		if ok {
+			actionEvents = append(actionEvents, DomainEvent{
+				Type:       "build_completed",
+				OccurredAt: now,
+				Payload: map[string]any{
+					"kind": int(obj.Kind),
+					"x":    obj.X,
+					"y":    obj.Y,
+					"hp":   100,
+				},
+			})
+		}
 	case ActionFarm:
 		next.Vitals.Energy -= scaledInt(10, delta.Minutes)
 		next.Vitals.Hunger -= scaledInt(1, delta.Minutes)
@@ -105,6 +118,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		events = append(events, DomainEvent{Type: "critical_hp", OccurredAt: now})
 		events = append(events, DomainEvent{Type: "force_retreat", OccurredAt: now})
 	}
+	events = append(events, actionEvents...)
 
 	return SettlementResult{
 		UpdatedState: next,

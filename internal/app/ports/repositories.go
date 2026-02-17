@@ -36,3 +36,20 @@ type EventRepository interface {
 	Append(ctx context.Context, agentID string, events []survival.DomainEvent) error
 	ListByAgentID(ctx context.Context, agentID string, limit int) ([]survival.DomainEvent, error)
 }
+
+type WorldObjectRecord struct {
+	ObjectID string
+	Kind     int
+	X        int
+	Y        int
+	HP       int
+}
+
+type WorldObjectRepository interface {
+	Save(ctx context.Context, agentID string, obj WorldObjectRecord) error
+}
+
+type AgentSessionRepository interface {
+	EnsureActive(ctx context.Context, sessionID, agentID string, startTick int64) error
+	Close(ctx context.Context, sessionID string, cause survival.DeathCause, endedAt time.Time) error
+}
