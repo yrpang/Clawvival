@@ -92,7 +92,7 @@ func TestWriteError_InvalidActionParams(t *testing.T) {
 		t.Fatalf("status mismatch: got=%d want=%d", got, want)
 	}
 
-	var body map[string]map[string]string
+	var body map[string]map[string]any
 	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestWriteError_ActionPreconditionFailed(t *testing.T) {
 		t.Fatalf("status mismatch: got=%d want=%d", got, want)
 	}
 
-	var body map[string]map[string]string
+	var body map[string]map[string]any
 	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestWriteError_ActionInvalidPosition(t *testing.T) {
 	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
 		t.Fatalf("status mismatch: got=%d want=%d", got, want)
 	}
-	var body map[string]map[string]string
+	var body map[string]map[string]any
 	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestWriteError_ActionCooldownActive(t *testing.T) {
 	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
 		t.Fatalf("status mismatch: got=%d want=%d", got, want)
 	}
-	var body map[string]map[string]string
+	var body map[string]map[string]any
 	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
@@ -168,6 +168,9 @@ func TestWriteActionRejectedFromErr_TargetNotVisible(t *testing.T) {
 	errObj, _ := body["error"].(map[string]any)
 	if got, want := errObj["code"], "TARGET_NOT_VISIBLE"; got != want {
 		t.Fatalf("error code mismatch: got=%v want=%v", got, want)
+	}
+	if got, want := errObj["retryable"], false; got != want {
+		t.Fatalf("error.retryable mismatch: got=%v want=%v", got, want)
 	}
 }
 
@@ -220,6 +223,9 @@ func TestAction_RejectsClientDTField(t *testing.T) {
 	errObj, _ := body["error"].(map[string]any)
 	if got, want := errObj["code"], "dt_managed_by_server"; got != want {
 		t.Fatalf("error code mismatch: got=%q want=%q", got, want)
+	}
+	if got, want := errObj["retryable"], false; got != want {
+		t.Fatalf("error.retryable mismatch: got=%v want=%v", got, want)
 	}
 	actionErr, _ := body["action_error"].(map[string]any)
 	if got, want := actionErr["retryable"], false; got != want {
