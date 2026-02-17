@@ -11,6 +11,6 @@ type Request struct {
 }
 
 type Response struct {
-	Events      []survival.DomainEvent
-	LatestState survival.AgentStateAggregate
+	Events      []survival.DomainEvent       `json:"events"`
+	LatestState survival.AgentStateAggregate `json:"latest_state"`
 }

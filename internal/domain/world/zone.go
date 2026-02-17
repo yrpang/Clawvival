@@ -12,13 +12,13 @@ const (
 type Biome string
 
 const (
-	BiomePlain    Biome = "plain"
-	BiomeForest   Biome = "forest"
-	BiomeMountain Biome = "mountain"
+	BiomePlain     Biome = "plain"
+	BiomeForest    Biome = "forest"
+	BiomeMountain  Biome = "mountain"
 	BiomeWasteland Biome = "wasteland"
 )
 
 type Point struct {
-	X int
-	Y int
+	X int `json:"x"`
+	Y int `json:"y"`
 }

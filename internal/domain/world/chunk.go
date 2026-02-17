@@ -1,11 +1,11 @@
 package world
 
 type ChunkCoord struct {
-	X int
-	Y int
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
 type Chunk struct {
-	Coord ChunkCoord
-	Tiles []Tile
+	Coord ChunkCoord `json:"coord"`
+	Tiles []Tile     `json:"tiles"`
 }

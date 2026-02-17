@@ -11,12 +11,12 @@ const (
 )
 
 type Tile struct {
-	X          int
-	Y          int
-	Kind       TileKind
-	Zone       Zone
-	Biome      Biome
-	Passable   bool
-	Resource   string
-	BaseThreat int
+	X          int      `json:"x"`
+	Y          int      `json:"y"`
+	Kind       TileKind `json:"kind"`
+	Zone       Zone     `json:"zone"`
+	Biome      Biome    `json:"biome"`
+	Passable   bool     `json:"passable"`
+	Resource   string   `json:"resource,omitempty"`
+	BaseThreat int      `json:"base_threat"`
 }

@@ -11,7 +11,7 @@ type Request struct {
 }
 
 type Response struct {
-	UpdatedState survival.AgentStateAggregate
-	Events       []survival.DomainEvent
-	ResultCode   survival.ResultCode
+	UpdatedState survival.AgentStateAggregate `json:"updated_state"`
+	Events       []survival.DomainEvent       `json:"events"`
+	ResultCode   survival.ResultCode          `json:"result_code"`
 }

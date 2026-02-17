@@ -10,6 +10,6 @@ type Request struct {
 }
 
 type Response struct {
-	State    survival.AgentStateAggregate
-	Snapshot world.Snapshot
+	State    survival.AgentStateAggregate `json:"state"`
+	Snapshot world.Snapshot               `json:"snapshot"`
 }

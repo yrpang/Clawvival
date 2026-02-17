@@ -7,7 +7,7 @@ type Request struct {
 }
 
 type Response struct {
-	State              survival.AgentStateAggregate
-	TimeOfDay          string
-	NextPhaseInSeconds int
+	State              survival.AgentStateAggregate `json:"state"`
+	TimeOfDay          string                       `json:"time_of_day"`
+	NextPhaseInSeconds int                          `json:"next_phase_in_seconds"`
 }

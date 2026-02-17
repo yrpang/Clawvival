@@ -95,9 +95,9 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 		if err := json.Unmarshal(statusBody, &st); err != nil {
 			t.Fatalf("unmarshal status response: %v body=%s", err, string(statusBody))
 		}
-		timeOfDay, _ := st["TimeOfDay"].(string)
+		timeOfDay, _ := st["time_of_day"].(string)
 		if strings.TrimSpace(timeOfDay) == "" {
-			t.Fatalf("expected TimeOfDay in status response, got=%v", st)
+			t.Fatalf("expected time_of_day in status response, got=%v", st)
 		}
 
 		replayURL := baseURL + "/api/agent/replay?limit=20"
@@ -112,7 +112,7 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 		if err := json.Unmarshal(replayBody, &rep); err != nil {
 			t.Fatalf("unmarshal replay response: %v body=%s", err, string(replayBody))
 		}
-		if len(asSlice(rep["Events"])) == 0 {
+		if len(asSlice(rep["events"])) == 0 {
 			t.Fatalf("expected replay events in response")
 		}
 
