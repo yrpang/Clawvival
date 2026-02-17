@@ -33,5 +33,8 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		WorldTimeSeconds:   snapshot.WorldTimeSeconds,
 		TimeOfDay:          snapshot.TimeOfDay,
 		NextPhaseInSeconds: snapshot.NextPhaseInSeconds,
+		World: WorldMeta{
+			Rules: Rules{StandardTickMinutes: 30},
+		},
 	}, nil
 }

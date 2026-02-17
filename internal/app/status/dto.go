@@ -11,4 +11,13 @@ type Response struct {
 	WorldTimeSeconds   int64                        `json:"world_time_seconds"`
 	TimeOfDay          string                       `json:"time_of_day"`
 	NextPhaseInSeconds int                          `json:"next_phase_in_seconds"`
+	World              WorldMeta                    `json:"world"`
+}
+
+type WorldMeta struct {
+	Rules Rules `json:"rules"`
+}
+
+type Rules struct {
+	StandardTickMinutes int `json:"standard_tick_minutes"`
 }

@@ -35,6 +35,9 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if resp.NextPhaseInSeconds != 123 {
 		t.Fatalf("expected next phase 123, got %d", resp.NextPhaseInSeconds)
 	}
+	if resp.World.Rules.StandardTickMinutes != 30 {
+		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
+	}
 }
 
 func TestUseCase_RejectsEmptyAgentID(t *testing.T) {
