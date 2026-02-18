@@ -84,8 +84,6 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		if intent.DX != 0 || intent.DY != 0 {
 			next.Position.X += clampStep(intent.DX)
 			next.Position.Y += clampStep(intent.DY)
-		} else {
-			next.Position = moveToward(next.Position, next.Home)
 		}
 	case ActionCraft:
 		next.Vitals.Energy -= scaledInt(12, delta.Minutes)
