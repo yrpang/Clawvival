@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"clawvival/internal/app/cooldown"
 	"clawvival/internal/app/ports"
 	"clawvival/internal/app/resourcestate"
 	"clawvival/internal/app/stateview"
@@ -40,6 +41,19 @@ func (e *ResourceDepletedError) Error() string {
 
 func (e *ResourceDepletedError) Unwrap() error {
 	return ErrResourceDepleted
+}
+
+type ActionCooldownActiveError struct {
+	IntentType       survival.ActionType
+	RemainingSeconds int
+}
+
+func (e *ActionCooldownActiveError) Error() string {
+	return ErrActionCooldownActive.Error()
+}
+
+func (e *ActionCooldownActiveError) Unwrap() error {
+	return ErrActionCooldownActive
 }
 
 type ActionInvalidPositionError struct {
@@ -191,7 +205,11 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if moveErr := validateMovePosition(state, req.Intent, snapshot); moveErr != nil {
 			return moveErr
 		}
-		if err := ensureCooldownReady(txCtx, u.EventRepo, req.AgentID, req.Intent.Type, nowAt); err != nil {
+		eventsBeforeAction, err := listRecentEvents(txCtx, u.EventRepo, req.AgentID)
+		if err != nil {
+			return err
+		}
+		if err := ensureCooldownReady(eventsBeforeAction, req.Intent.Type, nowAt); err != nil {
 			return err
 		}
 		deltaMinutes, err := resolveHeartbeatDeltaMinutes(txCtx, u.EventRepo, req.AgentID, nowAt)
@@ -221,6 +239,8 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			return err
 		}
 		result.UpdatedState = stateview.Enrich(result.UpdatedState, snapshot.TimeOfDay, isCurrentTileLit(snapshot.TimeOfDay))
+		result.UpdatedState.CurrentZone = stateview.CurrentZoneAtPosition(result.UpdatedState.Position, snapshot.VisibleTiles)
+		result.UpdatedState.ActionCooldowns = cooldown.RemainingByActionWithCurrent(eventsBeforeAction, nowAt, req.Intent.Type)
 		if snapshot.PhaseChanged {
 			result.Events = append(result.Events, survival.DomainEvent{
 				Type:       "world_phase_changed",
@@ -436,46 +456,26 @@ func validateMovePosition(state survival.AgentStateAggregate, intent survival.Ac
 	return &ActionInvalidPositionError{TargetPos: targetPos}
 }
 
-var actionCooldowns = map[survival.ActionType]time.Duration{
-	survival.ActionBuild:     5 * time.Minute,
-	survival.ActionCraft:     5 * time.Minute,
-	survival.ActionFarmPlant: 3 * time.Minute,
-	survival.ActionMove:      1 * time.Minute,
+func ensureCooldownReady(events []survival.DomainEvent, intentType survival.ActionType, now time.Time) error {
+	remaining, ok := cooldown.RemainingForAction(events, intentType, now)
+	if !ok {
+		return nil
+	}
+	return &ActionCooldownActiveError{
+		IntentType:       intentType,
+		RemainingSeconds: remaining,
+	}
 }
 
-func ensureCooldownReady(ctx context.Context, repo ports.EventRepository, agentID string, intentType survival.ActionType, now time.Time) error {
-	cooldown, ok := actionCooldowns[intentType]
-	if !ok || repo == nil {
-		return nil
+func listRecentEvents(ctx context.Context, repo ports.EventRepository, agentID string) ([]survival.DomainEvent, error) {
+	if repo == nil {
+		return nil, nil
 	}
 	events, err := repo.ListByAgentID(ctx, agentID, 50)
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
-		return err
+		return nil, err
 	}
-	lastAt := time.Time{}
-	for _, evt := range events {
-		if evt.Type != "action_settled" || evt.Payload == nil {
-			continue
-		}
-		decision, ok := evt.Payload["decision"].(map[string]any)
-		if !ok {
-			continue
-		}
-		intent, _ := decision["intent"].(string)
-		if intent != string(intentType) {
-			continue
-		}
-		if evt.OccurredAt.After(lastAt) {
-			lastAt = evt.OccurredAt
-		}
-	}
-	if lastAt.IsZero() {
-		return nil
-	}
-	if now.Sub(lastAt) < cooldown {
-		return ErrActionCooldownActive
-	}
-	return nil
+	return events, nil
 }
 
 func resolveHeartbeatDeltaMinutes(ctx context.Context, repo ports.EventRepository, agentID string, now time.Time) (int, error) {

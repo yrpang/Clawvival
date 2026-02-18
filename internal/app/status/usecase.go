@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
+	"clawvival/internal/app/cooldown"
 	"clawvival/internal/app/ports"
 	"clawvival/internal/app/stateview"
+	"clawvival/internal/domain/survival"
 	"clawvival/internal/domain/world"
 )
 
@@ -14,12 +17,18 @@ var ErrInvalidRequest = errors.New("invalid status request")
 
 type UseCase struct {
 	StateRepo ports.AgentStateRepository
+	EventRepo ports.EventRepository
 	World     ports.WorldProvider
+	Now       func() time.Time
 }
 
 func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if strings.TrimSpace(req.AgentID) == "" {
 		return Response{}, ErrInvalidRequest
+	}
+	nowFn := u.Now
+	if nowFn == nil {
+		nowFn = time.Now
 	}
 	state, err := u.StateRepo.GetByAgentID(ctx, req.AgentID)
 	if err != nil {
@@ -30,7 +39,16 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	events := []survival.DomainEvent{}
+	if u.EventRepo != nil {
+		events, err = u.EventRepo.ListByAgentID(ctx, req.AgentID, 50)
+		if err != nil && !errors.Is(err, ports.ErrNotFound) {
+			return Response{}, err
+		}
+	}
 	state = stateview.Enrich(state, snapshot.TimeOfDay, isCurrentTileLit(snapshot.TimeOfDay))
+	state.CurrentZone = stateview.CurrentZoneAtPosition(state.Position, snapshot.VisibleTiles)
+	state.ActionCooldowns = cooldown.RemainingByAction(events, nowFn())
 	return Response{
 		State:              state,
 		WorldTimeSeconds:   snapshot.WorldTimeSeconds,

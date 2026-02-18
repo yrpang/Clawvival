@@ -18,10 +18,12 @@ type AgentStateAggregate struct {
 	SessionID         string             `json:"session_id,omitempty"`
 	Vitals            Vitals             `json:"vitals"`
 	Position          Position           `json:"position"`
+	CurrentZone       string             `json:"current_zone,omitempty"`
 	Home              Position           `json:"home"`
 	Inventory         map[string]int     `json:"inventory"`
 	InventoryCapacity int                `json:"inventory_capacity"`
 	InventoryUsed     int                `json:"inventory_used"`
+	ActionCooldowns   map[string]int     `json:"action_cooldowns,omitempty"`
 	StatusEffects     []string           `json:"status_effects"`
 	Dead              bool               `json:"dead"`
 	DeathCause        DeathCause         `json:"death_cause"`

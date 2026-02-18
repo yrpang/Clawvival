@@ -1047,6 +1047,10 @@ func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
 	if !errors.Is(err, ErrActionCooldownActive) {
 		t.Fatalf("expected ErrActionCooldownActive, got %v", err)
 	}
+	var cooldownErr *ActionCooldownActiveError
+	if !errors.As(err, &cooldownErr) || cooldownErr == nil || cooldownErr.RemainingSeconds <= 0 {
+		t.Fatalf("expected ActionCooldownActiveError with remaining seconds, got %v", err)
+	}
 }
 
 func TestUseCase_GatherRejectsTargetOutOfView(t *testing.T) {
@@ -1694,7 +1698,7 @@ func TestUseCase_GatherOnlyCollectsTargetResourceType(t *testing.T) {
 			ThreatLevel:      0,
 			NearbyResource:   map[string]int{"wood": 7, "stone": 9},
 			VisibleTiles: []world.Tile{
-				{X: 0, Y: 0, Passable: true, Resource: "wood"},
+				{X: 0, Y: 0, Zone: world.ZoneForest, Passable: true, Resource: "wood"},
 			},
 		}},
 		Settle: survival.SettlementService{},
@@ -1713,6 +1717,9 @@ func TestUseCase_GatherOnlyCollectsTargetResourceType(t *testing.T) {
 	}
 	if got := out.UpdatedState.Inventory["stone"]; got != 0 {
 		t.Fatalf("expected non-target stone not gathered, got=%d", got)
+	}
+	if got, want := out.UpdatedState.CurrentZone, string(world.ZoneForest); got != want {
+		t.Fatalf("expected current_zone=%q, got %q", want, got)
 	}
 }
 

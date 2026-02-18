@@ -22,9 +22,13 @@ func TestResponseJSONUsesSnakeCase(t *testing.T) {
 			Hunger: 40,
 			Energy: 70,
 		},
-		Position:   survival.Position{X: 1, Y: 2},
-		Home:       survival.Position{X: 0, Y: 0},
-		Inventory:  map[string]int{"wood": 2},
+		Position:    survival.Position{X: 1, Y: 2},
+		CurrentZone: "safe",
+		Home:        survival.Position{X: 0, Y: 0},
+		Inventory:   map[string]int{"wood": 2},
+		ActionCooldowns: map[string]int{
+			"move": 12,
+		},
 		Dead:       false,
 		DeathCause: survival.DeathCauseUnknown,
 		Version:    3,
@@ -105,6 +109,9 @@ func TestResponseJSONUsesSnakeCase(t *testing.T) {
 				stateMap := asMap(got["agent_state"])
 				if _, ok := stateMap["agent_id"]; !ok {
 					t.Fatalf("expected nested snake_case key agent_state.agent_id in %s", string(b))
+				}
+				if _, ok := stateMap["current_zone"]; !ok {
+					t.Fatalf("expected nested snake_case key agent_state.current_zone in %s", string(b))
 				}
 				if _, ok := stateMap["AgentID"]; ok {
 					t.Fatalf("unexpected nested key agent_state.AgentID in %s", string(b))

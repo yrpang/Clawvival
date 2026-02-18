@@ -39,7 +39,7 @@ func main() {
 			Now:         time.Now,
 		},
 		AuthUC:    auth.VerifyUseCase{Credentials: credRepo},
-		ObserveUC: observe.UseCase{StateRepo: stateRepo, ObjectRepo: worldObjectRepo, ResourceRepo: resourceNodeRepo, World: worldProvider, Now: time.Now},
+		ObserveUC: observe.UseCase{StateRepo: stateRepo, ObjectRepo: worldObjectRepo, EventRepo: eventRepo, ResourceRepo: resourceNodeRepo, World: worldProvider, Now: time.Now},
 		ActionUC: action.UseCase{
 			TxManager:    txManager,
 			StateRepo:    stateRepo,
@@ -53,7 +53,7 @@ func main() {
 			Settle:       survival.SettlementService{},
 			Now:          time.Now,
 		},
-		StatusUC: status.UseCase{StateRepo: stateRepo, World: worldProvider},
+		StatusUC: status.UseCase{StateRepo: stateRepo, EventRepo: eventRepo, World: worldProvider, Now: time.Now},
 		ReplayUC: replay.UseCase{Events: eventRepo},
 		SkillsUC: skills.UseCase{Provider: skillsProvider},
 		KPI:      kpiRecorder,

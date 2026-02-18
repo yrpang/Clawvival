@@ -150,6 +150,35 @@ func TestWriteError_ActionCooldownActive(t *testing.T) {
 	}
 }
 
+func TestWriteActionRejectedFromErr_ActionCooldownIncludesRemainingSeconds(t *testing.T) {
+	ctx := &app.RequestContext{}
+	err := &action.ActionCooldownActiveError{
+		IntentType:       survival.ActionMove,
+		RemainingSeconds: 42,
+	}
+	if ok := writeActionRejectedFromErr(ctx, err); !ok {
+		t.Fatalf("expected handled error")
+	}
+	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]any
+	if e := json.Unmarshal(ctx.Response.Body(), &body); e != nil {
+		t.Fatalf("unmarshal response: %v", e)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if got, want := errObj["code"], "action_cooldown_active"; got != want {
+		t.Fatalf("error code mismatch: got=%v want=%v", got, want)
+	}
+	details, _ := errObj["details"].(map[string]any)
+	if got, want := int(details["remaining_seconds"].(float64)), 42; got != want {
+		t.Fatalf("remaining_seconds mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := details["intent"], "move"; got != want {
+		t.Fatalf("intent mismatch: got=%v want=%v", got, want)
+	}
+}
+
 func TestWriteActionRejectedFromErr_ActionInvalidPositionWithDetails(t *testing.T) {
 	ctx := &app.RequestContext{}
 	err := &action.ActionInvalidPositionError{
