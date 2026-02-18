@@ -19,7 +19,7 @@ export POSTGRES_USER="${POSTGRES_USER:-clawvival}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-clawvival}"
 export POSTGRES_DB="${POSTGRES_DB:-clawvival}"
 
-export CLAWVIVAL_DB_DSN="${CLAWVIVAL_DB_DSN:-host=127.0.0.1 port=${POSTGRES_PORT} user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} sslmode=disable}"
+export DATABASE_URL="${DATABASE_URL:-host=127.0.0.1 port=${POSTGRES_PORT} user=${POSTGRES_USER} password=${POSTGRES_PASSWORD} dbname=${POSTGRES_DB} sslmode=disable}"
 
 if [[ "${1:-}" == "--prepare" ]]; then
   (
@@ -29,7 +29,7 @@ if [[ "${1:-}" == "--prepare" ]]; then
 fi
 
 echo "[clawvival] env ready"
-echo "  CLAWVIVAL_DB_DSN=$CLAWVIVAL_DB_DSN"
+echo "  DATABASE_URL=$DATABASE_URL"
 echo "  docker container=$CONTAINER_NAME (port=$POSTGRES_PORT)"
 echo ""
 echo "next:"

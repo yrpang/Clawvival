@@ -74,7 +74,7 @@ echo "$SQL_FILES" | while IFS= read -r f; do
     -d "$POSTGRES_DB" < "$f" >/dev/null
 done
 
-export CLAWVIVAL_DB_DSN="host=127.0.0.1 port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DB sslmode=disable"
+export DATABASE_URL="host=127.0.0.1 port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DB sslmode=disable"
 
 echo "running gorm/gen"
 (
@@ -82,7 +82,7 @@ echo "running gorm/gen"
   if [ ! -f go.sum ]; then
     GOCACHE=/tmp/gocache go mod download
   fi
-  GOCACHE=/tmp/gocache go run . --dsn "$CLAWVIVAL_DB_DSN" --out "$MODEL_OUT"
+  GOCACHE=/tmp/gocache go run . --dsn "$DATABASE_URL" --out "$MODEL_OUT"
 )
 
 echo "done. generated models under internal/adapter/repo/gorm/model"

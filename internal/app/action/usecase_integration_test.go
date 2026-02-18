@@ -18,9 +18,9 @@ import (
 )
 
 func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -141,9 +141,9 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 }
 
 func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -228,9 +228,9 @@ func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
 }
 
 func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -313,9 +313,9 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 }
 
 func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -389,9 +389,9 @@ func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T)
 }
 
 func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -486,9 +486,9 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 }
 
 func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -559,9 +559,9 @@ func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
 }
 
 func TestUseCase_E2E_RejectsMoveDuringCooldown(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -644,9 +644,9 @@ func TestUseCase_E2E_RejectsMoveDuringCooldown(t *testing.T) {
 }
 
 func TestUseCase_E2E_ContainerDepositWithdraw_PersistsBoxState(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -749,9 +749,9 @@ func TestUseCase_E2E_ContainerDepositWithdraw_PersistsBoxState(t *testing.T) {
 }
 
 func TestUseCase_E2E_FarmPlantHarvest_UsesFarmObjectStateMachine(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -858,9 +858,9 @@ func TestUseCase_E2E_FarmPlantHarvest_UsesFarmObjectStateMachine(t *testing.T) {
 }
 
 func TestUseCase_E2E_GatherDepletesNodeThenRespawnsAtSamePosition(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -965,9 +965,9 @@ func TestUseCase_E2E_GatherDepletesNodeThenRespawnsAtSamePosition(t *testing.T) 
 }
 
 func TestUseCase_E2E_GatherDepletionIsPerAgentMapState(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)

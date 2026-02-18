@@ -18,7 +18,7 @@ Usage:
 ```bash
 cd tools/modelgen
 go mod tidy
-go run . --dsn "$CLAWVIVAL_DB_DSN" --out ../../internal/adapter/repo/gorm/model
+go run . --dsn "$DATABASE_URL" --out ../../internal/adapter/repo/gorm/model
 ```
 
 Prerequisites:

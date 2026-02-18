@@ -11,9 +11,9 @@ import (
 )
 
 func TestProvider_GormChunkStoreCachesChunks(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {

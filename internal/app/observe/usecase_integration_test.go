@@ -14,9 +14,9 @@ import (
 )
 
 func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -92,9 +92,9 @@ func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
 }
 
 func TestUseCase_E2E_ResourceNodesRefreshAcrossTimeBuckets(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)

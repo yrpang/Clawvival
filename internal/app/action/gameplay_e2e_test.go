@@ -24,9 +24,9 @@ func absInt(v int) int {
 }
 
 func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -182,9 +182,9 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_AgentIsolationAndSharedWorldClock(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -320,9 +320,9 @@ func TestGameplayLoop_E2E_AgentIsolationAndSharedWorldClock(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -427,9 +427,9 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_DayNightNonCombatHPLossConsistent(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -554,9 +554,9 @@ func TestGameplayLoop_E2E_DayNightNonCombatHPLossConsistent(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_StarvationTriggersGameOver(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -639,9 +639,9 @@ func TestGameplayLoop_E2E_StarvationTriggersGameOver(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)
@@ -731,9 +731,9 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_WorldPhaseChangedEvent(t *testing.T) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+		t.Skip("DATABASE_URL is required for integration test")
 	}
 
 	db, err := gormrepo.OpenPostgres(dsn)

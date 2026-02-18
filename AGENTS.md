@@ -28,7 +28,7 @@
 - Use the project script to prepare local integration-test dependencies and env vars:
   - `source scripts/setup_test_env.sh --prepare`
 - This step should be run before any DB-backed integration/e2e test.
-- After prepare, tests should use exported DSN env vars from the script (for example `CLAWVIVAL_DB_DSN`).
+- After prepare, tests should use exported DSN env vars from the script (for example `DATABASE_URL`).
 - Recommended execution order:
 1. Run unit tests for the changed package(s).
 2. Prepare local integration env (`source scripts/setup_test_env.sh --prepare`).

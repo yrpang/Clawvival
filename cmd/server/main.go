@@ -67,9 +67,9 @@ func main() {
 }
 
 func mustBuildRepos() (ports.AgentStateRepository, ports.AgentCredentialRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentResourceNodeRepository, ports.AgentSessionRepository, ports.TxManager) {
-	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		log.Fatal("CLAWVIVAL_DB_DSN is required")
+		log.Fatal("DATABASE_URL is required")
 	}
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
@@ -96,7 +96,7 @@ func buildWorldProviderFromEnv() ports.WorldProvider {
 	if resources := resourcesEnv("WORLD_RESOURCES_NIGHT"); len(resources) > 0 {
 		cfg.ResourcesNight = resources
 	}
-	if dsn := strings.TrimSpace(os.Getenv("CLAWVIVAL_DB_DSN")); dsn != "" {
+	if dsn := strings.TrimSpace(os.Getenv("DATABASE_URL")); dsn != "" {
 		if db, err := gormrepo.OpenPostgres(dsn); err == nil {
 			cfg.ChunkStore = gormrepo.NewWorldChunkRepo(db)
 			cfg.ClockStateStore = gormrepo.NewWorldClockStateRepo(db)

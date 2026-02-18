@@ -6,7 +6,7 @@ MIGRATIONS_TABLE="${MIGRATIONS_TABLE:-schema_migrations}"
 SECRETS_FILE="${SECRETS_FILE:-.secrets}"
 FLY_PROXY_LOCAL_PORT="${FLY_PROXY_LOCAL_PORT:-15432}"
 FLY_PROXY_REMOTE="${FLY_PROXY_REMOTE:-5432}"
-FLY_PROXY_TARGET="${FLY_PROXY_TARGET:-calendar-db.flycast}"
+FLY_PROXY_TARGET="${FLY_PROXY_TARGET:-pgdb.flycast}"
 
 if [ ! -d "$SCHEMA_DIR" ]; then
   echo "schema dir not found: $SCHEMA_DIR" >&2
@@ -59,10 +59,10 @@ set -a
 source "$SECRETS_FILE"
 set +a
 
-DSN="${CLAWVIVAL_DB_DSN:-}"
+DSN="${DATABASE_URL:-}"
 
 if [ -z "$DSN" ]; then
-  echo "CLAWVIVAL_DB_DSN is required (from ${SECRETS_FILE})" >&2
+  echo "DATABASE_URL is required (from ${SECRETS_FILE})" >&2
   exit 1
 fi
 
