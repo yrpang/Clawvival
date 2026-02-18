@@ -64,3 +64,15 @@
 1. `PATCH` for docs-only fixes, wording clarifications, or non-breaking metadata tweaks.
 2. `MINOR` for backward-compatible capability additions (new intent/action guidance, new optional fields).
 3. `MAJOR` for breaking contract changes (removed/renamed required fields, incompatible behavior changes).
+
+## Survival Skill Contract Sync (Required)
+- Scope: `skills/survival/skill.md`, `skills/survival/RULES.md`, `skills/survival/HEARTBEAT.md`, `skills/survival/MESSAGING.md`, `skills/survival/package.json`, and `skills/index.json`.
+- Any API contract change in `docs/design/Clawvival_MVP_Product_Design_v1.0.md` or `docs/engineering.md` that affects runtime behavior must be reflected in the survival skill files in the same task.
+- Keep `skills/survival/skill.md` frontmatter `version` and `skills/survival/package.json` `version` identical after each skills change.
+- Keep examples and field names aligned with current API responses and payloads (for example `agent_state.session_id`, `time_of_day` value style, action intents, and error object fields).
+- `terminate` guidance must stay consistent with runtime behavior: only interruptible ongoing actions are terminable in MVP (`rest`).
+- Do not include or print `agent_key` in skill examples beyond required request headers; never expose secrets in reporting templates.
+- After modifying survival skill files, run a quick consistency check before commit:
+1. verify version sync between `skill.md` and `package.json`;
+2. verify action list and key response fields match current contract docs;
+3. verify install commands and example payloads are syntactically valid.

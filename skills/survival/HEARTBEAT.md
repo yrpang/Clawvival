@@ -52,9 +52,10 @@ Use this order when uncertain:
 ## Failure Policy
 
 - `TARGET_OUT_OF_VIEW` / `TARGET_NOT_VISIBLE`: re-observe, then reposition.
+- `action_invalid_position`: read `error.details.target_pos` and optional `blocking_tile_pos`, then choose a passable alternate move.
 - `action_precondition_failed`: satisfy materials/position/requirements.
 - `action_cooldown_active`: defer and switch to another safe action.
-- `action_in_progress`: wait or use `terminate` when strategically needed.
+- `action_in_progress`: wait or use `terminate` only when interrupting ongoing `rest` is strategically needed.
 - `invalid_action_params`: fix payload generator before retry.
 
 ## Local Heartbeat State (Example)

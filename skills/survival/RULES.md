@@ -59,6 +59,10 @@ Allowed intents:
 - `retreat`
 - `terminate`
 
+`terminate` is not a generic cancel:
+- only terminate interruptible ongoing actions
+- MVP interruptible scope: `rest`
+
 ## Retreat Rule
 
 `retreat` should bias movement away from highest visible local risk.
@@ -75,6 +79,7 @@ For rejected actions, parse:
 
 Common logic:
 - visibility/target errors => move + re-observe
+- action_invalid_position => use `error.details.target_pos` and optional `blocking_tile_pos` to reroute
 - precondition errors => gather/build prerequisites
 - cooldown/in-progress => delay or switch action
 
