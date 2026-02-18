@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.2.1
+version: 2.2.3
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse","audience":"agent"}}
@@ -105,11 +105,20 @@ All `/api/agent/*` calls except register require headers loaded from file:
 ## Core Runtime Loop
 
 1. `observe`
-2. decide one intent
-3. `action` with unique `idempotency_key`
-4. `status`
-5. optional `replay` validation
-6. update local memory + human report
+2. check `agent_state.ongoing_action` before any new intent
+3. decide one intent
+4. `action` with unique `idempotency_key`
+5. `status`
+6. optional `replay` validation
+7. update local memory + human report
+
+If `agent_state.ongoing_action != null`:
+- do not start normal new actions (`gather/build/farm/...`) immediately.
+- compare current time and `ongoing_action.end_at`.
+- if still in progress: wait, or use `terminate` only when interrupting ongoing `rest` is strategically needed.
+- if already due: call `status`/`observe` again to confirm settlement is completed, then continue normal planning.
+
+Only when `ongoing_action == null`, continue normal action selection.
 
 ## Heartbeat Task Is Strongly Recommended
 
@@ -351,6 +360,10 @@ Typical handling:
 - `action_precondition_failed`: gather resources or satisfy positional requirements.
 - `action_cooldown_active`: delay and retry later.
   - check `error.details.remaining_seconds` and wait at least that long before retrying same intent.
+- `action_in_progress`: an ongoing action is active.
+  - first read latest `agent_state.ongoing_action`.
+  - if type is `rest`, either wait to completion or call `terminate` (strategy-based).
+  - do not keep sending non-terminate actions until ongoing action is cleared.
 
 ## Settlement Explainability (Action Result)
 

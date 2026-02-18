@@ -30,19 +30,24 @@ Minimum verification before gameplay:
 
 1. Load credentials (`agent_id`, `agent_key`, base URL).
 2. Call `POST /api/agent/observe`.
-3. Evaluate state and world:
+3. Check `agent_state.ongoing_action` before planning new action:
+   - if `ongoing_action != null`, do not send normal new actions first.
+   - compare current time with `ongoing_action.end_at`.
+   - if still running, wait or (only for strategic interrupt) use `terminate` on ongoing `rest`.
+   - if due, call `status`/`observe` again and confirm `ongoing_action` is cleared.
+4. Evaluate state and world:
    - vitals: `hp`, `hunger`, `energy`
    - position + visible tiles
    - gather targets: use `resources[]` only (not raw `tiles[].resource_type` in night planning)
    - `time_of_day`, `next_phase_in_seconds`, threat level
    - objective milestones (`bed/box/farm_plot/farm_plant`)
-4. Choose one intent from current contract.
-5. Call `POST /api/agent/action` with:
+5. Choose one intent from current contract.
+6. Call `POST /api/agent/action` with:
    - unique `idempotency_key`
    - optional `strategy_hash`
-6. Call `POST /api/agent/status`.
-7. Optionally call replay (`GET /api/agent/replay?limit=...`) for audit.
-8. Persist local memory and emit human progress summary.
+7. Call `POST /api/agent/status`.
+8. Optionally call replay (`GET /api/agent/replay?limit=...`) for audit.
+9. Persist local memory and emit human progress summary.
 
 ## Decision Priority
 
@@ -103,7 +108,10 @@ After newcomer milestones are done, shift to exploration-oriented survival:
 - `action_precondition_failed`: satisfy materials/position/requirements.
 - `action_cooldown_active`: defer and switch to another safe action.
   - use `error.details.remaining_seconds` to schedule next retry.
-- `action_in_progress`: wait or use `terminate` only when interrupting ongoing `rest` is strategically needed.
+- `action_in_progress`: ongoing action is still active.
+  - immediately re-read `agent_state.ongoing_action`.
+  - do not keep sending non-terminate actions while ongoing action exists.
+  - for ongoing `rest`, either wait to completion or call `terminate` if strategy requires immediate switch.
 - `invalid_action_params`: fix payload generator before retry.
 
 ## Local Heartbeat State (Example)
