@@ -47,6 +47,11 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -3 || got.DeltaEnergy != -18 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
 	}
+	if got, ok := resp.ActionCosts["terminate"]; !ok {
+		t.Fatalf("expected terminate action cost configured")
+	} else if got.BaseMinutes != 1 || got.DeltaHunger != 0 || got.DeltaEnergy != 0 {
+		t.Fatalf("terminate action cost mismatch: %+v", got)
+	}
 	if resp.State.InventoryUsed != 3 {
 		t.Fatalf("expected inventory_used=3, got=%d", resp.State.InventoryUsed)
 	}

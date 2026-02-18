@@ -430,6 +430,7 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 		ActionRepo: actionRepo,
 		EventRepo:  eventRepo,
 		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 3600,
 			TimeOfDay:      "day",
 			ThreatLevel:    1,
 			NearbyResource: map[string]int{"wood": 1},
@@ -474,6 +475,12 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 	}
 	if rec := actionRepo.byKey["agent-1|rest-terminate"]; rec.DT != 10 {
 		t.Fatalf("expected terminate execution dt=10, got=%d", rec.DT)
+	}
+	if got, want := out.WorldTimeBeforeSeconds, int64(3600); got != want {
+		t.Fatalf("expected world_time_before_seconds=%d, got=%d", want, got)
+	}
+	if got, want := out.WorldTimeAfterSeconds, int64(4200); got != want {
+		t.Fatalf("expected world_time_after_seconds=%d, got=%d", want, got)
 	}
 	foundEnded := false
 	for _, evt := range out.Events {
@@ -525,6 +532,44 @@ func TestUseCase_TerminateWithoutOngoingReturnsPreconditionFailed(t *testing.T) 
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "terminate-no-ongoing",
+		Intent:         survival.ActionIntent{Type: survival.ActionTerminate},
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
+func TestUseCase_TerminateRejectsNonInterruptibleOngoingAction(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			OngoingAction: &survival.OngoingActionInfo{
+				Type:    survival.ActionGather,
+				Minutes: 30,
+				EndAt:   now.Add(20 * time.Minute),
+			},
+			Version: 1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{WorldTimeSeconds: 100, TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return now },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "terminate-non-interruptible",
 		Intent:         survival.ActionIntent{Type: survival.ActionTerminate},
 	})
 	if !errors.Is(err, ErrActionPreconditionFailed) {

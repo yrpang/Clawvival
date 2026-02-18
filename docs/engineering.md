@@ -306,10 +306,15 @@ flowchart LR
 `POST /api/agent/action` 约束：
 - 必填：`idempotency_key`, `intent`
 - 禁止字段：`dt`（服务端计算）
-- intent 集：`move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat`
+- intent 集：`move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat/terminate`
 - 引用规则：交互类动作优先使用 `*_id`，放置类使用 `pos`
 - 鉴权上下文注入：`agent_id`（不依赖 body 明文字段）
 - 可选只读元信息：`strategy_hash`
+
+`terminate` 约束：
+- 语义：中止进行中动作并立即结算已发生时长。
+- MVP 可中止范围：仅 `rest`（其余进行中状态视为不可中止）。
+- 响应必须返回与结算一致的 `settled_dt_minutes` 与 `world_time_before_seconds/world_time_after_seconds`。
 
 `POST /api/agent/action` 响应语义：
 - `result_code`：`OK | REJECTED | FAILED`
@@ -572,7 +577,7 @@ sequenceDiagram
 2. 动作系统重构（P0）
 - [x] 移除 `combat` 主路径与相关契约/测试
 - [x] 按 v1.0 实现 intents：
-  `move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat`
+  `move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat/terminate`
 - [x] 动作参数从“枚举数值参数”逐步迁移到“可解释参数”（`direction`、`*_id`、`pos`）
 - [x] 响应补齐 `settled_dt_minutes` 与世界时间推进字段
 

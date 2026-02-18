@@ -67,6 +67,11 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -3 || got.DeltaEnergy != -18 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
 	}
+	if got, ok := resp.ActionCosts["terminate"]; !ok {
+		t.Fatalf("expected terminate action cost configured")
+	} else if got.BaseMinutes != 1 || got.DeltaHunger != 0 || got.DeltaEnergy != 0 {
+		t.Fatalf("terminate action cost mismatch: %+v", got)
+	}
 	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != 1 || got[1] != 3 {
 		t.Fatalf("expected wheat_yield_range [1,3], got=%v", got)
 	}
