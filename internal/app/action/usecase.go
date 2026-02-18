@@ -33,6 +33,7 @@ const (
 	targetViewRadius             = 5
 	defaultFarmGrowMinutes       = 60
 	seedPityMaxFails             = 8
+	actionNightVisionRadius      = 3
 )
 
 type UseCase struct {
@@ -184,6 +185,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			})
 		}
 		applySeedPityIfNeeded(txCtx, req.Intent, &result, state, u.EventRepo, req.AgentID)
+		attachLastKnownThreat(&result, snapshot)
 
 		if err := u.StateRepo.SaveWithVersion(txCtx, result.UpdatedState, state.Version); err != nil {
 			return err
@@ -613,6 +615,12 @@ func validateTargetVisibility(center survival.Position, intent survival.ActionIn
 	if tx < center.X-targetViewRadius || tx > center.X+targetViewRadius || ty < center.Y-targetViewRadius || ty > center.Y+targetViewRadius {
 		return ErrTargetOutOfView
 	}
+	if strings.EqualFold(snapshot.TimeOfDay, "night") {
+		dist := abs(tx-center.X) + abs(ty-center.Y)
+		if dist > actionNightVisionRadius {
+			return ErrTargetNotVisible
+		}
+	}
 	for _, tile := range snapshot.VisibleTiles {
 		if tile.X == tx && tile.Y == ty {
 			return nil
@@ -978,6 +986,42 @@ func findActionSettledEvent(events []survival.DomainEvent) *survival.DomainEvent
 	return nil
 }
 
+func attachLastKnownThreat(result *survival.SettlementResult, snapshot world.Snapshot) {
+	if result == nil {
+		return
+	}
+	threat, ok := strongestVisibleThreat(snapshot)
+	if !ok {
+		return
+	}
+	for i := range result.Events {
+		if result.Events[i].Type != "game_over" || result.Events[i].Payload == nil {
+			continue
+		}
+		result.Events[i].Payload["last_known_threat"] = map[string]any{
+			"id":           fmt.Sprintf("thr_%d_%d", threat.X, threat.Y),
+			"type":         "wild",
+			"pos":          map[string]int{"x": threat.X, "y": threat.Y},
+			"danger_score": min(100, threat.BaseThreat*25),
+		}
+	}
+}
+
+func strongestVisibleThreat(snapshot world.Snapshot) (world.Tile, bool) {
+	best := world.Tile{}
+	found := false
+	for _, tile := range snapshot.VisibleTiles {
+		if tile.BaseThreat <= 0 {
+			continue
+		}
+		if !found || tile.BaseThreat > best.BaseThreat {
+			found = true
+			best = tile
+		}
+	}
+	return best, found
+}
+
 func resolveRetreatIntent(intent survival.ActionIntent, pos survival.Position, tiles []world.Tile) survival.ActionIntent {
 	if intent.Type != survival.ActionRetreat {
 		return intent
@@ -1072,4 +1116,11 @@ func toNum(v any) float64 {
 	default:
 		return 0
 	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -137,6 +137,50 @@ func TestUseCase_ProjectsVisibleObjectsOnly(t *testing.T) {
 	}
 }
 
+func TestUseCase_NightVisibilityRadiusMasksOuterTiles(t *testing.T) {
+	tiles := make([]world.Tile, 0, 121)
+	for y := -5; y <= 5; y++ {
+		for x := -5; x <= 5; x++ {
+			tiles = append(tiles, world.Tile{
+				X:        x,
+				Y:        y,
+				Kind:     world.TileGrass,
+				Passable: true,
+				Resource: "wood",
+			})
+		}
+	}
+	uc := UseCase{
+		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+			AgentID:  "agent-1",
+			Position: survival.Position{X: 0, Y: 0},
+		}},
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay:    "night",
+			VisibleTiles: tiles,
+		}},
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	visible := 0
+	for _, t := range resp.Tiles {
+		if t.IsVisible {
+			visible++
+		}
+	}
+	if visible != 25 {
+		t.Fatalf("expected night visible tiles=25 (radius 3 Manhattan), got %d", visible)
+	}
+	for _, res := range resp.Resources {
+		if abs(res.Pos.X)+abs(res.Pos.Y) > 3 {
+			t.Fatalf("resource outside night visibility leaked: %+v", res)
+		}
+	}
+}
+
 type observeStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error

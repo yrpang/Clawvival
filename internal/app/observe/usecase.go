@@ -17,6 +17,7 @@ var ErrInvalidRequest = errors.New("invalid observe request")
 const (
 	fixedViewRadius = 5
 	fixedViewSize   = fixedViewRadius*2 + 1
+	nightVisionRadius = 3
 )
 
 type UseCase struct {
@@ -218,6 +219,10 @@ func extractObjectState(obj ports.WorldObjectRecord) string {
 
 func buildWindowTiles(center world.Point, timeOfDay string, visible []world.Tile) []ObservedTile {
 	isLit := timeOfDay == "day"
+	visionRadius := fixedViewRadius
+	if !isLit {
+		visionRadius = nightVisionRadius
+	}
 	visibleByPos := make(map[string]world.Tile, len(visible))
 	for _, tile := range visible {
 		visibleByPos[posKey(tile.X, tile.Y)] = tile
@@ -237,12 +242,14 @@ func buildWindowTiles(center world.Point, timeOfDay string, visible []world.Tile
 				})
 				continue
 			}
+			dist := abs(x-center.X) + abs(y-center.Y)
+			isVisible := dist <= visionRadius
 			out = append(out, ObservedTile{
 				Pos:          world.Point{X: x, Y: y},
 				TerrainType:  string(tile.Kind),
 				IsWalkable:   tile.Passable,
 				IsLit:        isLit,
-				IsVisible:    true,
+				IsVisible:    isVisible,
 				ResourceType: tile.Resource,
 				BaseThreat:   tile.BaseThreat,
 			})
@@ -260,4 +267,11 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }

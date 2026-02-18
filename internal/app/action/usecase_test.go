@@ -801,6 +801,38 @@ func TestUseCase_GatherRejectsTargetNotVisible(t *testing.T) {
 	}
 }
 
+func TestUseCase_GatherRejectsNightTargetOutsideVisionRadius(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "night",
+			ThreatLevel: 2,
+			VisibleTiles: []world.Tile{
+				{X: 4, Y: 0, Passable: true},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-night-hidden",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_4_0_wood"},
+	})
+	if !errors.Is(err, ErrTargetNotVisible) {
+		t.Fatalf("expected ErrTargetNotVisible, got %v", err)
+	}
+}
+
 func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
@@ -1074,5 +1106,59 @@ func TestUseCase_RetreatAvoidsBlockedTile(t *testing.T) {
 	}
 	if out.UpdatedState.Position.X == -1 && out.UpdatedState.Position.Y == 0 {
 		t.Fatalf("retreat selected blocked tile")
+	}
+}
+
+func TestUseCase_GameOverEventIncludesLastKnownThreatWhenVisible(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 1, Hunger: -200, Energy: -50},
+			Position:  survival.Position{X: 0, Y: 0},
+			Home:      survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 100,
+			TimeOfDay:        "night",
+			ThreatLevel:      3,
+			VisibleTiles: []world.Tile{
+				{X: 1, Y: 1, BaseThreat: 4},
+				{X: -1, Y: 0, BaseThreat: 2},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700007000, 0) },
+	}
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gameover-threat",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	found := false
+	for _, evt := range out.Events {
+		if evt.Type != "game_over" {
+			continue
+		}
+		found = true
+		last, _ := evt.Payload["last_known_threat"].(map[string]any)
+		if last == nil || last["id"] == nil {
+			t.Fatalf("expected last_known_threat in game_over payload, got=%v", evt.Payload["last_known_threat"])
+		}
+	}
+	if !found {
+		t.Fatalf("expected game_over event")
 	}
 }
