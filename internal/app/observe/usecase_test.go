@@ -107,15 +107,20 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 			Inventory: map[string]int{"wood": 2, "stone": 1},
 		}},
 		World: observeWorldProvider{snapshot: world.Snapshot{
-			TimeOfDay:    "day",
-			ThreatLevel:  2,
-			VisibleTiles: []world.Tile{{X: 0, Y: 0, Kind: world.TileTree, Passable: false, Resource: "wood", BaseThreat: 2}},
+			TimeOfDay:   "day",
+			ThreatLevel: 2,
+			VisibleTiles: []world.Tile{{
+				X: 0, Y: 0, Kind: world.TileTree, Zone: world.ZoneForest, Passable: false, Resource: "wood", BaseThreat: 2,
+			}},
 		}},
 	}
 
 	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
+	}
+	if got, want := resp.State.CurrentZone, string(world.ZoneForest); got != want {
+		t.Fatalf("expected current_zone=%q, got %q", want, got)
 	}
 	if resp.LocalThreatLevel != 2 {
 		t.Fatalf("expected local threat level 2, got %d", resp.LocalThreatLevel)
@@ -277,6 +282,40 @@ func TestUseCase_HidesDepletedGatherTargetAndUpdatesNearbySummary(t *testing.T) 
 	}
 }
 
+func TestUseCase_IncludesActionCooldownsInAgentState(t *testing.T) {
+	now := time.Unix(1700100000, 0)
+	uc := UseCase{
+		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+			AgentID:  "agent-1",
+			Position: survival.Position{X: 0, Y: 0},
+		}},
+		EventRepo: observeEventRepo{eventsByAgent: map[string][]survival.DomainEvent{
+			"agent-1": {
+				{
+					Type:       "action_settled",
+					OccurredAt: now.Add(-20 * time.Second),
+					Payload: map[string]any{
+						"decision": map[string]any{"intent": "move"},
+					},
+				},
+			},
+		}},
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay:    "day",
+			VisibleTiles: []world.Tile{{X: 0, Y: 0, Zone: world.ZoneSafe, Passable: true}},
+		}},
+		Now: func() time.Time { return now },
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if resp.State.ActionCooldowns["move"] <= 0 {
+		t.Fatalf("expected move cooldown remaining in agent_state, got=%v", resp.State.ActionCooldowns)
+	}
+}
+
 type observeStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error
@@ -296,6 +335,11 @@ func (r observeStateRepo) SaveWithVersion(_ context.Context, _ survival.AgentSta
 type observeWorldProvider struct {
 	snapshot world.Snapshot
 	err      error
+}
+
+type observeEventRepo struct {
+	eventsByAgent map[string][]survival.DomainEvent
+	err           error
 }
 
 type observeResourceRepo struct {
@@ -325,6 +369,23 @@ func (r observeObjectRepo) ListByAgentID(_ context.Context, _ string) ([]ports.W
 
 func (r observeObjectRepo) Update(_ context.Context, _ string, _ ports.WorldObjectRecord) error {
 	return nil
+}
+
+func (r observeEventRepo) Append(_ context.Context, _ string, _ []survival.DomainEvent) error {
+	return nil
+}
+
+func (r observeEventRepo) ListByAgentID(_ context.Context, agentID string, _ int) ([]survival.DomainEvent, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	events := r.eventsByAgent[agentID]
+	if len(events) == 0 {
+		return nil, ports.ErrNotFound
+	}
+	out := make([]survival.DomainEvent, len(events))
+	copy(out, events)
+	return out, nil
 }
 
 func (r observeResourceRepo) Upsert(_ context.Context, _ ports.AgentResourceNodeRecord) error {
@@ -359,3 +420,4 @@ var _ ports.AgentStateRepository = observeStateRepo{}
 var _ ports.WorldProvider = observeWorldProvider{}
 var _ ports.WorldObjectRepository = observeObjectRepo{}
 var _ ports.AgentResourceNodeRepository = observeResourceRepo{}
+var _ ports.EventRepository = observeEventRepo{}

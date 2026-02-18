@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.1.2
+version: 2.1.4
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse","audience":"agent"}}
@@ -128,6 +128,8 @@ curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/observe" \
 Key response fields:
 - `agent_state` (not `state`)
 - `agent_state.session_id` for same-session objective tracking
+- `agent_state.current_zone` for current zone context (`safe|forest|quarry|wild`)
+- `agent_state.action_cooldowns` for per-intent remaining cooldown seconds (when active)
 - top-level `world_time_seconds`, `time_of_day`, `next_phase_in_seconds`
 - top-level `hp_drain_feedback` (whether HP is currently dropping, estimated loss per 30m, causes)
 - `view` + `tiles` + `resources/objects/threats`
@@ -179,6 +181,8 @@ curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/status" \
 Key response fields:
 - `agent_state` (not `state`)
 - `agent_state.session_id`
+- `agent_state.current_zone`
+- `agent_state.action_cooldowns`
 - `world_time_seconds`, `time_of_day`, `next_phase_in_seconds`
 - `hp_drain_feedback`
 - `world.rules` and `action_costs`
@@ -315,6 +319,7 @@ Typical handling:
 - `CONTAINER_FULL`: use another container or withdraw items first.
 - `action_precondition_failed`: gather resources or satisfy positional requirements.
 - `action_cooldown_active`: delay and retry later.
+  - check `error.details.remaining_seconds` and wait at least that long before retrying same intent.
 
 ## Settlement Explainability (Action Result)
 

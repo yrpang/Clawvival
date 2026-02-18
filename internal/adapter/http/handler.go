@@ -360,7 +360,13 @@ func writeActionRejectedFromErr(ctx *app.RequestContext, err error) bool {
 		writeActionRejected(ctx, consts.StatusConflict, "action_invalid_position", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, details)
 		return true
 	case errors.Is(err, action.ErrActionCooldownActive):
-		writeActionRejected(ctx, consts.StatusConflict, "action_cooldown_active", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		details := map[string]any{}
+		var cooldownErr *action.ActionCooldownActiveError
+		if errors.As(err, &cooldownErr) && cooldownErr != nil {
+			details["intent"] = string(cooldownErr.IntentType)
+			details["remaining_seconds"] = cooldownErr.RemainingSeconds
+		}
+		writeActionRejected(ctx, consts.StatusConflict, "action_cooldown_active", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, details)
 		return true
 	case errors.Is(err, action.ErrActionInProgress):
 		writeActionRejected(ctx, consts.StatusConflict, "action_in_progress", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)

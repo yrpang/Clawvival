@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"clawvival/internal/app/ports"
 	"clawvival/internal/domain/survival"
@@ -22,6 +23,9 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 		WorldTimeSeconds:   456,
 		TimeOfDay:          "night",
 		NextPhaseInSeconds: 123,
+		VisibleTiles: []world.Tile{
+			{X: 3, Y: 4, Zone: world.ZoneQuarry, Passable: true},
+		},
 	}}
 
 	uc := UseCase{StateRepo: repo, World: worldProvider}
@@ -37,6 +41,9 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	}
 	if resp.NextPhaseInSeconds != 123 {
 		t.Fatalf("expected next phase 123, got %d", resp.NextPhaseInSeconds)
+	}
+	if got, want := resp.State.CurrentZone, string(world.ZoneQuarry); got != want {
+		t.Fatalf("expected current_zone=%q, got %q", want, got)
 	}
 	if got, want := resp.State.SessionID, "session-agent-1"; got != want {
 		t.Fatalf("expected session_id=%q, got %q", want, got)
@@ -112,6 +119,38 @@ func TestUseCase_PropagatesWorldError(t *testing.T) {
 	}
 }
 
+func TestUseCase_IncludesActionCooldownsInAgentState(t *testing.T) {
+	now := time.Unix(1700100000, 0)
+	uc := UseCase{
+		StateRepo: statusStateRepo{state: survival.AgentStateAggregate{
+			AgentID:  "agent-1",
+			Position: survival.Position{X: 0, Y: 0},
+		}},
+		EventRepo: statusEventRepo{events: []survival.DomainEvent{
+			{
+				Type:       "action_settled",
+				OccurredAt: now.Add(-20 * time.Second),
+				Payload: map[string]any{
+					"decision": map[string]any{"intent": "move"},
+				},
+			},
+		}},
+		World: statusWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay:    "day",
+			VisibleTiles: []world.Tile{{X: 0, Y: 0, Zone: world.ZoneSafe, Passable: true}},
+		}},
+		Now: func() time.Time { return now },
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if resp.State.ActionCooldowns["move"] <= 0 {
+		t.Fatalf("expected move cooldown remaining in agent_state, got=%v", resp.State.ActionCooldowns)
+	}
+}
+
 type statusStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error
@@ -133,11 +172,32 @@ type statusWorldProvider struct {
 	err      error
 }
 
+type statusEventRepo struct {
+	events []survival.DomainEvent
+	err    error
+}
+
 func (p statusWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ world.Point) (world.Snapshot, error) {
 	if p.err != nil {
 		return world.Snapshot{}, p.err
 	}
 	return p.snapshot, nil
+}
+
+func (r statusEventRepo) Append(_ context.Context, _ string, _ []survival.DomainEvent) error {
+	return nil
+}
+
+func (r statusEventRepo) ListByAgentID(_ context.Context, _ string, _ int) ([]survival.DomainEvent, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	if len(r.events) == 0 {
+		return nil, ports.ErrNotFound
+	}
+	out := make([]survival.DomainEvent, len(r.events))
+	copy(out, r.events)
+	return out, nil
 }
 
 var _ ports.AgentStateRepository = statusStateRepo{}

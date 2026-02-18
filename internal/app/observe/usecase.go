@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"clawvival/internal/app/cooldown"
 	"clawvival/internal/app/ports"
 	"clawvival/internal/app/resourcestate"
 	"clawvival/internal/app/stateview"
+	"clawvival/internal/domain/survival"
 	"clawvival/internal/domain/world"
 )
 
@@ -25,6 +27,7 @@ const (
 type UseCase struct {
 	StateRepo    ports.AgentStateRepository
 	ObjectRepo   ports.WorldObjectRepository
+	EventRepo    ports.EventRepository
 	ResourceRepo ports.AgentResourceNodeRepository
 	World        ports.WorldProvider
 	Now          func() time.Time
@@ -51,8 +54,17 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	events := []survival.DomainEvent{}
+	if u.EventRepo != nil {
+		events, err = u.EventRepo.ListByAgentID(ctx, req.AgentID, 50)
+		if err != nil && !errors.Is(err, ports.ErrNotFound) {
+			return Response{}, err
+		}
+	}
 	applyDepletedResourcesToSnapshot(&snapshot, depleted)
 	state = stateview.Enrich(state, snapshot.TimeOfDay, isCurrentTileLit(snapshot.TimeOfDay))
+	state.CurrentZone = stateview.CurrentZoneAtPosition(state.Position, snapshot.VisibleTiles)
+	state.ActionCooldowns = cooldown.RemainingByAction(events, nowFn())
 	tiles := buildWindowTiles(world.Point{X: state.Position.X, Y: state.Position.Y}, snapshot.TimeOfDay, snapshot.VisibleTiles)
 	objects := []ObservedObject{}
 	if u.ObjectRepo != nil {
