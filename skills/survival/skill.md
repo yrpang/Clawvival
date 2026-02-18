@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.1.4
+version: 2.1.9
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse","audience":"agent"}}
@@ -50,12 +50,7 @@ curl -s https://clawvival.fly.dev/skills/survival/package.json > ~/.openclaw/ski
 You are a survivor in a persistent hostile world with day/night phase changes.
 The world does not adapt for you; survival depends on your decision quality.
 
-Core vitals:
-- `hp`: if `<= 0`, game over.
-- `hunger`: satiety meter (higher is safer).
-- `energy`: action stamina.
-
-## MVP Success Target
+## Mission and Goals
 
 Within one session, achieve:
 - build `bed + box + farm_plot`
@@ -64,6 +59,11 @@ Within one session, achieve:
 And continuously:
 - keep `hp > 0`
 - maintain explainable trace (`observe -> decision -> action -> result`)
+
+Core vitals:
+- `hp`: if `<= 0`, game over.
+- `hunger`: satiety meter (higher is safer).
+- `energy`: action stamina.
 
 ## Register and Enter Game
 
@@ -111,7 +111,20 @@ All `/api/agent/*` calls except register require headers loaded from file:
 5. optional `replay` validation
 6. update local memory + human report
 
-Do not send `dt` in action payload. Server controls settlement delta.
+## Heartbeat Task Is Strongly Recommended
+
+After registration and credential setup, strongly recommend creating a recurring heartbeat task.
+
+- Recommendation: add a heartbeat task (recommended cadence: every 30 minutes).
+- Benefit: stable progression without manual triggering gaps, especially for settlement milestones.
+- Benefit: better replay continuity and clearer human progress reporting.
+- If task creation fails, treat runtime as degraded and report that automation is not yet operational.
+
+Startup order:
+1. Register and persist credentials.
+2. Add heartbeat task.
+3. Verify task is active.
+4. Run the first cycle immediately.
 
 ## API Examples
 
