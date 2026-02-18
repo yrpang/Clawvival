@@ -333,25 +333,22 @@ func worldTimeWindowFromExecution(exec *ports.ActionExecutionRecord) (int64, int
 	if exec == nil {
 		return 0, 0
 	}
-	for _, evt := range exec.Result.Events {
-		if evt.Type != "action_settled" || evt.Payload == nil {
-			continue
-		}
-		beforeRaw, hasBefore := evt.Payload["world_time_before_seconds"]
-		afterRaw, hasAfter := evt.Payload["world_time_after_seconds"]
-		if !hasBefore || !hasAfter {
-			continue
-		}
-		before := int64(toNum(beforeRaw))
-		after := int64(toNum(afterRaw))
+	if before, after, ok := worldTimeWindowFromEventPayload(exec.Result.Events); ok {
 		return before, after
 	}
 	return worldTimeWindow(0, exec.DT)
 }
 
 func worldTimeWindowFromEvents(events []survival.DomainEvent, fallbackBefore int64, dtMinutes int) (int64, int64) {
+	if before, after, ok := worldTimeWindowFromEventPayload(events); ok {
+		return before, after
+	}
+	return worldTimeWindow(fallbackBefore, dtMinutes)
+}
+
+func worldTimeWindowFromEventPayload(events []survival.DomainEvent) (int64, int64, bool) {
 	for _, evt := range events {
-		if evt.Type != "action_settled" || evt.Payload == nil {
+		if evt.Payload == nil {
 			continue
 		}
 		beforeRaw, hasBefore := evt.Payload["world_time_before_seconds"]
@@ -359,9 +356,9 @@ func worldTimeWindowFromEvents(events []survival.DomainEvent, fallbackBefore int
 		if !hasBefore || !hasAfter {
 			continue
 		}
-		return int64(toNum(beforeRaw)), int64(toNum(afterRaw))
+		return int64(toNum(beforeRaw)), int64(toNum(afterRaw)), true
 	}
-	return worldTimeWindow(fallbackBefore, dtMinutes)
+	return 0, 0, false
 }
 
 func isInterruptibleOngoingActionType(t survival.ActionType) bool {
@@ -655,6 +652,10 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 
 func startRestAction(ctx context.Context, u UseCase, req Request, state survival.AgentStateAggregate, nowAt time.Time) (Response, error) {
 	restMinutes := req.Intent.RestMinutes
+	snapshot, err := u.World.SnapshotForAgent(ctx, req.AgentID, world.Point{X: state.Position.X, Y: state.Position.Y})
+	if err != nil {
+		return Response{}, err
+	}
 	next := state
 	next.OngoingAction = &survival.OngoingActionInfo{
 		Type:    survival.ActionRest,
@@ -672,6 +673,8 @@ func startRestAction(ctx context.Context, u UseCase, req Request, state survival
 			"session_id":   "session-" + req.AgentID,
 			"rest_minutes": restMinutes,
 			"end_at":       next.OngoingAction.EndAt,
+			"world_time_before_seconds": snapshot.WorldTimeSeconds,
+			"world_time_after_seconds":  snapshot.WorldTimeSeconds,
 		},
 	}
 	if req.StrategyHash != "" {
@@ -692,8 +695,8 @@ func startRestAction(ctx context.Context, u UseCase, req Request, state survival
 	}
 	return Response{
 		SettledDTMinutes:       0,
-		WorldTimeBeforeSeconds: 0,
-		WorldTimeAfterSeconds:  0,
+		WorldTimeBeforeSeconds: snapshot.WorldTimeSeconds,
+		WorldTimeAfterSeconds:  snapshot.WorldTimeSeconds,
 		UpdatedState:           next,
 		Events:                 []survival.DomainEvent{event},
 		ResultCode:             survival.ResultOK,

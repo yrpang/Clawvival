@@ -102,6 +102,33 @@ func TestSettlementService_CriticalHPAutoRetreatsTowardHome(t *testing.T) {
 	}
 }
 
+func TestSettlementService_NoCriticalEventsAboveCriticalThreshold(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 28, Hunger: -100, Energy: 100},
+		Position: Position{X: 5, Y: 5},
+		Home:     Position{X: 0, Y: 0},
+		Version:  1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{Type: ActionGather}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if out.ResultCode != ResultOK {
+		t.Fatalf("expected result ok, got %s", out.ResultCode)
+	}
+	if got, want := out.UpdatedState.Vitals.HP, 19; got != want {
+		t.Fatalf("expected hp=%d, got %d", want, got)
+	}
+	for _, evt := range out.Events {
+		if evt.Type == "critical_hp" || evt.Type == "force_retreat" {
+			t.Fatalf("did not expect critical events above threshold, got=%s", evt.Type)
+		}
+	}
+}
+
 func TestSettlementService_MoveChangesPositionAndConsumesEnergy(t *testing.T) {
 	svc := SettlementService{}
 	state := AgentStateAggregate{

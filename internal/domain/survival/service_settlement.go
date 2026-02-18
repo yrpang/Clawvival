@@ -8,6 +8,8 @@ import (
 
 var ErrInvalidDelta = errors.New("invalid delta minutes")
 
+const criticalHPThreshold = 15
+
 type SettlementService struct{}
 
 func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, delta HeartbeatDelta, now time.Time, snapshot WorldSnapshot) (SettlementResult, error) {
@@ -198,7 +200,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 			},
 		})
 		resultCode = ResultGameOver
-	} else if next.Vitals.HP <= 20 {
+	} else if next.Vitals.HP <= criticalHPThreshold {
 		next.Position = moveToward(next.Position, next.Home)
 		events = append(events, DomainEvent{Type: "critical_hp", OccurredAt: now})
 		events = append(events, DomainEvent{Type: "force_retreat", OccurredAt: now})

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"clawvival/internal/app/ports"
 	"clawvival/internal/domain/survival"
 )
 
@@ -98,6 +99,22 @@ func TestUseCase_FiltersEventsBySessionID(t *testing.T) {
 	}
 }
 
+func TestUseCase_EmptyEventsReturnsEmptyResponse(t *testing.T) {
+	repo := fakeRepoErr{err: ports.ErrNotFound}
+	uc := UseCase{Events: repo}
+
+	out, err := uc.Execute(context.Background(), Request{AgentID: "agent-1", Limit: 10})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if got := len(out.Events); got != 0 {
+		t.Fatalf("expected empty events, got=%d", got)
+	}
+	if got, want := out.LatestState.AgentID, "agent-1"; got != want {
+		t.Fatalf("expected latest state agent id=%s, got=%s", want, got)
+	}
+}
+
 type fakeRepo struct {
 	events []survival.DomainEvent
 }
@@ -125,4 +142,16 @@ func (r fakeRepoWithLimit) ListByAgentID(_ context.Context, _ string, limit int)
 	out := make([]survival.DomainEvent, limit)
 	copy(out, r.events[:limit])
 	return out, nil
+}
+
+type fakeRepoErr struct {
+	err error
+}
+
+func (r fakeRepoErr) Append(_ context.Context, _ string, _ []survival.DomainEvent) error {
+	return nil
+}
+
+func (r fakeRepoErr) ListByAgentID(_ context.Context, _ string, _ int) ([]survival.DomainEvent, error) {
+	return nil, r.err
 }

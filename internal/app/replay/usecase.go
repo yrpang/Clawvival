@@ -30,7 +30,11 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	}
 	events, err := u.Events.ListByAgentID(ctx, req.AgentID, fetchLimit)
 	if err != nil {
-		return Response{}, err
+		if errors.Is(err, ports.ErrNotFound) {
+			events = []survival.DomainEvent{}
+		} else {
+			return Response{}, err
+		}
 	}
 	events = filterByTimeWindow(events, req.OccurredFrom, req.OccurredTo)
 	events = filterBySession(events, req.SessionID)

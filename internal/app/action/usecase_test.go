@@ -365,6 +365,7 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 		ActionRepo: actionRepo,
 		EventRepo:  eventRepo,
 		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 7200,
 			TimeOfDay:      "day",
 			ThreatLevel:    1,
 			NearbyResource: map[string]int{"wood": 1},
@@ -390,6 +391,30 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 	}
 	if restOut.UpdatedState.OngoingAction == nil {
 		t.Fatalf("expected ongoing rest after start")
+	}
+	if got, want := restOut.WorldTimeBeforeSeconds, int64(7200); got != want {
+		t.Fatalf("expected world_time_before_seconds=%d, got=%d", want, got)
+	}
+	if got, want := restOut.WorldTimeAfterSeconds, int64(7200); got != want {
+		t.Fatalf("expected world_time_after_seconds=%d, got=%d", want, got)
+	}
+
+	restReplay, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "rest-1",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionRest,
+			RestMinutes: 30,
+		},
+	})
+	if err != nil {
+		t.Fatalf("replay rest: %v", err)
+	}
+	if got, want := restReplay.WorldTimeBeforeSeconds, int64(7200); got != want {
+		t.Fatalf("expected replay world_time_before_seconds=%d, got=%d", want, got)
+	}
+	if got, want := restReplay.WorldTimeAfterSeconds, int64(7200); got != want {
+		t.Fatalf("expected replay world_time_after_seconds=%d, got=%d", want, got)
 	}
 
 	now = now.Add(10 * time.Minute)
