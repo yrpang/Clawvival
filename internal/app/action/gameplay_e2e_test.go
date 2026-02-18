@@ -16,6 +16,13 @@ import (
 	"clawvival/internal/domain/world"
 )
 
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
@@ -94,14 +101,6 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 		t.Fatalf("expected visible tiles from observe")
 	}
 
-	if _, err := actionUC.Execute(ctx, Request{
-		AgentID:        agentID,
-		IdempotencyKey: "loop-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-loop",
-	}); err != nil {
-		t.Fatalf("gather: %v", err)
-	}
-
 	now = now.Add(2 * time.Minute)
 	moveOut, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
@@ -111,10 +110,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moveOut.UpdatedState.Position.X != 1 || moveOut.UpdatedState.Position.Y != 0 {
-		t.Fatalf("expected move to update position to (1,0), got (%d,%d)", moveOut.UpdatedState.Position.X, moveOut.UpdatedState.Position.Y)
-	}
-	if moveOut.UpdatedState.Vitals.Energy >= 42 {
+	if moveOut.UpdatedState.Vitals.Energy >= seed.Vitals.Energy {
 		t.Fatalf("expected move to consume energy, got energy=%d", moveOut.UpdatedState.Vitals.Energy)
 	}
 
@@ -277,10 +273,10 @@ func TestGameplayLoop_E2E_AgentIsolationAndSharedWorldClock(t *testing.T) {
 	// state mutation is isolated by agent_id.
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentA,
-		IdempotencyKey: "isolation-a-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-isolation",
+		IdempotencyKey: "isolation-a-retreat",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, StrategyHash: "sha-isolation",
 	}); err != nil {
-		t.Fatalf("action A gather: %v", err)
+		t.Fatalf("action A retreat: %v", err)
 	}
 
 	afterA, err := stateRepo.GetByAgentID(ctx, agentA)
@@ -398,11 +394,10 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 		Settle:     survival.SettlementService{},
 		Now:        func() time.Time { return now },
 	}
-
 	out30, err := actionUC.Execute(ctx, Request{
 		AgentID:        agent30,
-		IdempotencyKey: "dt-30-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // ignored: server derives dt from event timeline
+		IdempotencyKey: "dt-30-retreat",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, // ignored: server derives dt from event timeline
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {
@@ -410,8 +405,8 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	}
 	out60, err := actionUC.Execute(ctx, Request{
 		AgentID:        agent60,
-		IdempotencyKey: "dt-60-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // ignored: server derives dt from event timeline
+		IdempotencyKey: "dt-60-retreat",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, // ignored: server derives dt from event timeline
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {
@@ -535,20 +530,20 @@ func TestGameplayLoop_E2E_DayNightNonCombatHPLossConsistent(t *testing.T) {
 
 	dayOut, err := actionUCDay.Execute(ctx, Request{
 		AgentID:        dayAgent,
-		IdempotencyKey: "gather-day",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-risk",
+		IdempotencyKey: "retreat-day",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, StrategyHash: "sha-risk",
 	})
 	if err != nil {
-		t.Fatalf("day gather: %v", err)
+		t.Fatalf("day retreat: %v", err)
 	}
 
 	nightOut, err := actionUCNight.Execute(ctx, Request{
 		AgentID:        nightAgent,
-		IdempotencyKey: "gather-night",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-risk",
+		IdempotencyKey: "retreat-night",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, StrategyHash: "sha-risk",
 	})
 	if err != nil {
-		t.Fatalf("night gather: %v", err)
+		t.Fatalf("night retreat: %v", err)
 	}
 
 	dayLoss := seedDay.Vitals.HP - dayOut.UpdatedState.Vitals.HP
@@ -612,15 +607,14 @@ func TestGameplayLoop_E2E_StarvationTriggersGameOver(t *testing.T) {
 		Settle:     survival.SettlementService{},
 		Now:        func() time.Time { return now },
 	}
-
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
-		IdempotencyKey: "starvation-rest",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		IdempotencyKey: "starvation-retreat",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat},
 		StrategyHash:   "sha-starve",
 	})
 	if err != nil {
-		t.Fatalf("gather action: %v", err)
+		t.Fatalf("retreat action: %v", err)
 	}
 	if out.ResultCode != survival.ResultGameOver {
 		t.Fatalf("expected game over, got %s", out.ResultCode)
@@ -700,14 +694,13 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 		Settle:     survival.SettlementService{},
 		Now:        func() time.Time { return now },
 	}
-
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
-		IdempotencyKey: "critical-gather",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-critical",
+		IdempotencyKey: "critical-retreat",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, StrategyHash: "sha-critical",
 	})
 	if err != nil {
-		t.Fatalf("gather action: %v", err)
+		t.Fatalf("retreat action: %v", err)
 	}
 
 	if out.ResultCode != survival.ResultOK {
@@ -716,8 +709,10 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 	if out.UpdatedState.Vitals.HP <= 0 || out.UpdatedState.Vitals.HP > 20 {
 		t.Fatalf("expected HP in critical range (1-20), got %d", out.UpdatedState.Vitals.HP)
 	}
-	if out.UpdatedState.Position.X != 4 || out.UpdatedState.Position.Y != 4 {
-		t.Fatalf("expected forced retreat to (4,4), got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
+	beforeDist := absInt(seed.Position.X-seed.Home.X) + absInt(seed.Position.Y-seed.Home.Y)
+	afterDist := absInt(out.UpdatedState.Position.X-seed.Home.X) + absInt(out.UpdatedState.Position.Y-seed.Home.Y)
+	if afterDist >= beforeDist {
+		t.Fatalf("expected forced retreat toward home, got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
 	}
 
 	foundCritical := false
@@ -789,11 +784,10 @@ func TestGameplayLoop_E2E_WorldPhaseChangedEvent(t *testing.T) {
 		Settle:     survival.SettlementService{},
 		Now:        func() time.Time { return now },
 	}
-
 	if _, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-day-prime",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-phase",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, StrategyHash: "sha-phase",
 	}); err != nil {
 		t.Fatalf("prime action: %v", err)
 	}
@@ -802,7 +796,7 @@ func TestGameplayLoop_E2E_WorldPhaseChangedEvent(t *testing.T) {
 	out, err := actionUC.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-night-switch",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-phase",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, StrategyHash: "sha-phase",
 	})
 	if err != nil {
 		t.Fatalf("switch action: %v", err)

@@ -10,16 +10,20 @@ type Request struct {
 }
 
 type Response struct {
-	State            survival.AgentStateAggregate `json:"state"`
-	Snapshot         world.Snapshot               `json:"snapshot"`
-	View             View                         `json:"view"`
-	World            WorldMeta                    `json:"world"`
-	ActionCosts      map[string]ActionCost        `json:"action_costs"`
-	Tiles            []ObservedTile               `json:"tiles"`
-	Objects          []ObservedObject             `json:"objects"`
-	Resources        []ObservedResource           `json:"resources"`
-	Threats          []ObservedThreat             `json:"threats"`
-	LocalThreatLevel int                          `json:"local_threat_level"`
+	State              survival.AgentStateAggregate `json:"agent_state"`
+	Snapshot           world.Snapshot               `json:"snapshot"`
+	WorldTimeSeconds   int64                        `json:"world_time_seconds"`
+	TimeOfDay          string                       `json:"time_of_day"`
+	NextPhaseInSeconds int                          `json:"next_phase_in_seconds"`
+	HPDrainFeedback    HPDrainFeedback              `json:"hp_drain_feedback"`
+	View               View                         `json:"view"`
+	World              WorldMeta                    `json:"world"`
+	ActionCosts        map[string]ActionCost        `json:"action_costs"`
+	Tiles              []ObservedTile               `json:"tiles"`
+	Objects            []ObservedObject             `json:"objects"`
+	Resources          []ObservedResource           `json:"resources"`
+	Threats            []ObservedThreat             `json:"threats"`
+	LocalThreatLevel   int                          `json:"local_threat_level"`
 }
 
 type View struct {
@@ -43,9 +47,12 @@ type Rules struct {
 }
 
 type DrainsPer30m struct {
-	HungerDrain     int `json:"hunger_drain"`
-	EnergyDrain     int `json:"energy_drain"`
-	HPDrainStarving int `json:"hp_drain_starving"`
+	HungerDrain            int     `json:"hunger_drain"`
+	EnergyDrain            int     `json:"energy_drain"`
+	HPDrainModel           string  `json:"hp_drain_model"`
+	HPDrainFromHungerCoeff float64 `json:"hp_drain_from_hunger_coeff"`
+	HPDrainFromEnergyCoeff float64 `json:"hp_drain_from_energy_coeff"`
+	HPDrainCap             int     `json:"hp_drain_cap"`
 }
 
 type Thresholds struct {
@@ -61,8 +68,7 @@ type Visibility struct {
 
 type Farming struct {
 	FarmGrowMinutes  int     `json:"farm_grow_minutes"`
-	WheatYieldMin    int     `json:"wheat_yield_min"`
-	WheatYieldMax    int     `json:"wheat_yield_max"`
+	WheatYieldRange  []int   `json:"wheat_yield_range"`
 	SeedReturnChance float64 `json:"seed_return_chance"`
 }
 
@@ -72,7 +78,19 @@ type Seed struct {
 }
 
 type ActionCost struct {
-	BaseMinutes int `json:"base_minutes"`
+	BaseMinutes  int      `json:"base_minutes"`
+	DeltaHunger  int      `json:"delta_hunger"`
+	DeltaEnergy  int      `json:"delta_energy"`
+	Requirements []string `json:"requirements"`
+}
+
+type HPDrainFeedback struct {
+	IsLosingHP         bool     `json:"is_losing_hp"`
+	EstimatedLossPer30 int      `json:"estimated_loss_per_30m"`
+	HungerComponent    int      `json:"hunger_component"`
+	EnergyComponent    int      `json:"energy_component"`
+	CapPer30           int      `json:"cap_per_30m"`
+	Causes             []string `json:"causes"`
 }
 
 type ObservedTile struct {

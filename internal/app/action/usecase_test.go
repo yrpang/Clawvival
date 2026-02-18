@@ -29,9 +29,10 @@ func TestUseCase_Idempotency(t *testing.T) {
 		ActionRepo: actionRepo,
 		EventRepo:  eventRepo,
 		World: worldmock.Provider{Snapshot: world.Snapshot{
-			TimeOfDay:      "day",
-			ThreatLevel:    1,
-			NearbyResource: map[string]int{"wood": 10},
+			WorldTimeSeconds: 1234,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+			NearbyResource:   map[string]int{"wood": 10},
 		}},
 		Settle: survival.SettlementService{},
 		Now:    func() time.Time { return time.Unix(1700000000, 0) },
@@ -40,7 +41,7 @@ func TestUseCase_Idempotency(t *testing.T) {
 	req := Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}}
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}}
 
 	first, err := uc.Execute(context.Background(), req)
 	if err != nil {
@@ -53,6 +54,15 @@ func TestUseCase_Idempotency(t *testing.T) {
 
 	if first.UpdatedState.Version != second.UpdatedState.Version {
 		t.Fatalf("idempotency broken: version mismatch first=%d second=%d", first.UpdatedState.Version, second.UpdatedState.Version)
+	}
+	if first.WorldTimeBeforeSeconds != second.WorldTimeBeforeSeconds || first.WorldTimeAfterSeconds != second.WorldTimeAfterSeconds {
+		t.Fatalf(
+			"idempotency should preserve world time window: first=(%d,%d) second=(%d,%d)",
+			first.WorldTimeBeforeSeconds,
+			first.WorldTimeAfterSeconds,
+			second.WorldTimeBeforeSeconds,
+			second.WorldTimeAfterSeconds,
+		)
 	}
 }
 
@@ -80,7 +90,7 @@ func TestUseCase_DeltaUsesSystemTimeDefaultOnFirstAction(t *testing.T) {
 	out, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-system-dt-default",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // external value should be ignored
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}, // external value should be ignored
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
@@ -129,7 +139,7 @@ func TestUseCase_DeltaUsesElapsedSinceLastSettle(t *testing.T) {
 	out, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-system-dt-elapsed",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, // external value should be ignored
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}, // external value should be ignored
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
@@ -272,6 +282,42 @@ func (r *stubEventRepo) ListByAgentID(_ context.Context, _ string, limit int) ([
 	return out, nil
 }
 
+type stubObjectRepo struct {
+	byID map[string]ports.WorldObjectRecord
+}
+
+func (r *stubObjectRepo) Save(_ context.Context, _ string, obj ports.WorldObjectRecord) error {
+	if r.byID == nil {
+		r.byID = map[string]ports.WorldObjectRecord{}
+	}
+	r.byID[obj.ObjectID] = obj
+	return nil
+}
+
+func (r *stubObjectRepo) GetByObjectID(_ context.Context, _ string, objectID string) (ports.WorldObjectRecord, error) {
+	obj, ok := r.byID[objectID]
+	if !ok {
+		return ports.WorldObjectRecord{}, ports.ErrNotFound
+	}
+	return obj, nil
+}
+
+func (r *stubObjectRepo) ListByAgentID(_ context.Context, _ string) ([]ports.WorldObjectRecord, error) {
+	out := make([]ports.WorldObjectRecord, 0, len(r.byID))
+	for _, obj := range r.byID {
+		out = append(out, obj)
+	}
+	return out, nil
+}
+
+func (r *stubObjectRepo) Update(_ context.Context, _ string, obj ports.WorldObjectRecord) error {
+	if r.byID == nil {
+		r.byID = map[string]ports.WorldObjectRecord{}
+	}
+	r.byID[obj.ObjectID] = obj
+	return nil
+}
+
 func TestUseCase_RejectsInvalidActionParams(t *testing.T) {
 	cases := []Request{
 		{AgentID: "agent-1", IdempotencyKey: "k0", Intent: survival.ActionIntent{Type: survival.ActionRest}},
@@ -317,7 +363,7 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 			ThreatLevel:    1,
 			NearbyResource: map[string]int{"wood": 1},
 			VisibleTiles: []world.Tile{
-				{X: 0, Y: 0, Passable: true},
+				{X: 0, Y: 0, Passable: true, Resource: "wood"},
 				{X: 1, Y: 0, Passable: true},
 			},
 		}},
@@ -344,7 +390,7 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 	_, err = uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "gather-during-rest",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
 	})
 	if !errors.Is(err, ErrActionInProgress) {
 		t.Fatalf("expected ErrActionInProgress, got %v", err)
@@ -354,7 +400,7 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 	out, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "gather-after-rest",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
 	})
 	if err != nil {
 		t.Fatalf("gather after rest: %v", err)
@@ -388,7 +434,7 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 			ThreatLevel:    1,
 			NearbyResource: map[string]int{"wood": 1},
 			VisibleTiles: []world.Tile{
-				{X: 0, Y: 0, Passable: true},
+				{X: 0, Y: 0, Passable: true, Resource: "wood"},
 				{X: 1, Y: 0, Passable: true},
 			},
 		}},
@@ -447,7 +493,7 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 	_, err = uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "gather-after-terminate",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
 	})
 	if err != nil {
 		t.Fatalf("gather after terminate should succeed, got: %v", err)
@@ -488,16 +534,26 @@ func TestUseCase_TerminateWithoutOngoingReturnsPreconditionFailed(t *testing.T) 
 
 func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
-		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
 	}}
 	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
 	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{
+		"bed-1": {ObjectID: "bed-1", ObjectType: "bed", X: 0, Y: 0},
+	}}
 
 	uc := UseCase{
 		TxManager:  stubTxManager{},
 		StateRepo:  stateRepo,
 		ActionRepo: actionRepo,
 		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
 		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
 		Settle:     survival.SettlementService{},
 		Now:        func() time.Time { return time.Unix(1700000000, 0) },
@@ -509,6 +565,40 @@ func TestUseCase_AcceptsValidExpandedAction(t *testing.T) {
 		Intent:         survival.ActionIntent{Type: survival.ActionSleep, BedID: "bed-1"}})
 	if err != nil {
 		t.Fatalf("expected valid expanded action, got %v", err)
+	}
+}
+
+func TestUseCase_RejectsSleepWhenBedMissing(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{}}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-sleep-missing-bed",
+		Intent:         survival.ActionIntent{Type: survival.ActionSleep, BedID: "missing-bed"}})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
 	}
 }
 
@@ -535,7 +625,7 @@ func TestUseCase_AppendsStrategyMetadataToEvents(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-strategy",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-123",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}, StrategyHash: "sha-123",
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
@@ -577,7 +667,7 @@ func TestUseCase_AppendsPhaseChangedEvent(t *testing.T) {
 	_, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-phase-switch",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
 	}
@@ -667,6 +757,96 @@ func TestUseCase_RejectsEatWhenInventoryInsufficient(t *testing.T) {
 	}
 	if !errors.Is(err, ErrActionPreconditionFailed) {
 		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
+func TestUseCase_EatAllowsWheat(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID: "agent-1",
+			Vitals: survival.Vitals{
+				HP:     100,
+				Hunger: 40,
+				Energy: 60,
+			},
+			Inventory: map[string]int{"wheat": 1},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 0,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-eat-wheat",
+		Intent: survival.ActionIntent{
+			Type:     survival.ActionEat,
+			ItemType: "wheat",
+			Count:    1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected wheat eat success, got err=%v", err)
+	}
+	if out.UpdatedState.Inventory["wheat"] != 0 {
+		t.Fatalf("expected wheat consumed, got=%d", out.UpdatedState.Inventory["wheat"])
+	}
+}
+
+func TestUseCase_EatRespectsCount(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID: "agent-1",
+			Vitals: survival.Vitals{
+				HP:     100,
+				Hunger: 10,
+				Energy: 60,
+			},
+			Inventory: map[string]int{"berry": 2},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 0,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-eat-count-2",
+		Intent: survival.ActionIntent{
+			Type:     survival.ActionEat,
+			ItemType: "berry",
+			Count:    2,
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected eat success, got err=%v", err)
+	}
+	if got := out.UpdatedState.Inventory["berry"]; got != 0 {
+		t.Fatalf("expected 2 berries consumed, got=%d", got)
 	}
 }
 
@@ -833,6 +1013,74 @@ func TestUseCase_GatherRejectsNightTargetOutsideVisionRadius(t *testing.T) {
 	}
 }
 
+func TestUseCase_GatherRejectsWhenTargetResourceTypeMismatchesTile(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+			NearbyResource: map[string]int{
+				"stone": 1,
+			},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true, Resource: "wood"},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-mismatch-type",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_stone"},
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
+func TestUseCase_GatherRejectsWhenTargetTileHasNoResource(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:      "day",
+			ThreatLevel:    1,
+			NearbyResource: map[string]int{"wood": 1},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true, Resource: ""},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-no-resource-tile",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
 func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
@@ -850,11 +1098,13 @@ func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 	}}
 	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
 	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{}}
 	uc := UseCase{
 		TxManager:  stubTxManager{},
 		StateRepo:  stateRepo,
 		ActionRepo: actionRepo,
 		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
 		World: worldmock.Provider{Snapshot: world.Snapshot{
 			WorldTimeSeconds: 100,
 			TimeOfDay:        "day",
@@ -886,7 +1136,7 @@ func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 		{
 			AgentID:        "agent-1",
 			IdempotencyKey: "gate-farm-plant",
-			Intent:         survival.ActionIntent{Type: survival.ActionFarmPlant, FarmID: "farm-1"},
+			Intent:         survival.ActionIntent{Type: survival.ActionFarmPlant, FarmID: "obj-agent-1-gate-build-farm"},
 		},
 	}
 
@@ -904,6 +1154,352 @@ func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 
 	if got := last.UpdatedState.Inventory["seed"]; got >= 2 {
 		t.Fatalf("expected seed consumed by farm_plant, got=%d", got)
+	}
+}
+
+func TestUseCase_ContainerWithdrawRejectsWhenInventoryCapacityExceeded(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:           "agent-1",
+			Vitals:            survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:          survival.Position{X: 0, Y: 0},
+			Inventory:         map[string]int{"wood": 1},
+			InventoryCapacity: 1,
+			Version:           1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{
+		"box-1": {
+			ObjectID:      "box-1",
+			ObjectType:    "box",
+			X:             0,
+			Y:             0,
+			CapacitySlots: 60,
+			UsedSlots:     1,
+			ObjectState:   `{"inventory":{"berry":1}}`,
+		},
+	}}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-withdraw-over-cap",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionContainerWithdraw,
+			ContainerID: "box-1",
+			Items:       []survival.ItemAmount{{ItemType: "berry", Count: 1}},
+		},
+	})
+	if !errors.Is(err, ErrInventoryFull) {
+		t.Fatalf("expected ErrInventoryFull, got %v", err)
+	}
+}
+
+func TestUseCase_ContainerDepositRejectsDuplicateItemsOverInventory(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:           "agent-1",
+			Vitals:            survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:          survival.Position{X: 0, Y: 0},
+			Inventory:         map[string]int{"wood": 1},
+			InventoryCapacity: 30,
+			Version:           1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{
+		"box-1": {
+			ObjectID:      "box-1",
+			ObjectType:    "box",
+			X:             0,
+			Y:             0,
+			CapacitySlots: 60,
+			UsedSlots:     0,
+			ObjectState:   `{"inventory":{}}`,
+		},
+	}}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-deposit-dup-over",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionContainerDeposit,
+			ContainerID: "box-1",
+			Items: []survival.ItemAmount{
+				{ItemType: "wood", Count: 1},
+				{ItemType: "wood", Count: 1},
+			},
+		},
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
+func TestUseCase_ContainerDepositRejectsWhenContainerFull(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:           "agent-1",
+			Vitals:            survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:          survival.Position{X: 0, Y: 0},
+			Inventory:         map[string]int{"wood": 1},
+			InventoryCapacity: 30,
+			Version:           1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{
+		"box-1": {
+			ObjectID:      "box-1",
+			ObjectType:    "box",
+			X:             0,
+			Y:             0,
+			CapacitySlots: 1,
+			UsedSlots:     1,
+			ObjectState:   `{"inventory":{"berry":1}}`,
+		},
+	}}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-deposit-full",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionContainerDeposit,
+			ContainerID: "box-1",
+			Items:       []survival.ItemAmount{{ItemType: "wood", Count: 1}},
+		},
+	})
+	if !errors.Is(err, ErrContainerFull) {
+		t.Fatalf("expected ErrContainerFull, got %v", err)
+	}
+}
+
+func TestUseCase_ContainerWithdrawRejectsDuplicateItemsOverBoxInventory(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:           "agent-1",
+			Vitals:            survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:          survival.Position{X: 0, Y: 0},
+			Inventory:         map[string]int{},
+			InventoryCapacity: 30,
+			Version:           1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{
+		"box-1": {
+			ObjectID:      "box-1",
+			ObjectType:    "box",
+			X:             0,
+			Y:             0,
+			CapacitySlots: 60,
+			UsedSlots:     1,
+			ObjectState:   `{"inventory":{"berry":1}}`,
+		},
+	}}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-withdraw-dup-over",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionContainerWithdraw,
+			ContainerID: "box-1",
+			Items: []survival.ItemAmount{
+				{ItemType: "berry", Count: 1},
+				{ItemType: "berry", Count: 1},
+			},
+		},
+	})
+	if !errors.Is(err, ErrActionPreconditionFailed) {
+		t.Fatalf("expected ErrActionPreconditionFailed, got %v", err)
+	}
+}
+
+func TestUseCase_ActionResponseIncludesDerivedStatusEffects(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:    "agent-1",
+			Vitals:     survival.Vitals{HP: 100, Hunger: 80, Energy: 10},
+			Position:   survival.Position{X: 0, Y: 0},
+			Inventory:  map[string]int{},
+			Version:    1,
+			DeathCause: survival.DeathCauseUnknown,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "night", ThreatLevel: 0}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-action-stateview",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if len(out.UpdatedState.StatusEffects) == 0 {
+		t.Fatalf("expected derived status_effects in action response")
+	}
+}
+
+func TestUseCase_BuildActionSettledIncludesBuiltObjectID(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{"wood": 8},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{}}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:        "day",
+			ThreatLevel:      0,
+			WorldTimeSeconds: 100,
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-build-result-id",
+		Intent: survival.ActionIntent{
+			Type:       survival.ActionBuild,
+			ObjectType: "bed_rough",
+			Pos:        &survival.Position{X: 0, Y: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	found := false
+	for _, evt := range out.Events {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		result, _ := evt.Payload["result"].(map[string]any)
+		if result == nil {
+			continue
+		}
+		ids, _ := result["built_object_ids"].([]string)
+		if len(ids) == 0 {
+			continue
+		}
+		found = true
+		if ids[0] != "obj-agent-1-k-build-result-id" {
+			t.Fatalf("unexpected built object id: %v", ids)
+		}
+	}
+	if !found {
+		t.Fatalf("expected built_object_ids in action_settled.result")
+	}
+}
+
+func TestUseCase_GatherOnlyCollectsTargetResourceType(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:        "day",
+			WorldTimeSeconds: 100,
+			ThreatLevel:      0,
+			NearbyResource:   map[string]int{"wood": 7, "stone": 9},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true, Resource: "wood"},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-target-only",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if got := out.UpdatedState.Inventory["wood"]; got != 1 {
+		t.Fatalf("expected exactly one target resource per gather, got=%d", got)
+	}
+	if got := out.UpdatedState.Inventory["stone"]; got != 0 {
+		t.Fatalf("expected non-target stone not gathered, got=%d", got)
 	}
 }
 
@@ -946,7 +1542,7 @@ func TestUseCase_GatherTriggersSeedPityAfterConsecutiveFails(t *testing.T) {
 	out, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-gather-seed-pity",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)
@@ -1015,6 +1611,56 @@ func TestUseCase_RetreatMovesAwayFromHighestThreatTile(t *testing.T) {
 	}
 	if out.UpdatedState.Position.X != -1 || out.UpdatedState.Position.Y != 0 {
 		t.Fatalf("expected retreat move west to (-1,0), got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
+	}
+}
+
+func TestUseCase_ResponseIncludesSettlementReasonSummary(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: -20, Energy: -10},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 100,
+			TimeOfDay:        "day",
+			ThreatLevel:      0,
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700005000, 0) },
+	}
+
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-settlement-summary",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if out.Settlement == nil {
+		t.Fatalf("expected settlement summary in action response")
+	}
+	reasons, ok := out.Settlement["vitals_change_reasons"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected vitals_change_reasons map in settlement summary, got=%T", out.Settlement["vitals_change_reasons"])
+	}
+	hpReasons, ok := reasons["hp"].([]map[string]any)
+	if ok && len(hpReasons) == 0 {
+		t.Fatalf("expected hp reasons to explain hp changes")
 	}
 }
 
@@ -1132,7 +1778,7 @@ func TestUseCase_GameOverEventIncludesLastKnownThreatWhenVisible(t *testing.T) {
 			TimeOfDay:        "night",
 			ThreatLevel:      3,
 			VisibleTiles: []world.Tile{
-				{X: 1, Y: 1, BaseThreat: 4},
+				{X: 1, Y: 1, BaseThreat: 4, Resource: "wood"},
 				{X: -1, Y: 0, BaseThreat: 2},
 			},
 		}},
@@ -1142,7 +1788,7 @@ func TestUseCase_GameOverEventIncludesLastKnownThreatWhenVisible(t *testing.T) {
 	out, err := uc.Execute(context.Background(), Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "k-gameover-threat",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather},
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_1_1_wood"},
 	})
 	if err != nil {
 		t.Fatalf("execute error: %v", err)

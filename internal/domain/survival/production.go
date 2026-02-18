@@ -31,6 +31,7 @@ type FoodID int
 const (
 	FoodBerry FoodID = 1
 	FoodBread FoodID = 2
+	FoodWheat FoodID = 3
 )
 
 var recipeDefs = map[RecipeID]struct {
@@ -78,6 +79,7 @@ var foodDefs = map[FoodID]struct {
 }{
 	FoodBerry: {ItemName: "berry", HungerRecover: 12},
 	FoodBread: {ItemName: "bread", HungerRecover: 28},
+	FoodWheat: {ItemName: "wheat", HungerRecover: 16},
 }
 
 type BuiltObject struct {

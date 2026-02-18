@@ -102,6 +102,7 @@
 - `world_time_seconds`
 - `time_of_day: DAY|NIGHT`
 - `next_phase_in_seconds`
+- `hp_drain_feedback`（是否正在掉血、预计每 30 分钟掉血、原因分解）
 
 ### 2.3 动作耗时与时间推进（Agent 决策闭环必需）
 
@@ -161,7 +162,10 @@
 - `drains_per_30m`：
   - `hunger_drain`
   - `energy_drain`
-  - `hp_drain_starving`
+  - `hp_drain_model`（`dynamic_capped`）
+  - `hp_drain_from_hunger_coeff`（默认 `0.08`）
+  - `hp_drain_from_energy_coeff`（默认 `0.05`）
+  - `hp_drain_cap`（默认 `12`）
 - `thresholds`：
   - `critical_hp`
   - `low_energy`
@@ -180,7 +184,9 @@
 推荐默认范围（便于可玩与验收）：
 - `hunger_drain_per_30m`: 4~6（建议 5）
 - `energy_drain_per_30m`: 3~5（建议 4）
-- `hp_drain_starving_per_30m`: 6~10（建议 8）
+- `hp_drain_from_hunger_coeff`: 0.05~0.12（建议 0.08）
+- `hp_drain_from_energy_coeff`: 0.03~0.08（建议 0.05）
+- `hp_drain_cap_per_30m`: 8~16（建议 12）
 - `vision_radius_day`: 5~7（建议 6）
 - `vision_radius_night`: 2~4（建议 3）
 - `torch_light_radius`: 2~4（建议 3）
@@ -462,7 +468,14 @@ tile id：可不强制（可由坐标 hash 推导）。
     "next_phase_in_seconds": 120,
     "rules": {
       "standard_tick_minutes": 30,
-      "drains_per_30m": {"hunger_drain": 5, "energy_drain": 4, "hp_drain_starving": 8},
+      "drains_per_30m": {
+        "hunger_drain": 4,
+        "energy_drain": 0,
+        "hp_drain_model": "dynamic_capped",
+        "hp_drain_from_hunger_coeff": 0.08,
+        "hp_drain_from_energy_coeff": 0.05,
+        "hp_drain_cap": 12
+      },
       "thresholds": {"critical_hp": 15, "low_energy": 20},
       "visibility": {"vision_radius_day": 6, "vision_radius_night": 3, "torch_light_radius": 3},
       "seed": {"seed_drop_chance": 0.2, "seed_pity_max_fails": 8, "seed_pity_remaining": 3},

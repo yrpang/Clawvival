@@ -7,11 +7,13 @@ type Request struct {
 }
 
 type Response struct {
-	State              survival.AgentStateAggregate `json:"state"`
+	State              survival.AgentStateAggregate `json:"agent_state"`
 	WorldTimeSeconds   int64                        `json:"world_time_seconds"`
 	TimeOfDay          string                       `json:"time_of_day"`
 	NextPhaseInSeconds int                          `json:"next_phase_in_seconds"`
+	HPDrainFeedback    HPDrainFeedback              `json:"hp_drain_feedback"`
 	World              WorldMeta                    `json:"world"`
+	ActionCosts        map[string]ActionCost        `json:"action_costs"`
 }
 
 type WorldMeta struct {
@@ -19,7 +21,7 @@ type WorldMeta struct {
 }
 
 type Rules struct {
-	StandardTickMinutes int `json:"standard_tick_minutes"`
+	StandardTickMinutes int          `json:"standard_tick_minutes"`
 	DrainsPer30m        DrainsPer30m `json:"drains_per_30m"`
 	Thresholds          Thresholds   `json:"thresholds"`
 	Visibility          Visibility   `json:"visibility"`
@@ -28,9 +30,12 @@ type Rules struct {
 }
 
 type DrainsPer30m struct {
-	HungerDrain     int `json:"hunger_drain"`
-	EnergyDrain     int `json:"energy_drain"`
-	HPDrainStarving int `json:"hp_drain_starving"`
+	HungerDrain            int     `json:"hunger_drain"`
+	EnergyDrain            int     `json:"energy_drain"`
+	HPDrainModel           string  `json:"hp_drain_model"`
+	HPDrainFromHungerCoeff float64 `json:"hp_drain_from_hunger_coeff"`
+	HPDrainFromEnergyCoeff float64 `json:"hp_drain_from_energy_coeff"`
+	HPDrainCap             int     `json:"hp_drain_cap"`
 }
 
 type Thresholds struct {
@@ -46,12 +51,27 @@ type Visibility struct {
 
 type Farming struct {
 	FarmGrowMinutes  int     `json:"farm_grow_minutes"`
-	WheatYieldMin    int     `json:"wheat_yield_min"`
-	WheatYieldMax    int     `json:"wheat_yield_max"`
+	WheatYieldRange  []int   `json:"wheat_yield_range"`
 	SeedReturnChance float64 `json:"seed_return_chance"`
 }
 
 type Seed struct {
 	SeedDropChance   float64 `json:"seed_drop_chance"`
 	SeedPityMaxFails int     `json:"seed_pity_max_fails"`
+}
+
+type ActionCost struct {
+	BaseMinutes  int      `json:"base_minutes"`
+	DeltaHunger  int      `json:"delta_hunger"`
+	DeltaEnergy  int      `json:"delta_energy"`
+	Requirements []string `json:"requirements"`
+}
+
+type HPDrainFeedback struct {
+	IsLosingHP         bool     `json:"is_losing_hp"`
+	EstimatedLossPer30 int      `json:"estimated_loss_per_30m"`
+	HungerComponent    int      `json:"hunger_component"`
+	EnergyComponent    int      `json:"energy_component"`
+	CapPer30           int      `json:"cap_per_30m"`
+	Causes             []string `json:"causes"`
 }

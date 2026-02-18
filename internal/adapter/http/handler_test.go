@@ -172,6 +172,71 @@ func TestWriteActionRejectedFromErr_TargetNotVisible(t *testing.T) {
 	if got, want := errObj["retryable"], false; got != want {
 		t.Fatalf("error.retryable mismatch: got=%v want=%v", got, want)
 	}
+	details, _ := errObj["details"].(map[string]any)
+	if got, want := details["in_window"], true; got != want {
+		t.Fatalf("error.details.in_window mismatch: got=%v want=%v", got, want)
+	}
+	if got, want := details["is_visible"], false; got != want {
+		t.Fatalf("error.details.is_visible mismatch: got=%v want=%v", got, want)
+	}
+}
+
+func TestWriteActionRejectedFromErr_TargetOutOfView(t *testing.T) {
+	ctx := &app.RequestContext{}
+	if ok := writeActionRejectedFromErr(ctx, action.ErrTargetOutOfView); !ok {
+		t.Fatalf("expected handled error")
+	}
+	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if got, want := errObj["code"], "TARGET_OUT_OF_VIEW"; got != want {
+		t.Fatalf("error code mismatch: got=%v want=%v", got, want)
+	}
+	details, _ := errObj["details"].(map[string]any)
+	if got, want := details["in_window"], false; got != want {
+		t.Fatalf("error.details.in_window mismatch: got=%v want=%v", got, want)
+	}
+}
+
+func TestWriteActionRejectedFromErr_InventoryFull(t *testing.T) {
+	ctx := &app.RequestContext{}
+	if ok := writeActionRejectedFromErr(ctx, action.ErrInventoryFull); !ok {
+		t.Fatalf("expected handled error")
+	}
+	var body map[string]any
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if got, want := errObj["code"], "INVENTORY_FULL"; got != want {
+		t.Fatalf("error code mismatch: got=%v want=%v", got, want)
+	}
+	if blocked, _ := errObj["blocked_by"].([]any); len(blocked) != 1 || blocked[0] != "INVENTORY_FULL" {
+		t.Fatalf("blocked_by mismatch: got=%v", errObj["blocked_by"])
+	}
+}
+
+func TestWriteActionRejectedFromErr_ContainerFull(t *testing.T) {
+	ctx := &app.RequestContext{}
+	if ok := writeActionRejectedFromErr(ctx, action.ErrContainerFull); !ok {
+		t.Fatalf("expected handled error")
+	}
+	var body map[string]any
+	if err := json.Unmarshal(ctx.Response.Body(), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if got, want := errObj["code"], "CONTAINER_FULL"; got != want {
+		t.Fatalf("error code mismatch: got=%v want=%v", got, want)
+	}
+	if blocked, _ := errObj["blocked_by"].([]any); len(blocked) != 1 || blocked[0] != "CONTAINER_FULL" {
+		t.Fatalf("blocked_by mismatch: got=%v", errObj["blocked_by"])
+	}
 }
 
 func TestWriteError_InvalidCredentials(t *testing.T) {

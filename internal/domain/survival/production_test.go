@@ -99,6 +99,27 @@ func TestEatAndCanEat(t *testing.T) {
 	}
 }
 
+func TestEatAndCanEat_Wheat(t *testing.T) {
+	state := AgentStateAggregate{
+		Vitals: Vitals{Hunger: 30},
+		Inventory: map[string]int{
+			"wheat": 1,
+		},
+	}
+	if !CanEat(state, FoodWheat) {
+		t.Fatalf("expected CanEat wheat true")
+	}
+	if ok := Eat(&state, FoodWheat); !ok {
+		t.Fatalf("expected Eat wheat success")
+	}
+	if got, want := state.Inventory["wheat"], 0; got != want {
+		t.Fatalf("wheat consume mismatch: got=%d want=%d", got, want)
+	}
+	if got := state.Vitals.Hunger; got <= 30 {
+		t.Fatalf("expected hunger increase after wheat, got=%d", got)
+	}
+}
+
 func TestBuildCosts_MVPv1MinimumSet(t *testing.T) {
 	state := AgentStateAggregate{Inventory: map[string]int{
 		"wood":  14,

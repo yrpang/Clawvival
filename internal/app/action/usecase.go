@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"clawvival/internal/app/ports"
+	"clawvival/internal/app/stateview"
 	"clawvival/internal/domain/survival"
 	"clawvival/internal/domain/world"
 )
@@ -22,6 +23,8 @@ var (
 	ErrActionInProgress         = errors.New("action in progress")
 	ErrTargetOutOfView          = errors.New("target out of view")
 	ErrTargetNotVisible         = errors.New("target not visible")
+	ErrInventoryFull            = errors.New("inventory full")
+	ErrContainerFull            = errors.New("container full")
 )
 
 const (
@@ -34,6 +37,7 @@ const (
 	defaultFarmGrowMinutes       = 60
 	seedPityMaxFails             = 8
 	actionNightVisionRadius      = 3
+	defaultInventoryCapacity     = 30
 )
 
 type UseCase struct {
@@ -70,13 +74,14 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	err := u.TxManager.RunInTx(ctx, func(txCtx context.Context) error {
 		exec, err := u.ActionRepo.GetByIdempotencyKey(txCtx, req.AgentID, req.IdempotencyKey)
 		if err == nil && exec != nil {
-			before, after := worldTimeWindow(0, exec.DT)
+			before, after := worldTimeWindowFromExecution(exec)
 			out = Response{
 				SettledDTMinutes:       exec.DT,
 				WorldTimeBeforeSeconds: before,
 				WorldTimeAfterSeconds:  after,
 				UpdatedState:           exec.Result.UpdatedState,
 				Events:                 exec.Result.Events,
+				Settlement:             settlementSummary(exec.Result.Events),
 				ResultCode:             exec.Result.ResultCode,
 			}
 			return nil
@@ -114,6 +119,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				WorldTimeAfterSeconds:  int64(finalized.DTMinutes * 60),
 				UpdatedState:           finalized.UpdatedState,
 				Events:                 finalized.Events,
+				Settlement:             settlementSummary(finalized.Events),
 				ResultCode:             finalized.ResultCode,
 			}
 			return nil
@@ -157,6 +163,10 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			return err
 		}
 		req.Intent = resolveRetreatIntent(req.Intent, state.Position, snapshot.VisibleTiles)
+		settleNearby := snapshot.NearbyResource
+		if req.Intent.Type == survival.ActionGather {
+			settleNearby = filterGatherNearbyResource(req.Intent.TargetID, snapshot.NearbyResource)
+		}
 
 		result, err := u.Settle.Settle(
 			state,
@@ -167,13 +177,14 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				TimeOfDay:         snapshot.TimeOfDay,
 				ThreatLevel:       snapshot.ThreatLevel,
 				VisibilityPenalty: snapshot.VisibilityPenalty,
-				NearbyResource:    snapshot.NearbyResource,
+				NearbyResource:    settleNearby,
 				WorldTimeSeconds:  snapshot.WorldTimeSeconds,
 			},
 		)
 		if err != nil {
 			return err
 		}
+		result.UpdatedState = stateview.Enrich(result.UpdatedState, snapshot.TimeOfDay, isCurrentTileLit(snapshot.TimeOfDay))
 		if snapshot.PhaseChanged {
 			result.Events = append(result.Events, survival.DomainEvent{
 				Type:       "world_phase_changed",
@@ -217,13 +228,15 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err := u.EventRepo.Append(txCtx, req.AgentID, result.Events); err != nil {
 			return err
 		}
+		builtObjectIDs := make([]string, 0, 1)
 		if u.ObjectRepo != nil {
 			for _, evt := range result.Events {
 				if evt.Type != "build_completed" || evt.Payload == nil {
 					continue
 				}
+				objectID := "obj-" + req.AgentID + "-" + req.IdempotencyKey
 				obj := ports.WorldObjectRecord{
-					ObjectID: "obj-" + req.AgentID + "-" + req.IdempotencyKey,
+					ObjectID: objectID,
 					Kind:     int(toNum(evt.Payload["kind"])),
 					X:        int(toNum(evt.Payload["x"])),
 					Y:        int(toNum(evt.Payload["y"])),
@@ -236,8 +249,10 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 				if err := u.ObjectRepo.Save(txCtx, req.AgentID, obj); err != nil {
 					return err
 				}
+				builtObjectIDs = append(builtObjectIDs, objectID)
 			}
 		}
+		attachBuiltObjectIDs(result.Events, builtObjectIDs)
 		if u.SessionRepo != nil && result.ResultCode == survival.ResultGameOver {
 			if err := u.SessionRepo.Close(txCtx, sessionID, result.UpdatedState.DeathCause, nowAt); err != nil {
 				return err
@@ -251,6 +266,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			WorldTimeAfterSeconds:  after,
 			UpdatedState:           result.UpdatedState,
 			Events:                 result.Events,
+			Settlement:             settlementSummary(result.Events),
 			ResultCode:             result.ResultCode,
 		}
 		return nil
@@ -272,8 +288,47 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	return out, nil
 }
 
+func settlementSummary(events []survival.DomainEvent) map[string]any {
+	for _, evt := range events {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		result, ok := evt.Payload["result"].(map[string]any)
+		if !ok || result == nil {
+			return nil
+		}
+		return map[string]any{
+			"hp_loss":               result["hp_loss"],
+			"inventory_delta":       result["inventory_delta"],
+			"vitals_delta":          result["vitals_delta"],
+			"vitals_change_reasons": result["vitals_change_reasons"],
+		}
+	}
+	return nil
+}
+
 func worldTimeWindow(beforeSeconds int64, dtMinutes int) (int64, int64) {
 	return beforeSeconds, beforeSeconds + int64(dtMinutes*60)
+}
+
+func worldTimeWindowFromExecution(exec *ports.ActionExecutionRecord) (int64, int64) {
+	if exec == nil {
+		return 0, 0
+	}
+	for _, evt := range exec.Result.Events {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		beforeRaw, hasBefore := evt.Payload["world_time_before_seconds"]
+		afterRaw, hasAfter := evt.Payload["world_time_after_seconds"]
+		if !hasBefore || !hasAfter {
+			continue
+		}
+		before := int64(toNum(beforeRaw))
+		after := int64(toNum(afterRaw))
+		return before, after
+	}
+	return worldTimeWindow(0, exec.DT)
 }
 
 func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
@@ -287,7 +342,14 @@ func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 		return survival.CanPlantSeed(state)
 	case survival.ActionEat:
 		foodID, ok := foodIDFromItemType(intent.ItemType)
-		return ok && survival.CanEat(state, foodID)
+		if !ok || !survival.CanEat(state, foodID) {
+			return false
+		}
+		count := intent.Count
+		if count <= 0 {
+			count = 1
+		}
+		return state.Inventory[strings.ToLower(strings.TrimSpace(intent.ItemType))] >= count
 	default:
 		return true
 	}
@@ -415,7 +477,7 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 	case survival.ActionMove:
 		return intent.DX != 0 || intent.DY != 0
 	case survival.ActionGather:
-		return true
+		return strings.TrimSpace(intent.TargetID) != ""
 	case survival.ActionBuild:
 		_, ok := buildKindFromObjectType(intent.ObjectType)
 		return ok && intent.Pos != nil
@@ -497,6 +559,7 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 	}
 	result.UpdatedState.OngoingAction = nil
 	result.UpdatedState.UpdatedAt = nowAt
+	result.UpdatedState = stateview.Enrich(result.UpdatedState, snapshot.TimeOfDay, isCurrentTileLit(snapshot.TimeOfDay))
 
 	sessionID := "session-" + agentID
 	for i := range result.Events {
@@ -608,7 +671,7 @@ func validateTargetVisibility(center survival.Position, intent survival.ActionIn
 	if intent.Type != survival.ActionGather || strings.TrimSpace(intent.TargetID) == "" {
 		return nil
 	}
-	tx, ty, _, ok := parseResourceTargetID(intent.TargetID)
+	tx, ty, resource, ok := parseResourceTargetID(intent.TargetID)
 	if !ok {
 		return ErrActionPreconditionFailed
 	}
@@ -623,6 +686,9 @@ func validateTargetVisibility(center survival.Position, intent survival.ActionIn
 	}
 	for _, tile := range snapshot.VisibleTiles {
 		if tile.X == tx && tile.Y == ty {
+			if resource != "" && !strings.EqualFold(strings.TrimSpace(tile.Resource), strings.TrimSpace(resource)) {
+				return ErrActionPreconditionFailed
+			}
 			return nil
 		}
 	}
@@ -661,6 +727,8 @@ func foodIDFromItemType(itemType string) (survival.FoodID, bool) {
 		return survival.FoodBerry, true
 	case "bread":
 		return survival.FoodBread, true
+	case "wheat":
+		return survival.FoodWheat, true
 	default:
 		return 0, false
 	}
@@ -711,9 +779,28 @@ type farmObjectState struct {
 
 func prepareObjectAction(ctx context.Context, nowAt time.Time, state survival.AgentStateAggregate, intent survival.ActionIntent, repo ports.WorldObjectRepository, agentID string) (*preparedObjectAction, error) {
 	if repo == nil {
+		switch intent.Type {
+		case survival.ActionSleep, survival.ActionFarmPlant, survival.ActionFarmHarvest, survival.ActionContainerDeposit, survival.ActionContainerWithdraw:
+			return nil, ErrActionPreconditionFailed
+		}
 		return nil, nil
 	}
 	switch intent.Type {
+	case survival.ActionSleep:
+		obj, err := repo.GetByObjectID(ctx, agentID, intent.BedID)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				return nil, ErrActionPreconditionFailed
+			}
+			return nil, err
+		}
+		if !isBedObject(obj) {
+			return nil, ErrActionPreconditionFailed
+		}
+		if obj.X != state.Position.X || obj.Y != state.Position.Y {
+			return nil, ErrActionPreconditionFailed
+		}
+		return &preparedObjectAction{record: obj}, nil
 	case survival.ActionContainerDeposit, survival.ActionContainerWithdraw:
 		obj, err := repo.GetByObjectID(ctx, agentID, intent.ContainerID)
 		if err != nil {
@@ -730,21 +817,33 @@ func prepareObjectAction(ctx context.Context, nowAt time.Time, state survival.Ag
 			return nil, ErrActionPreconditionFailed
 		}
 		total := 0
+		requested := aggregateItemCounts(intent.Items)
 		for _, item := range intent.Items {
 			total += item.Count
+		}
+		for itemType, need := range requested {
 			switch intent.Type {
 			case survival.ActionContainerDeposit:
-				if state.Inventory[item.ItemType] < item.Count {
+				if state.Inventory[itemType] < need {
 					return nil, ErrActionPreconditionFailed
 				}
 			case survival.ActionContainerWithdraw:
-				if box.Inventory[item.ItemType] < item.Count {
+				if box.Inventory[itemType] < need {
 					return nil, ErrActionPreconditionFailed
 				}
 			}
 		}
 		if intent.Type == survival.ActionContainerDeposit && obj.CapacitySlots > 0 && obj.UsedSlots+total > obj.CapacitySlots {
-			return nil, ErrActionPreconditionFailed
+			return nil, ErrContainerFull
+		}
+		if intent.Type == survival.ActionContainerWithdraw {
+			capacity := state.InventoryCapacity
+			if capacity <= 0 {
+				capacity = defaultInventoryCapacity
+			}
+			if inventoryUsed(state.Inventory)+total > capacity {
+				return nil, ErrInventoryFull
+			}
 		}
 		return &preparedObjectAction{record: obj, box: box}, nil
 	case survival.ActionFarmPlant, survival.ActionFarmHarvest:
@@ -883,6 +982,11 @@ func isBoxObject(obj ports.WorldObjectRecord) bool {
 func isFarmObject(obj ports.WorldObjectRecord) bool {
 	typ := strings.ToLower(strings.TrimSpace(obj.ObjectType))
 	return typ == "farm_plot" || obj.Kind == int(survival.BuildFarm)
+}
+
+func isBedObject(obj ports.WorldObjectRecord) bool {
+	typ := strings.ToLower(strings.TrimSpace(obj.ObjectType))
+	return typ == "bed" || obj.Kind == int(survival.BuildBed)
 }
 
 func buildObjectDefaults(intentObjectType string) (objectType, quality string, capacitySlots int, objectState string) {
@@ -1123,4 +1227,58 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func isCurrentTileLit(timeOfDay string) bool {
+	return strings.EqualFold(strings.TrimSpace(timeOfDay), "day")
+}
+
+func inventoryUsed(items map[string]int) int {
+	total := 0
+	for _, c := range items {
+		if c > 0 {
+			total += c
+		}
+	}
+	return total
+}
+
+func aggregateItemCounts(items []survival.ItemAmount) map[string]int {
+	out := map[string]int{}
+	for _, item := range items {
+		key := strings.ToLower(strings.TrimSpace(item.ItemType))
+		if key == "" || item.Count <= 0 {
+			continue
+		}
+		out[key] += item.Count
+	}
+	return out
+}
+
+func filterGatherNearbyResource(targetID string, nearby map[string]int) map[string]int {
+	_, _, resource, ok := parseResourceTargetID(targetID)
+	if !ok || strings.TrimSpace(resource) == "" {
+		return map[string]int{}
+	}
+	resource = strings.ToLower(strings.TrimSpace(resource))
+	// A gather action targets a single resource node by id.
+	// Keep per-action yield stable regardless of how many same-type nodes are in view.
+	return map[string]int{resource: 1}
+}
+
+func attachBuiltObjectIDs(events []survival.DomainEvent, ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	for i := range events {
+		if events[i].Type != "action_settled" || events[i].Payload == nil {
+			continue
+		}
+		result, _ := events[i].Payload["result"].(map[string]any)
+		if result == nil {
+			result = map[string]any{}
+		}
+		result["built_object_ids"] = ids
+		events[i].Payload["result"] = result
+	}
 }

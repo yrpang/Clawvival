@@ -22,11 +22,11 @@ func TestAgentStateInventoryOps(t *testing.T) {
 
 func TestAgentStateMarkDeathCause(t *testing.T) {
 	s := AgentStateAggregate{}
-	s.MarkDead(DeathCauseCombat)
+	s.MarkDead(DeathCauseThreat)
 	if !s.Dead {
 		t.Fatalf("expected dead=true")
 	}
-	if s.DeathCause != DeathCauseCombat {
+	if s.DeathCause != DeathCauseThreat {
 		t.Fatalf("unexpected death cause: %s", s.DeathCause)
 	}
 }

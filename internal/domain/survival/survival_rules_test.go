@@ -5,22 +5,22 @@ import (
 	"time"
 )
 
-func TestSettlementService_NightCombatHigherRisk(t *testing.T) {
+func TestSettlementService_NonCombatHpLossConsistentAcrossDayNight(t *testing.T) {
 	svc := SettlementService{}
 	state := AgentStateAggregate{AgentID: "a-1", Vitals: Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1}
 	now := time.Now()
 
-	dayOut, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "day", ThreatLevel: 1})
+	dayOut, err := svc.Settle(state, ActionIntent{Type: ActionRetreat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "day", ThreatLevel: 1})
 	if err != nil {
 		t.Fatalf("day settle error: %v", err)
 	}
-	nightOut, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "night", ThreatLevel: 4})
+	nightOut, err := svc.Settle(state, ActionIntent{Type: ActionRetreat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{TimeOfDay: "night", ThreatLevel: 4})
 	if err != nil {
 		t.Fatalf("night settle error: %v", err)
 	}
 
-	if nightOut.UpdatedState.Vitals.HP >= dayOut.UpdatedState.Vitals.HP {
-		t.Fatalf("expected night combat to lose more HP, day=%d night=%d", dayOut.UpdatedState.Vitals.HP, nightOut.UpdatedState.Vitals.HP)
+	if nightOut.UpdatedState.Vitals.HP != dayOut.UpdatedState.Vitals.HP {
+		t.Fatalf("expected day/night non-combat hp loss equal, day=%d night=%d", dayOut.UpdatedState.Vitals.HP, nightOut.UpdatedState.Vitals.HP)
 	}
 }
 
@@ -69,12 +69,12 @@ func TestSettlementService_GameOverMarksDeathCause(t *testing.T) {
 	}
 }
 
-func TestSettlementService_CombatAffectedByVisibilityPenalty(t *testing.T) {
+func TestSettlementService_NonCombatNotAffectedByVisibilityPenalty(t *testing.T) {
 	svc := SettlementService{}
 	state := AgentStateAggregate{AgentID: "a-1", Vitals: Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1}
 	now := time.Now()
 
-	lowPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
+	lowPenalty, err := svc.Settle(state, ActionIntent{Type: ActionRetreat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
 		TimeOfDay:         "night",
 		ThreatLevel:       3,
 		VisibilityPenalty: 0,
@@ -82,7 +82,7 @@ func TestSettlementService_CombatAffectedByVisibilityPenalty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("low penalty settle error: %v", err)
 	}
-	highPenalty, err := svc.Settle(state, ActionIntent{Type: ActionCombat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
+	highPenalty, err := svc.Settle(state, ActionIntent{Type: ActionRetreat}, HeartbeatDelta{Minutes: 30}, now, WorldSnapshot{
 		TimeOfDay:         "night",
 		ThreatLevel:       3,
 		VisibilityPenalty: 2,
@@ -91,8 +91,8 @@ func TestSettlementService_CombatAffectedByVisibilityPenalty(t *testing.T) {
 		t.Fatalf("high penalty settle error: %v", err)
 	}
 
-	if highPenalty.UpdatedState.Vitals.HP >= lowPenalty.UpdatedState.Vitals.HP {
-		t.Fatalf("expected visibility penalty to increase hp loss, low=%d high=%d", lowPenalty.UpdatedState.Vitals.HP, highPenalty.UpdatedState.Vitals.HP)
+	if highPenalty.UpdatedState.Vitals.HP != lowPenalty.UpdatedState.Vitals.HP {
+		t.Fatalf("expected visibility penalty to not affect non-combat hp, low=%d high=%d", lowPenalty.UpdatedState.Vitals.HP, highPenalty.UpdatedState.Vitals.HP)
 	}
 }
 

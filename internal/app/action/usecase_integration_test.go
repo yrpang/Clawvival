@@ -123,7 +123,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "die-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}})
 	if err != nil {
 		t.Fatalf("gameover execute: %v", err)
 	}
@@ -190,6 +190,10 @@ func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
 			TimeOfDay:      "day",
 			ThreatLevel:    1,
 			NearbyResource: map[string]int{"wood": 2, "stone": 3},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true, Resource: "wood"},
+				{X: 1, Y: 0, Passable: true, Resource: "stone"},
+			},
 		}},
 		Settle: survival.SettlementService{},
 		Now:    func() time.Time { return time.Unix(1700001000, 0) },
@@ -198,19 +202,26 @@ func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
 	_, err = uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "gather-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}})
 	if err != nil {
 		t.Fatalf("gather execute: %v", err)
+	}
+	_, err = uc.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "gather-2",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_1_0_stone"}})
+	if err != nil {
+		t.Fatalf("second gather execute: %v", err)
 	}
 
 	st, err := stateRepo.GetByAgentID(ctx, agentID)
 	if err != nil {
 		t.Fatalf("reload state: %v", err)
 	}
-	if got, want := st.Inventory["wood"], 4; got != want {
+	if got, want := st.Inventory["wood"], 2; got != want {
 		t.Fatalf("wood gather mismatch: got=%d want=%d", got, want)
 	}
-	if got, want := st.Inventory["stone"], 6; got != want {
+	if got, want := st.Inventory["stone"], 2; got != want {
 		t.Fatalf("stone gather mismatch: got=%d want=%d", got, want)
 	}
 }
@@ -272,7 +283,7 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 	resp, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "gather-critical-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}})
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_5_5_wood"}})
 	if err != nil {
 		t.Fatalf("gather execute: %v", err)
 	}
@@ -438,11 +449,10 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 		Settle:     survival.SettlementService{},
 		Now:        func() time.Time { return now },
 	}
-
 	if _, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-day",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}}); err != nil {
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}}); err != nil {
 		t.Fatalf("first execute: %v", err)
 	}
 
@@ -450,7 +460,7 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 	if _, err := uc.Execute(ctx, Request{
 		AgentID:        agentID,
 		IdempotencyKey: "phase-night",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}}); err != nil {
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}}); err != nil {
 		t.Fatalf("second execute: %v", err)
 	}
 

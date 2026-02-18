@@ -68,7 +68,7 @@ func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, action.Request{
 		AgentID:        agentID,
 		IdempotencyKey: "replay-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-old",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}, StrategyHash: "sha-old",
 	}); err != nil {
 		t.Fatalf("first action execute: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, action.Request{
 		AgentID:        agentID,
 		IdempotencyKey: "replay-2",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}, StrategyHash: "sha-new",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}, StrategyHash: "sha-new",
 	}); err != nil {
 		t.Fatalf("second action execute: %v", err)
 	}
@@ -181,14 +181,14 @@ func TestUseCase_E2E_AppliesFiltersBeforeLimit(t *testing.T) {
 	if _, err := actionUC.Execute(ctx, action.Request{
 		AgentID:        agentID,
 		IdempotencyKey: "limit-1",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}}); err != nil {
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}}); err != nil {
 		t.Fatalf("first action execute: %v", err)
 	}
 	actionUC.Now = func() time.Time { return time.Unix(1700013600, 0) }
 	if _, err := actionUC.Execute(ctx, action.Request{
 		AgentID:        agentID,
 		IdempotencyKey: "limit-2",
-		Intent:         survival.ActionIntent{Type: survival.ActionGather}}); err != nil {
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"}}); err != nil {
 		t.Fatalf("second action execute: %v", err)
 	}
 

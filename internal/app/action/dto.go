@@ -15,5 +15,6 @@ type Response struct {
 	WorldTimeAfterSeconds  int64                        `json:"world_time_after_seconds"`
 	UpdatedState           survival.AgentStateAggregate `json:"updated_state"`
 	Events                 []survival.DomainEvent       `json:"events"`
+	Settlement             map[string]any               `json:"settlement,omitempty"`
 	ResultCode             survival.ResultCode          `json:"result_code"`
 }

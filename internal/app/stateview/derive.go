@@ -8,20 +8,17 @@ const (
 	defaultCapacity     = 30
 )
 
-func Enrich(state survival.AgentStateAggregate, timeOfDay string) survival.AgentStateAggregate {
+func Enrich(state survival.AgentStateAggregate, timeOfDay string, currentTileLit bool) survival.AgentStateAggregate {
 	next := state
 	if next.InventoryCapacity <= 0 {
 		next.InventoryCapacity = defaultCapacity
 	}
 	next.InventoryUsed = computeInventoryUsed(next)
-	next.StatusEffects = deriveStatusEffects(next, timeOfDay)
+	next.StatusEffects = deriveStatusEffects(next, timeOfDay, currentTileLit)
 	return next
 }
 
 func computeInventoryUsed(state survival.AgentStateAggregate) int {
-	if state.InventoryUsed > 0 {
-		return state.InventoryUsed
-	}
 	total := 0
 	for _, count := range state.Inventory {
 		if count > 0 {
@@ -31,7 +28,7 @@ func computeInventoryUsed(state survival.AgentStateAggregate) int {
 	return total
 }
 
-func deriveStatusEffects(state survival.AgentStateAggregate, timeOfDay string) []string {
+func deriveStatusEffects(state survival.AgentStateAggregate, timeOfDay string, currentTileLit bool) []string {
 	effects := make([]string, 0, 4)
 	if state.Vitals.Hunger <= 0 {
 		effects = append(effects, "STARVING")
@@ -42,7 +39,7 @@ func deriveStatusEffects(state survival.AgentStateAggregate, timeOfDay string) [
 	if state.Vitals.HP <= criticalHPThreshold {
 		effects = append(effects, "CRITICAL")
 	}
-	if timeOfDay == "night" {
+	if timeOfDay == "night" && !currentTileLit {
 		effects = append(effects, "IN_DARK")
 	}
 	return effects

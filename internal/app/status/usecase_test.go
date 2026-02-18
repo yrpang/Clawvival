@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -40,11 +41,34 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if resp.World.Rules.StandardTickMinutes != 30 {
 		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
 	}
+	if resp.World.Rules.DrainsPer30m.HungerDrain != 4 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
+		t.Fatalf("unexpected drains_per_30m: %+v", resp.World.Rules.DrainsPer30m)
+	}
+	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -3 || got.DeltaEnergy != -18 {
+		t.Fatalf("gather action cost mismatch: %+v", got)
+	}
 	if resp.State.InventoryUsed != 3 {
 		t.Fatalf("expected inventory_used=3, got=%d", resp.State.InventoryUsed)
 	}
+	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != 1 || got[1] != 3 {
+		t.Fatalf("expected wheat_yield_range [1,3], got=%v", got)
+	}
 	if len(resp.State.StatusEffects) == 0 {
 		t.Fatalf("expected status effects for low hp/energy")
+	}
+	if resp.HPDrainFeedback.IsLosingHP {
+		t.Fatalf("did not expect hp drain at hunger=20 energy=5, got=%+v", resp.HPDrainFeedback)
+	}
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal status response: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal status response: %v", err)
+	}
+	if _, ok := payload["action_costs"]; !ok {
+		t.Fatalf("expected action_costs in status response, got=%v", payload)
 	}
 }
 

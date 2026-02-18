@@ -566,6 +566,7 @@ sequenceDiagram
 - [x] 增加 `is_lit/is_visible` 语义并约束实体仅在可见 tile 返回
 - [x] 增加 `objects/resources/threats/local_threat_level`
 - [x] 增加 `world.rules` 与 `action_costs` 显式暴露
+- [x] `world.rules.drains_per_30m` 改为动态扣血模型暴露（`hp_drain_model + coeff + cap`），并在 `observe/status` 增加 `hp_drain_feedback`
 - [x] `status` 与 `observe` 对齐 `world_time_seconds/time_of_day/next_phase_in_seconds`
 
 2. 动作系统重构（P0）

@@ -2,6 +2,7 @@ package observe
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -51,11 +52,40 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if resp.View.Center.X != 7 || resp.View.Center.Y != -2 {
 		t.Fatalf("unexpected view center: %+v", resp.View.Center)
 	}
+	if resp.WorldTimeSeconds != 0 || resp.TimeOfDay != "" || resp.NextPhaseInSeconds != 0 {
+		t.Fatalf("unexpected default time projection: world_time=%d time_of_day=%q next_phase=%d", resp.WorldTimeSeconds, resp.TimeOfDay, resp.NextPhaseInSeconds)
+	}
 	if resp.World.Rules.StandardTickMinutes != 30 {
 		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
 	}
+	if resp.World.Rules.DrainsPer30m.HungerDrain != 4 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
+		t.Fatalf("unexpected drains_per_30m: %+v", resp.World.Rules.DrainsPer30m)
+	}
 	if resp.ActionCosts["move"].BaseMinutes <= 0 {
 		t.Fatalf("expected move action cost configured, got=%+v", resp.ActionCosts["move"])
+	}
+	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -3 || got.DeltaEnergy != -18 {
+		t.Fatalf("gather action cost mismatch: %+v", got)
+	}
+	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != 1 || got[1] != 3 {
+		t.Fatalf("expected wheat_yield_range [1,3], got=%v", got)
+	}
+	b, err := json.Marshal(resp.ActionCosts["gather"])
+	if err != nil {
+		t.Fatalf("marshal gather action cost: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(b, &payload); err != nil {
+		t.Fatalf("unmarshal gather action cost: %v", err)
+	}
+	if _, ok := payload["delta_hunger"]; !ok {
+		t.Fatalf("expected delta_hunger in gather action cost, got=%v", payload)
+	}
+	if _, ok := payload["delta_energy"]; !ok {
+		t.Fatalf("expected delta_energy in gather action cost, got=%v", payload)
+	}
+	if _, ok := payload["requirements"]; !ok {
+		t.Fatalf("expected requirements in gather action cost, got=%v", payload)
 	}
 }
 
@@ -64,7 +94,7 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:   "agent-1",
 			Position:  survival.Position{X: 0, Y: 0},
-			Vitals:    survival.Vitals{HP: 10, Hunger: 0, Energy: 10},
+			Vitals:    survival.Vitals{HP: 10, Hunger: -20, Energy: 10},
 			Inventory: map[string]int{"wood": 2, "stone": 1},
 		}},
 		World: observeWorldProvider{snapshot: world.Snapshot{
@@ -80,6 +110,9 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 	}
 	if resp.LocalThreatLevel != 2 {
 		t.Fatalf("expected local threat level 2, got %d", resp.LocalThreatLevel)
+	}
+	if resp.TimeOfDay != "day" {
+		t.Fatalf("expected top-level time_of_day=day, got %q", resp.TimeOfDay)
 	}
 	if len(resp.Tiles) != 121 {
 		t.Fatalf("expected 121 window tiles, got %d", len(resp.Tiles))
@@ -104,6 +137,9 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 	}
 	if len(resp.State.StatusEffects) == 0 {
 		t.Fatalf("expected derived status effects, got empty")
+	}
+	if !resp.HPDrainFeedback.IsLosingHP || resp.HPDrainFeedback.EstimatedLossPer30 <= 0 {
+		t.Fatalf("expected hp_drain_feedback to indicate active hp loss, got=%+v", resp.HPDrainFeedback)
 	}
 }
 

@@ -42,7 +42,6 @@ const (
 	ActionRest              ActionType = "rest"
 	ActionSleep             ActionType = "sleep"
 	ActionMove              ActionType = "move"
-	ActionCombat            ActionType = "combat"
 	ActionBuild             ActionType = "build"
 	ActionFarm              ActionType = "farm"
 	ActionFarmPlant         ActionType = "farm_plant"
@@ -116,5 +115,5 @@ const (
 	DeathCauseUnknown    DeathCause = "unknown"
 	DeathCauseStarvation DeathCause = "starvation"
 	DeathCauseExhaustion DeathCause = "exhaustion"
-	DeathCauseCombat     DeathCause = "combat"
+	DeathCauseThreat     DeathCause = "threat"
 )

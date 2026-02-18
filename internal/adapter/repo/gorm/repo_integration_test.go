@@ -41,7 +41,7 @@ func TestAgentStateRepo_RoundTripInventoryAndDeath(t *testing.T) {
 		InventoryCapacity: 40,
 		InventoryUsed:     4,
 		Dead:              true,
-		DeathCause:        survival.DeathCauseCombat,
+		DeathCause:        survival.DeathCauseThreat,
 		Version:           1,
 	}
 	if err := repo.SaveWithVersion(ctx, seed, 0); err != nil {
@@ -57,8 +57,8 @@ func TestAgentStateRepo_RoundTripInventoryAndDeath(t *testing.T) {
 	if got.InventoryCapacity != 40 || got.InventoryUsed != 4 {
 		t.Fatalf("expected inventory cap/used 40/4, got %d/%d", got.InventoryCapacity, got.InventoryUsed)
 	}
-	if !got.Dead || got.DeathCause != survival.DeathCauseCombat {
-		t.Fatalf("expected dead combat, got dead=%v cause=%s", got.Dead, got.DeathCause)
+	if !got.Dead || got.DeathCause != survival.DeathCauseThreat {
+		t.Fatalf("expected dead threat, got dead=%v cause=%s", got.Dead, got.DeathCause)
 	}
 }
 

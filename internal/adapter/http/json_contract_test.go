@@ -58,8 +58,8 @@ func TestResponseJSONUsesSnakeCase(t *testing.T) {
 		{
 			name:    "observe",
 			payload: observe.Response{State: state, Snapshot: snapshot},
-			want:    []string{"state", "snapshot"},
-			notWant: []string{"State", "Snapshot"},
+			want:    []string{"agent_state", "snapshot", "world_time_seconds", "time_of_day", "next_phase_in_seconds"},
+			notWant: []string{"State", "Snapshot", "state"},
 		},
 		{
 			name:    "action",
@@ -70,8 +70,8 @@ func TestResponseJSONUsesSnakeCase(t *testing.T) {
 		{
 			name:    "status",
 			payload: status.Response{State: state, TimeOfDay: "day", NextPhaseInSeconds: 60},
-			want:    []string{"state", "time_of_day", "next_phase_in_seconds"},
-			notWant: []string{"State", "TimeOfDay", "NextPhaseInSeconds"},
+			want:    []string{"agent_state", "time_of_day", "next_phase_in_seconds"},
+			notWant: []string{"State", "TimeOfDay", "NextPhaseInSeconds", "state"},
 		},
 		{
 			name:    "replay",
@@ -102,12 +102,12 @@ func TestResponseJSONUsesSnakeCase(t *testing.T) {
 				}
 			}
 			if tc.name == "observe" {
-				stateMap := asMap(got["state"])
+				stateMap := asMap(got["agent_state"])
 				if _, ok := stateMap["agent_id"]; !ok {
-					t.Fatalf("expected nested snake_case key state.agent_id in %s", string(b))
+					t.Fatalf("expected nested snake_case key agent_state.agent_id in %s", string(b))
 				}
 				if _, ok := stateMap["AgentID"]; ok {
-					t.Fatalf("unexpected nested key state.AgentID in %s", string(b))
+					t.Fatalf("unexpected nested key agent_state.AgentID in %s", string(b))
 				}
 				snapshotMap := asMap(got["snapshot"])
 				if _, ok := snapshotMap["time_of_day"]; !ok {

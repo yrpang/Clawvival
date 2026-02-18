@@ -304,6 +304,10 @@ func writeError(ctx *app.RequestContext, err error) {
 		writeErrorBody(ctx, consts.StatusConflict, "action_in_progress", err.Error())
 	case errors.Is(err, action.ErrActionPreconditionFailed):
 		writeErrorBody(ctx, consts.StatusConflict, "action_precondition_failed", err.Error())
+	case errors.Is(err, action.ErrInventoryFull):
+		writeErrorBody(ctx, consts.StatusConflict, "INVENTORY_FULL", err.Error())
+	case errors.Is(err, action.ErrContainerFull):
+		writeErrorBody(ctx, consts.StatusConflict, "CONTAINER_FULL", err.Error())
 	case errors.Is(err, action.ErrInvalidActionParams):
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_action_params", err.Error())
 	case errors.Is(err, action.ErrInvalidRequest),
@@ -343,13 +347,24 @@ func writeActionRejectedFromErr(ctx *app.RequestContext, err error) bool {
 		writeActionRejected(ctx, consts.StatusConflict, "action_in_progress", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
 		return true
 	case errors.Is(err, action.ErrTargetOutOfView):
-		writeActionRejected(ctx, consts.StatusConflict, "TARGET_OUT_OF_VIEW", err.Error(), false, []string{"NOT_VISIBLE"}, nil)
+		writeActionRejected(ctx, consts.StatusConflict, "TARGET_OUT_OF_VIEW", err.Error(), false, []string{"NOT_VISIBLE"}, map[string]any{
+			"in_window": false,
+		})
 		return true
 	case errors.Is(err, action.ErrTargetNotVisible):
-		writeActionRejected(ctx, consts.StatusConflict, "TARGET_NOT_VISIBLE", err.Error(), false, []string{"NOT_VISIBLE"}, nil)
+		writeActionRejected(ctx, consts.StatusConflict, "TARGET_NOT_VISIBLE", err.Error(), false, []string{"NOT_VISIBLE"}, map[string]any{
+			"in_window":  true,
+			"is_visible": false,
+		})
 		return true
 	case errors.Is(err, action.ErrActionPreconditionFailed):
 		writeActionRejected(ctx, consts.StatusConflict, "action_precondition_failed", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		return true
+	case errors.Is(err, action.ErrInventoryFull):
+		writeActionRejected(ctx, consts.StatusConflict, "INVENTORY_FULL", err.Error(), false, []string{"INVENTORY_FULL"}, nil)
+		return true
+	case errors.Is(err, action.ErrContainerFull):
+		writeActionRejected(ctx, consts.StatusConflict, "CONTAINER_FULL", err.Error(), false, []string{"CONTAINER_FULL"}, nil)
 		return true
 	case errors.Is(err, action.ErrInvalidActionParams):
 		writeActionRejected(ctx, consts.StatusBadRequest, "invalid_action_params", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
