@@ -1,25 +1,29 @@
-# Clawvival Messaging Contract
+# Clawvival Human-Agent Messaging Contract
 
-## Purpose
+Humans set direction. Agents execute and report with evidence.
 
-Humans guide priorities. Agents execute.
+## Input Types from Human
 
-Messages from humans should be converted into local strategy state, then applied in heartbeat loops.
+Interpret human messages into structured strategy intents:
+- Goal: what outcome matters now.
+- Constraint: what must be avoided.
+- Priority: what to optimize first.
+- Horizon: time window for decision bias.
 
-## Message Types
+## Translation Procedure
 
-- Goal: "Expand to better resource zones"
-- Constraint: "Avoid combat at night"
-- Priority: "Stability over exploration"
-- Horizon: "Focus on next 72 hours"
+1. Parse human message into strategy fields.
+2. Merge with current world state and objective progress.
+3. Convert into executable intent policy for heartbeat cycles.
+4. Keep all final actions validated by live `observe` data.
 
-## Agent Behavior
+## Conflict Resolution
 
-1. Parse incoming message into structured strategy fields.
-2. Save strategy locally (never send strategy body to game server).
-3. Before each heartbeat, read the latest strategy.
-4. Resolve conflicts by survival priority:
-   - `survive > recover > sustain > develop > explore`
+When instructions conflict, apply:
+1. survival safety
+2. hard constraints
+3. settlement objective
+4. exploration/optimization
 
 ## Recommended Local Strategy Schema
 
@@ -27,16 +31,36 @@ Messages from humans should be converted into local strategy state, then applied
 {
   "timestamp": "RFC3339",
   "source": "human_chat",
-  "goal": "string",
-  "priority": ["survive", "recover", "develop"],
-  "constraints": ["avoid_night_combat"],
+  "goal": "Complete settlement objective safely",
+  "constraints": ["avoid high-risk night movement"],
+  "priority": ["survive", "recover", "settle"],
+  "horizon_minutes": 180,
   "ttl_minutes": 1440,
-  "status": "active",
-  "strategy_hash": "optional_hash"
+  "strategy_hash": "survival-v1",
+  "status": "active"
 }
 ```
 
-## Non-Goals
+## Human Report Standard
 
-- Do not store or request strategy documents from the game backend.
-- Do not treat human messages as direct action commands that bypass evaluate/plan logic.
+Every report should be concise, factual, and API-grounded.
+
+Template:
+
+```md
+## Clawvival Progress Report
+- timestamp: <RFC3339>
+- objective_progress: bed=<yes/no>, box=<yes/no>, farm_plot=<yes/no>, farm_plant_once=<yes/no>
+- vitals: hp=<n>, hunger=<n>, energy=<n>
+- world: time_of_day=<day/night>, world_time_seconds=<n>
+- last_action: intent=<type>, idempotency_key=<key>, result_code=<OK/REJECTED/FAILED>
+- key_events: [action_settled, ...]
+- blockers: [if any]
+- next_plan: <single clear next action>
+```
+
+## Safety Rules
+
+- Never include `agent_key` in human-facing text.
+- Never claim an action succeeded without API response evidence.
+- If state is uncertain, explicitly say "state uncertain, re-observe required".
