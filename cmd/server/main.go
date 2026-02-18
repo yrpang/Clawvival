@@ -26,7 +26,7 @@ import (
 )
 
 func main() {
-	stateRepo, credRepo, actionRepo, eventRepo, worldObjectRepo, sessionRepo, txManager := mustBuildRepos()
+	stateRepo, credRepo, actionRepo, eventRepo, worldObjectRepo, resourceNodeRepo, sessionRepo, txManager := mustBuildRepos()
 	worldProvider := buildWorldProviderFromEnv()
 	skillsProvider := staticskills.Provider{Root: "./skills"}
 	kpiRecorder := metricsinmem.NewRecorder()
@@ -39,18 +39,19 @@ func main() {
 			Now:         time.Now,
 		},
 		AuthUC:    auth.VerifyUseCase{Credentials: credRepo},
-		ObserveUC: observe.UseCase{StateRepo: stateRepo, ObjectRepo: worldObjectRepo, World: worldProvider},
+		ObserveUC: observe.UseCase{StateRepo: stateRepo, ObjectRepo: worldObjectRepo, ResourceRepo: resourceNodeRepo, World: worldProvider, Now: time.Now},
 		ActionUC: action.UseCase{
-			TxManager:   txManager,
-			StateRepo:   stateRepo,
-			ActionRepo:  actionRepo,
-			EventRepo:   eventRepo,
-			ObjectRepo:  worldObjectRepo,
-			SessionRepo: sessionRepo,
-			World:       worldProvider,
-			Metrics:     kpiRecorder,
-			Settle:      survival.SettlementService{},
-			Now:         time.Now,
+			TxManager:    txManager,
+			StateRepo:    stateRepo,
+			ActionRepo:   actionRepo,
+			EventRepo:    eventRepo,
+			ObjectRepo:   worldObjectRepo,
+			ResourceRepo: resourceNodeRepo,
+			SessionRepo:  sessionRepo,
+			World:        worldProvider,
+			Metrics:      kpiRecorder,
+			Settle:       survival.SettlementService{},
+			Now:          time.Now,
 		},
 		StatusUC: status.UseCase{StateRepo: stateRepo, World: worldProvider},
 		ReplayUC: replay.UseCase{Events: eventRepo},
@@ -65,7 +66,7 @@ func main() {
 	s.Spin()
 }
 
-func mustBuildRepos() (ports.AgentStateRepository, ports.AgentCredentialRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentSessionRepository, ports.TxManager) {
+func mustBuildRepos() (ports.AgentStateRepository, ports.AgentCredentialRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentResourceNodeRepository, ports.AgentSessionRepository, ports.TxManager) {
 	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
 	if dsn == "" {
 		log.Fatal("CLAWVIVAL_DB_DSN is required")
@@ -74,7 +75,7 @@ func mustBuildRepos() (ports.AgentStateRepository, ports.AgentCredentialReposito
 	if err != nil {
 		log.Fatalf("open postgres: %v", err)
 	}
-	return gormrepo.NewAgentStateRepo(db), gormrepo.NewAgentCredentialRepo(db), gormrepo.NewActionExecutionRepo(db), gormrepo.NewEventRepo(db), gormrepo.NewWorldObjectRepo(db), gormrepo.NewAgentSessionRepo(db), gormrepo.NewTxManager(db)
+	return gormrepo.NewAgentStateRepo(db), gormrepo.NewAgentCredentialRepo(db), gormrepo.NewActionExecutionRepo(db), gormrepo.NewEventRepo(db), gormrepo.NewWorldObjectRepo(db), gormrepo.NewAgentResourceNodeRepo(db), gormrepo.NewAgentSessionRepo(db), gormrepo.NewTxManager(db)
 }
 
 func buildWorldProviderFromEnv() ports.WorldProvider {

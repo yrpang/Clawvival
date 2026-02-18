@@ -3,6 +3,7 @@ package action
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -292,6 +293,45 @@ type stubObjectRepo struct {
 	byID map[string]ports.WorldObjectRecord
 }
 
+type stubResourceNodeRepo struct {
+	byTarget map[string]ports.AgentResourceNodeRecord
+}
+
+func (r *stubResourceNodeRepo) Upsert(_ context.Context, record ports.AgentResourceNodeRecord) error {
+	if r.byTarget == nil {
+		r.byTarget = map[string]ports.AgentResourceNodeRecord{}
+	}
+	r.byTarget[record.AgentID+"|"+record.TargetID] = record
+	return nil
+}
+
+func (r *stubResourceNodeRepo) GetByTargetID(_ context.Context, agentID, targetID string) (ports.AgentResourceNodeRecord, error) {
+	if r.byTarget == nil {
+		return ports.AgentResourceNodeRecord{}, ports.ErrNotFound
+	}
+	record, ok := r.byTarget[agentID+"|"+targetID]
+	if !ok {
+		return ports.AgentResourceNodeRecord{}, ports.ErrNotFound
+	}
+	return record, nil
+}
+
+func (r *stubResourceNodeRepo) ListByAgentID(_ context.Context, agentID string) ([]ports.AgentResourceNodeRecord, error) {
+	if r.byTarget == nil {
+		return nil, ports.ErrNotFound
+	}
+	out := make([]ports.AgentResourceNodeRecord, 0, len(r.byTarget))
+	for key, record := range r.byTarget {
+		if strings.HasPrefix(key, agentID+"|") {
+			out = append(out, record)
+		}
+	}
+	if len(out) == 0 {
+		return nil, ports.ErrNotFound
+	}
+	return out, nil
+}
+
 func (r *stubObjectRepo) Save(_ context.Context, _ string, obj ports.WorldObjectRecord) error {
 	if r.byID == nil {
 		r.byID = map[string]ports.WorldObjectRecord{}
@@ -366,9 +406,9 @@ func TestUseCase_RestBlocksOtherActionsUntilDue(t *testing.T) {
 		EventRepo:  eventRepo,
 		World: worldmock.Provider{Snapshot: world.Snapshot{
 			WorldTimeSeconds: 7200,
-			TimeOfDay:      "day",
-			ThreatLevel:    1,
-			NearbyResource: map[string]int{"wood": 1},
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+			NearbyResource:   map[string]int{"wood": 1},
 			VisibleTiles: []world.Tile{
 				{X: 0, Y: 0, Passable: true, Resource: "wood"},
 				{X: 1, Y: 0, Passable: true},
@@ -462,9 +502,9 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 		EventRepo:  eventRepo,
 		World: worldmock.Provider{Snapshot: world.Snapshot{
 			WorldTimeSeconds: 3600,
-			TimeOfDay:      "day",
-			ThreatLevel:    1,
-			NearbyResource: map[string]int{"wood": 1},
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+			NearbyResource:   map[string]int{"wood": 1},
 			VisibleTiles: []world.Tile{
 				{X: 0, Y: 0, Passable: true, Resource: "wood"},
 				{X: 1, Y: 0, Passable: true},
@@ -1202,6 +1242,55 @@ func TestUseCase_GatherRejectsWhenTargetTileHasNoResource(t *testing.T) {
 	}
 }
 
+func TestUseCase_GatherRejectsWhenTargetAlreadyDepletedForAgent(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	resourceRepo := &stubResourceNodeRepo{byTarget: map[string]ports.AgentResourceNodeRecord{
+		"agent-1|res_0_0_wood": {
+			AgentID:       "agent-1",
+			TargetID:      "res_0_0_wood",
+			ResourceType:  "wood",
+			X:             0,
+			Y:             0,
+			DepletedUntil: now.Add(30 * time.Minute),
+		},
+	}}
+	uc := UseCase{
+		TxManager:    stubTxManager{},
+		StateRepo:    stateRepo,
+		ActionRepo:   actionRepo,
+		EventRepo:    eventRepo,
+		ResourceRepo: resourceRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:      "day",
+			ThreatLevel:    1,
+			NearbyResource: map[string]int{"wood": 1},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true, Resource: "wood"},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-depleted",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if !errors.Is(err, ErrResourceDepleted) {
+		t.Fatalf("expected ErrResourceDepleted, got %v", err)
+	}
+	var depletedErr *ResourceDepletedError
+	if !errors.As(err, &depletedErr) || depletedErr == nil || depletedErr.RemainingSeconds <= 0 {
+		t.Fatalf("expected remaining_seconds in ResourceDepletedError, got=%v", err)
+	}
+}
+
 func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
@@ -1624,6 +1713,55 @@ func TestUseCase_GatherOnlyCollectsTargetResourceType(t *testing.T) {
 	}
 	if got := out.UpdatedState.Inventory["stone"]; got != 0 {
 		t.Fatalf("expected non-target stone not gathered, got=%d", got)
+	}
+}
+
+func TestUseCase_GatherPersistsAgentResourceDepletion(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	resourceRepo := &stubResourceNodeRepo{}
+	uc := UseCase{
+		TxManager:    stubTxManager{},
+		StateRepo:    stateRepo,
+		ActionRepo:   actionRepo,
+		EventRepo:    eventRepo,
+		ResourceRepo: resourceRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:        "day",
+			WorldTimeSeconds: 100,
+			ThreatLevel:      0,
+			NearbyResource:   map[string]int{"wood": 7},
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true, Resource: "wood"},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-persists-depleted",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	record, err := resourceRepo.GetByTargetID(context.Background(), "agent-1", "res_0_0_wood")
+	if err != nil {
+		t.Fatalf("expected depletion record, got err=%v", err)
+	}
+	if !record.DepletedUntil.After(now) {
+		t.Fatalf("expected depletion future timestamp, got=%v", record.DepletedUntil)
 	}
 }
 

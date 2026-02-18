@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"clawvival/internal/app/ports"
+	"clawvival/internal/app/resourcestate"
 	"clawvival/internal/app/stateview"
 	"clawvival/internal/domain/world"
 )
@@ -21,9 +23,11 @@ const (
 )
 
 type UseCase struct {
-	StateRepo  ports.AgentStateRepository
-	ObjectRepo ports.WorldObjectRepository
-	World      ports.WorldProvider
+	StateRepo    ports.AgentStateRepository
+	ObjectRepo   ports.WorldObjectRepository
+	ResourceRepo ports.AgentResourceNodeRepository
+	World        ports.WorldProvider
+	Now          func() time.Time
 }
 
 func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
@@ -39,6 +43,15 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	nowFn := u.Now
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	depleted, err := loadDepletedTargets(ctx, u.ResourceRepo, req.AgentID, nowFn())
+	if err != nil {
+		return Response{}, err
+	}
+	applyDepletedResourcesToSnapshot(&snapshot, depleted)
 	state = stateview.Enrich(state, snapshot.TimeOfDay, isCurrentTileLit(snapshot.TimeOfDay))
 	tiles := buildWindowTiles(world.Point{X: state.Position.X, Y: state.Position.Y}, snapshot.TimeOfDay, snapshot.VisibleTiles)
 	objects := []ObservedObject{}
@@ -49,6 +62,8 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		}
 		objects = projectObjects(tiles, rows)
 	}
+	resources := projectResources(tiles, depleted)
+	snapshot.NearbyResource = summarizeNearby(resources)
 	return Response{
 		State:              state,
 		Snapshot:           snapshot,
@@ -82,7 +97,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		},
 		Tiles:            tiles,
 		Objects:          objects,
-		Resources:        projectResources(tiles),
+		Resources:        resources,
 		Threats:          projectThreats(tiles),
 		LocalThreatLevel: snapshot.ThreatLevel,
 	}, nil
@@ -148,20 +163,74 @@ func projectTiles(tiles []world.Tile, timeOfDay string) []ObservedTile {
 	return out
 }
 
-func projectResources(tiles []ObservedTile) []ObservedResource {
+func projectResources(tiles []ObservedTile, depleted map[string]int) []ObservedResource {
 	out := make([]ObservedResource, 0, len(tiles))
 	for _, t := range tiles {
 		if !t.IsVisible || t.ResourceType == "" {
 			continue
 		}
+		id := resourcestate.BuildResourceTargetID(t.Pos.X, t.Pos.Y, t.ResourceType)
+		if depleted[strings.TrimSpace(id)] > 0 {
+			continue
+		}
 		out = append(out, ObservedResource{
-			ID:         fmt.Sprintf("res_%d_%d_%s", t.Pos.X, t.Pos.Y, t.ResourceType),
+			ID:         id,
 			Type:       t.ResourceType,
 			Pos:        t.Pos,
 			IsDepleted: false,
 		})
 	}
 	return out
+}
+
+func summarizeNearby(resources []ObservedResource) map[string]int {
+	out := map[string]int{}
+	for _, res := range resources {
+		out[res.Type]++
+	}
+	return out
+}
+
+func applyDepletedResourcesToSnapshot(snapshot *world.Snapshot, depleted map[string]int) {
+	if snapshot == nil || len(snapshot.VisibleTiles) == 0 || len(depleted) == 0 {
+		return
+	}
+	for i := range snapshot.VisibleTiles {
+		tile := &snapshot.VisibleTiles[i]
+		if strings.TrimSpace(tile.Resource) == "" {
+			continue
+		}
+		targetID := resourcestate.BuildResourceTargetID(tile.X, tile.Y, tile.Resource)
+		if depleted[strings.TrimSpace(targetID)] <= 0 {
+			continue
+		}
+		tile.Resource = ""
+	}
+}
+
+func loadDepletedTargets(ctx context.Context, repo ports.AgentResourceNodeRepository, agentID string, now time.Time) (map[string]int, error) {
+	if repo == nil {
+		return map[string]int{}, nil
+	}
+	rows, err := repo.ListByAgentID(ctx, agentID)
+	if errors.Is(err, ports.ErrNotFound) {
+		return map[string]int{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]int{}
+	for _, row := range rows {
+		if !row.DepletedUntil.After(now) {
+			continue
+		}
+		remaining := int(row.DepletedUntil.Sub(now).Seconds())
+		if remaining < 1 {
+			remaining = 1
+		}
+		out[row.TargetID] = remaining
+	}
+	return out, nil
 }
 
 func projectThreats(tiles []ObservedTile) []ObservedThreat {

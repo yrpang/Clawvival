@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"clawvival/internal/app/ports"
+	"clawvival/internal/app/resourcestate"
 	"clawvival/internal/app/stateview"
 	"clawvival/internal/domain/survival"
 	"clawvival/internal/domain/world"
@@ -23,9 +24,23 @@ var (
 	ErrActionInProgress         = errors.New("action in progress")
 	ErrTargetOutOfView          = errors.New("target out of view")
 	ErrTargetNotVisible         = errors.New("target not visible")
+	ErrResourceDepleted         = errors.New("resource depleted")
 	ErrInventoryFull            = errors.New("inventory full")
 	ErrContainerFull            = errors.New("container full")
 )
+
+type ResourceDepletedError struct {
+	TargetID         string
+	RemainingSeconds int
+}
+
+func (e *ResourceDepletedError) Error() string {
+	return ErrResourceDepleted.Error()
+}
+
+func (e *ResourceDepletedError) Unwrap() error {
+	return ErrResourceDepleted
+}
 
 type ActionInvalidPositionError struct {
 	TargetPos       *survival.Position
@@ -53,16 +68,17 @@ const (
 )
 
 type UseCase struct {
-	TxManager   ports.TxManager
-	StateRepo   ports.AgentStateRepository
-	ActionRepo  ports.ActionExecutionRepository
-	EventRepo   ports.EventRepository
-	ObjectRepo  ports.WorldObjectRepository
-	SessionRepo ports.AgentSessionRepository
-	World       ports.WorldProvider
-	Metrics     ports.ActionMetrics
-	Settle      survival.SettlementService
-	Now         func() time.Time
+	TxManager    ports.TxManager
+	StateRepo    ports.AgentStateRepository
+	ActionRepo   ports.ActionExecutionRepository
+	EventRepo    ports.EventRepository
+	ObjectRepo   ports.WorldObjectRepository
+	ResourceRepo ports.AgentResourceNodeRepository
+	SessionRepo  ports.AgentSessionRepository
+	World        ports.WorldProvider
+	Metrics      ports.ActionMetrics
+	Settle       survival.SettlementService
+	Now          func() time.Time
 }
 
 func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
@@ -165,6 +181,9 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err := validateTargetVisibility(state.Position, req.Intent, snapshot); err != nil {
 			return err
 		}
+		if err := validateGatherTargetState(txCtx, u.ResourceRepo, req.AgentID, req.Intent, nowAt); err != nil {
+			return err
+		}
 		preparedObj, err := prepareObjectAction(txCtx, nowAt, state, req.Intent, u.ObjectRepo, req.AgentID)
 		if err != nil {
 			return err
@@ -214,6 +233,9 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		}
 		applySeedPityIfNeeded(txCtx, req.Intent, &result, state, u.EventRepo, req.AgentID)
 		attachLastKnownThreat(&result, snapshot)
+		if err := persistGatherDepletion(txCtx, u.ResourceRepo, req.AgentID, req.Intent, nowAt); err != nil {
+			return err
+		}
 
 		if err := u.StateRepo.SaveWithVersion(txCtx, result.UpdatedState, state.Version); err != nil {
 			return err
@@ -668,10 +690,10 @@ func startRestAction(ctx context.Context, u UseCase, req Request, state survival
 		Type:       "rest_started",
 		OccurredAt: nowAt,
 		Payload: map[string]any{
-			"agent_id":     req.AgentID,
-			"session_id":   "session-" + req.AgentID,
-			"rest_minutes": restMinutes,
-			"end_at":       next.OngoingAction.EndAt,
+			"agent_id":                  req.AgentID,
+			"session_id":                "session-" + req.AgentID,
+			"rest_minutes":              restMinutes,
+			"end_at":                    next.OngoingAction.EndAt,
 			"world_time_before_seconds": snapshot.WorldTimeSeconds,
 			"world_time_after_seconds":  snapshot.WorldTimeSeconds,
 		},
@@ -725,7 +747,7 @@ func validateTargetVisibility(center survival.Position, intent survival.ActionIn
 	if intent.Type != survival.ActionGather || strings.TrimSpace(intent.TargetID) == "" {
 		return nil
 	}
-	tx, ty, resource, ok := parseResourceTargetID(intent.TargetID)
+	tx, ty, resource, ok := resourcestate.ParseResourceTargetID(intent.TargetID)
 	if !ok {
 		return ErrActionPreconditionFailed
 	}
@@ -751,17 +773,6 @@ func validateTargetVisibility(center survival.Position, intent survival.ActionIn
 		}
 	}
 	return ErrTargetNotVisible
-}
-
-func parseResourceTargetID(targetID string) (x int, y int, resource string, ok bool) {
-	var prefix string
-	if _, err := fmt.Sscanf(strings.TrimSpace(targetID), "%3s_%d_%d_%s", &prefix, &x, &y, &resource); err != nil {
-		return 0, 0, "", false
-	}
-	if prefix != "res" {
-		return 0, 0, "", false
-	}
-	return x, y, resource, true
 }
 
 func buildKindFromObjectType(objectType string) (survival.BuildKind, bool) {
@@ -1314,7 +1325,7 @@ func aggregateItemCounts(items []survival.ItemAmount) map[string]int {
 }
 
 func filterGatherNearbyResource(targetID string, nearby map[string]int) map[string]int {
-	_, _, resource, ok := parseResourceTargetID(targetID)
+	_, _, resource, ok := resourcestate.ParseResourceTargetID(targetID)
 	if !ok || strings.TrimSpace(resource) == "" {
 		return map[string]int{}
 	}
@@ -1322,6 +1333,45 @@ func filterGatherNearbyResource(targetID string, nearby map[string]int) map[stri
 	// A gather action targets a single resource node by id.
 	// Keep per-action yield stable regardless of how many same-type nodes are in view.
 	return map[string]int{resource: 1}
+}
+
+func validateGatherTargetState(ctx context.Context, repo ports.AgentResourceNodeRepository, agentID string, intent survival.ActionIntent, now time.Time) error {
+	if intent.Type != survival.ActionGather || strings.TrimSpace(intent.TargetID) == "" || repo == nil {
+		return nil
+	}
+	record, err := repo.GetByTargetID(ctx, agentID, strings.TrimSpace(intent.TargetID))
+	if errors.Is(err, ports.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !record.DepletedUntil.After(now) {
+		return nil
+	}
+	remaining := int(record.DepletedUntil.Sub(now).Seconds())
+	if remaining < 1 {
+		remaining = 1
+	}
+	return &ResourceDepletedError{TargetID: intent.TargetID, RemainingSeconds: remaining}
+}
+
+func persistGatherDepletion(ctx context.Context, repo ports.AgentResourceNodeRepository, agentID string, intent survival.ActionIntent, now time.Time) error {
+	if repo == nil || intent.Type != survival.ActionGather || strings.TrimSpace(intent.TargetID) == "" {
+		return nil
+	}
+	x, y, resource, ok := resourcestate.ParseResourceTargetID(intent.TargetID)
+	if !ok {
+		return nil
+	}
+	return repo.Upsert(ctx, ports.AgentResourceNodeRecord{
+		AgentID:       agentID,
+		TargetID:      strings.TrimSpace(intent.TargetID),
+		ResourceType:  resource,
+		X:             x,
+		Y:             y,
+		DepletedUntil: now.Add(resourcestate.RespawnDuration(resource)),
+	})
 }
 
 func attachBuiltObjectIDs(events []survival.DomainEvent, ids []string) {

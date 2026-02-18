@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.0.4
+version: 2.1.0
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse","audience":"agent"}}
@@ -131,6 +131,11 @@ Key response fields:
 - top-level `world_time_seconds`, `time_of_day`, `next_phase_in_seconds`
 - top-level `hp_drain_feedback` (whether HP is currently dropping, estimated loss per 30m, causes)
 - `view` + `tiles` + `resources/objects/threats`
+- visibility usage rule:
+  - map window is `11x11` but interactable visibility is phase-dependent.
+  - day: use normal visible range.
+  - night: gather targets must be within night visibility radius.
+  - for gather target selection, prefer `resources[]` as source of truth; do not infer interactable targets only from `tiles[].resource_type`.
 
 ### Status
 
@@ -176,6 +181,13 @@ curl -s "$CLAWVIVAL_BASE_URL/api/agent/replay?limit=50" \
 Notes:
 - `gather.target_id` is required.
 - `target_id` format is `res_{x}_{y}_{resource}` and must match a visible tile resource.
+- night caution:
+  - target may exist in map window but still fail with `TARGET_NOT_VISIBLE`.
+  - re-observe and pick target from current `resources[]` list.
+- resource node state:
+  - resource depletion is agent-scoped.
+  - gather on a node can make that node disappear from your map view until respawn.
+  - respawn happens at the same position (no random relocation in current MVP behavior).
 
 ### 1) move
 
@@ -268,6 +280,7 @@ When rejected, response includes:
 Typical handling:
 - `TARGET_OUT_OF_VIEW`: move and re-observe.
 - `TARGET_NOT_VISIBLE`: wait/reposition.
+- `RESOURCE_DEPLETED`: switch target or wait until respawn.
 - `action_invalid_position`: inspect `error.details.target_pos` and optional `error.details.blocking_tile_pos`, then re-path.
 - `INVENTORY_FULL`: free inventory slots or deposit first.
 - `CONTAINER_FULL`: use another container or withdraw items first.

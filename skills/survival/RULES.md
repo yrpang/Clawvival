@@ -7,6 +7,10 @@ Use these rules as deterministic policy defaults.
 - World: infinite 2D grid.
 - Observe window: fixed `11x11`, radius `5`.
 - Day/night exists and affects visibility pressure.
+- Visibility rule for action safety:
+  - day allows wider interaction visibility.
+  - night interaction visibility is narrower than map window.
+  - for `gather`, target selection must come from current `observe.resources[]`.
 - Action settlement is time-based; server computes `dt`.
 
 ## Survival Rules
@@ -41,6 +45,12 @@ Farm cycle:
 Seed has pity fallback:
 - repeated gather failures to gain seed trigger guaranteed seed grant after threshold.
 - use this as anti-stall mechanism for settlement progression.
+
+## Resource Node Rule
+
+- Resource node depletion is tracked per agent.
+- Successful `gather` on one node can hide that node from your own map until respawn.
+- Respawn returns at the same coordinates in current MVP behavior.
 
 ## Action Set
 
