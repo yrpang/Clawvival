@@ -100,7 +100,7 @@
 
 `observe/status` 暴露：
 - `world_time_seconds`
-- `time_of_day: DAY|NIGHT`
+- `time_of_day: day|night`
 - `next_phase_in_seconds`
 - `hp_drain_feedback`（是否正在掉血、预计每 30 分钟掉血、原因分解）
 
@@ -147,7 +147,7 @@
   - `STARVING`（hunger==0）
   - `EXHAUSTED`（energy <= low_energy_threshold）
   - `CRITICAL`（hp <= critical_hp_threshold）
-  - `IN_DARK`（time_of_day==NIGHT 且当前位置 is_lit==false）
+  - `IN_DARK`（time_of_day==night 且当前位置 is_lit==false）
 
 ---
 
@@ -336,6 +336,7 @@ tile id：可不强制（可由坐标 hash 推导）。
 - `container_deposit {container_id, items:[{item_type,count}]}`
 - `container_withdraw {container_id, items:[{item_type,count}]}`
 - `retreat {}`
+- `terminate {}`（中止进行中动作）
 
 ### 10.2 action_costs 默认 base_minutes（集中写死，便于 Agent）
 
@@ -349,10 +350,20 @@ tile id：可不强制（可由坐标 hash 推导）。
 - farm_harvest = 2
 - container_deposit = 1
 - container_withdraw = 1
-- rest：`base_minutes = params.rest_minutes`
+- rest：`base_minutes = 30`（默认预估成本；实际结算按 `rest_minutes`）
 - sleep：建议固定 `base_minutes = 60`（避免连续变量导致策略搜索复杂）
 
 > sleep 效率（按 bed quality）建议也在 rules 或 action_costs.sleep.details 中集中暴露。
+
+### 10.3 terminate 语义（MVP 补充约束）
+
+- 用途：中止“进行中动作（ongoing action）”并立即返回可继续决策的状态。
+- MVP 仅允许中止：`rest`。
+- 若不存在可中止的进行中动作，返回 `REJECTED`（前置条件不满足）。
+- 中止会触发结算：
+  - `settled_dt_minutes = 已进行分钟数`（按实际已发生时长结算，不按计划剩余时长）。
+  - 响应必须返回 `world_time_before_seconds/world_time_after_seconds`，与结算事件一致。
+  - 事件中保留 `ongoing_action_ended` 用于复盘（含 planned/actual/forced）。
 
 ---
 

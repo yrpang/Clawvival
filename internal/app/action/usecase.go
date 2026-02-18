@@ -115,8 +115,8 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			}
 			out = Response{
 				SettledDTMinutes:       finalized.DTMinutes,
-				WorldTimeBeforeSeconds: 0,
-				WorldTimeAfterSeconds:  int64(finalized.DTMinutes * 60),
+				WorldTimeBeforeSeconds: finalized.WorldTimeBeforeSeconds,
+				WorldTimeAfterSeconds:  finalized.WorldTimeAfterSeconds,
 				UpdatedState:           finalized.UpdatedState,
 				Events:                 finalized.Events,
 				Settlement:             settlementSummary(finalized.Events),
@@ -331,6 +331,25 @@ func worldTimeWindowFromExecution(exec *ports.ActionExecutionRecord) (int64, int
 	return worldTimeWindow(0, exec.DT)
 }
 
+func worldTimeWindowFromEvents(events []survival.DomainEvent, fallbackBefore int64, dtMinutes int) (int64, int64) {
+	for _, evt := range events {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		beforeRaw, hasBefore := evt.Payload["world_time_before_seconds"]
+		afterRaw, hasAfter := evt.Payload["world_time_after_seconds"]
+		if !hasBefore || !hasAfter {
+			continue
+		}
+		return int64(toNum(beforeRaw)), int64(toNum(afterRaw))
+	}
+	return worldTimeWindow(fallbackBefore, dtMinutes)
+}
+
+func isInterruptibleOngoingActionType(t survival.ActionType) bool {
+	return t == survival.ActionRest
+}
+
 func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent) bool {
 	switch intent.Type {
 	case survival.ActionBuild:
@@ -500,17 +519,22 @@ func hasValidActionParams(intent survival.ActionIntent) bool {
 }
 
 type ongoingFinalizeResult struct {
-	Settled      bool
-	UpdatedState survival.AgentStateAggregate
-	Events       []survival.DomainEvent
-	ResultCode   survival.ResultCode
-	DTMinutes    int
+	Settled                bool
+	UpdatedState           survival.AgentStateAggregate
+	Events                 []survival.DomainEvent
+	ResultCode             survival.ResultCode
+	DTMinutes              int
+	WorldTimeBeforeSeconds int64
+	WorldTimeAfterSeconds  int64
 }
 
 func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state survival.AgentStateAggregate, nowAt time.Time, forceTerminate bool) (ongoingFinalizeResult, error) {
 	ongoing := state.OngoingAction
 	if ongoing == nil {
 		return ongoingFinalizeResult{}, nil
+	}
+	if forceTerminate && !isInterruptibleOngoingActionType(ongoing.Type) {
+		return ongoingFinalizeResult{}, ErrActionPreconditionFailed
 	}
 	if nowAt.Before(ongoing.EndAt) && !forceTerminate {
 		return ongoingFinalizeResult{}, nil
@@ -592,12 +616,15 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 			return ongoingFinalizeResult{}, err
 		}
 	}
+	worldTimeBefore, worldTimeAfter := worldTimeWindowFromEvents(result.Events, snapshot.WorldTimeSeconds, deltaMinutes)
 	return ongoingFinalizeResult{
-		Settled:      true,
-		UpdatedState: result.UpdatedState,
-		Events:       result.Events,
-		ResultCode:   result.ResultCode,
-		DTMinutes:    deltaMinutes,
+		Settled:                true,
+		UpdatedState:           result.UpdatedState,
+		Events:                 result.Events,
+		ResultCode:             result.ResultCode,
+		DTMinutes:              deltaMinutes,
+		WorldTimeBeforeSeconds: worldTimeBefore,
+		WorldTimeAfterSeconds:  worldTimeAfter,
 	}, nil
 }
 

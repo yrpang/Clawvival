@@ -77,6 +77,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			"container_deposit":  {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: -4, Requirements: []string{"CONTAINER_ID", "HAS_ITEMS"}},
 			"container_withdraw": {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: -4, Requirements: []string{"CONTAINER_ID", "CAPACITY_AVAILABLE"}},
 			"retreat":            {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: -8, Requirements: []string{}},
+			"terminate":          {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: 0, Requirements: []string{"INTERRUPTIBLE_ONGOING_ACTION"}},
 		},
 		Tiles:            tiles,
 		Objects:          objects,
