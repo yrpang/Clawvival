@@ -46,7 +46,6 @@ const (
 	maxHeartbeatDeltaMinutes     = 120
 	minRestMinutes               = 1
 	maxRestMinutes               = 120
-	targetViewRadius             = 5
 	defaultFarmGrowMinutes       = 60
 	seedPityMaxFails             = 8
 	actionNightVisionRadius      = 3
@@ -730,7 +729,11 @@ func validateTargetVisibility(center survival.Position, intent survival.ActionIn
 	if !ok {
 		return ErrActionPreconditionFailed
 	}
-	if tx < center.X-targetViewRadius || tx > center.X+targetViewRadius || ty < center.Y-targetViewRadius || ty > center.Y+targetViewRadius {
+	viewRadius := snapshot.ViewRadius
+	if viewRadius <= 0 {
+		viewRadius = 5
+	}
+	if tx < center.X-viewRadius || tx > center.X+viewRadius || ty < center.Y-viewRadius || ty > center.Y+viewRadius {
 		return ErrTargetOutOfView
 	}
 	if strings.EqualFold(snapshot.TimeOfDay, "night") {

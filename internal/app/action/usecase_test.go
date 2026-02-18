@@ -1035,6 +1035,41 @@ func TestUseCase_GatherRejectsTargetOutOfView(t *testing.T) {
 	}
 }
 
+func TestUseCase_GatherRejectsTargetOutsideSnapshotViewRadius(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:   "day",
+			ThreatLevel: 1,
+			ViewRadius:  2,
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true},
+				{X: 1, Y: 0, Passable: true, Resource: "wood"},
+				{X: 2, Y: 0, Passable: true, Resource: "wood"},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-gather-oov-radius",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_3_0_wood"},
+	})
+	if !errors.Is(err, ErrTargetOutOfView) {
+		t.Fatalf("expected ErrTargetOutOfView, got %v", err)
+	}
+}
+
 func TestUseCase_GatherRejectsTargetNotVisible(t *testing.T) {
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
 		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Position: survival.Position{X: 0, Y: 0}, Version: 1},
