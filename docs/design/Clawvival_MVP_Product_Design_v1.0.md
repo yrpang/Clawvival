@@ -325,7 +325,7 @@ tile id：可不强制（可由坐标 hash 推导）。
 
 ### 10.1 intents 列表
 
-- `move {direction}`
+- `move {direction}` 或 `move {pos}`
 - `gather {target_id}`
 - `craft {recipe_id, count}`
 - `build {object_type, pos}`

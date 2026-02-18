@@ -190,12 +190,26 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 
 	t.Run("action intent set and rejection contract", func(t *testing.T) {
 		agentID, agentKey := mustRegisterAgent(t, client, baseURL)
+		status, observeBody := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/observe", agentID, agentKey, map[string]any{})
+		if status != http.StatusOK {
+			t.Fatalf("observe before intent contract status=%d body=%s", status, string(observeBody))
+		}
+		var observe map[string]any
+		if err := json.Unmarshal(observeBody, &observe); err != nil {
+			t.Fatalf("unmarshal observe before intent contract: %v body=%s", err, string(observeBody))
+		}
+		movePos := pickAdjacentMovePos(observe)
+		if movePos == nil {
+			t.Fatalf("expected at least one adjacent visible walkable pos for move.pos contract")
+		}
+
 		cases := []struct {
 			name       string
 			intent     map[string]any
 			wantStatus int
 			wantCode   string
 		}{
+			{name: "move with pos", intent: map[string]any{"type": "move", "pos": movePos}, wantStatus: http.StatusOK},
 			{name: "move missing direction", intent: map[string]any{"type": "move"}, wantStatus: http.StatusBadRequest, wantCode: "invalid_action_params"},
 			{name: "gather missing target", intent: map[string]any{"type": "gather"}, wantStatus: http.StatusBadRequest, wantCode: "invalid_action_params"},
 			{name: "craft missing recipe", intent: map[string]any{"type": "craft"}, wantStatus: http.StatusBadRequest, wantCode: "invalid_action_params"},
@@ -741,6 +755,42 @@ func pickMoveDirection(observe map[string]any) string {
 		}
 	}
 	return ""
+}
+
+func pickAdjacentMovePos(observe map[string]any) map[string]any {
+	center := asMap(asMap(observe["view"])["center"])
+	cx, cxOK := asInt(center["x"])
+	cy, cyOK := asInt(center["y"])
+	if !cxOK || !cyOK {
+		return nil
+	}
+	for _, tile := range asSlice(observe["tiles"]) {
+		tileMap := asMap(tile)
+		if walkable, _ := tileMap["is_walkable"].(bool); !walkable {
+			continue
+		}
+		if visible, _ := tileMap["is_visible"].(bool); !visible {
+			continue
+		}
+		pos := asMap(tileMap["pos"])
+		x, xOk := asInt(pos["x"])
+		y, yOk := asInt(pos["y"])
+		if !xOk || !yOk {
+			continue
+		}
+		if absInt(x-cx)+absInt(y-cy) != 1 {
+			continue
+		}
+		return map[string]any{"x": x, "y": y}
+	}
+	return nil
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 func asInt(v any) (int, bool) {

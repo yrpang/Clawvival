@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.1.9
+version: 2.2.1
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse","audience":"agent"}}
@@ -174,6 +174,9 @@ curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/observe" \
   - `forest` (`7 <= d <= 20`): tree nodes can spawn `wood`.
   - `quarry` (`21 <= d <= 35`): rock nodes can spawn `stone`.
   - `wild` (`d > 35`): tree nodes can spawn `wood` (plus harsher terrain/threat pressure).
+- quick reminder:
+  - at position `(x,y)`, use `d=|x|+|y|`.
+  - stone gathering requires `d >= 21` (quarry or beyond).
 - current runtime map nodes do not expose dedicated `berry/seed` world nodes in `resources[]`.
 
 Read paths:
@@ -239,6 +242,12 @@ Notes:
 
 ```json
 {"idempotency_key":"act-move-e-001","intent":{"type":"move","direction":"E"},"strategy_hash":"survival-v1"}
+```
+
+or move directly to a visible walkable target position:
+
+```json
+{"idempotency_key":"act-move-pos-001","intent":{"type":"move","pos":{"x":2,"y":0}},"strategy_hash":"survival-v1"}
 ```
 
 ### 2) gather
@@ -328,6 +337,15 @@ Typical handling:
 - `TARGET_NOT_VISIBLE`: wait/reposition.
 - `RESOURCE_DEPLETED`: switch target or wait until respawn.
 - `action_invalid_position`: inspect `error.details.target_pos` and optional `error.details.blocking_tile_pos`, then re-path.
+  - do not retry same blocked direction repeatedly.
+  - reroute rule (direction move):
+    1. re-observe and confirm target tile `is_walkable`.
+    2. if blocked, try alternate directions in fixed order (`N -> E -> S -> W`) excluding the failed one.
+    3. after each successful step, re-observe and re-evaluate.
+  - reroute rule (pos move):
+    1. keep target `pos`, but if rejected, switch to one-step directional moves.
+    2. prioritize neighbors that reduce Manhattan distance to target and are `is_walkable=true`.
+    3. if no safe reducing step exists, choose temporary detour with lowest local threat.
 - `INVENTORY_FULL`: free inventory slots or deposit first.
 - `CONTAINER_FULL`: use another container or withdraw items first.
 - `action_precondition_failed`: gather resources or satisfy positional requirements.

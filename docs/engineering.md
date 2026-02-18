@@ -578,7 +578,7 @@ sequenceDiagram
 - [x] 移除 `combat` 主路径与相关契约/测试
 - [x] 按 v1.0 实现 intents：
   `move/gather/craft/build/eat/rest/sleep/farm_plant/farm_harvest/container_deposit/container_withdraw/retreat/terminate`
-- [x] 动作参数从“枚举数值参数”逐步迁移到“可解释参数”（`direction`、`*_id`、`pos`）
+- [x] 动作参数从“枚举数值参数”逐步迁移到“可解释参数”（`move.direction|move.pos`、`*_id`、`pos`）
 - [x] 响应补齐 `settled_dt_minutes` 与世界时间推进字段
 
 3. 生存规则与可见性（P0）

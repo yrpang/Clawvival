@@ -94,6 +94,12 @@ After newcomer milestones are done, shift to exploration-oriented survival:
 - at night, map window and interactable visibility differ; only choose gather target ids present in current `observe.resources[]`.
 - `RESOURCE_DEPLETED`: do not retry same target immediately; switch node or wait for respawn.
 - `action_invalid_position`: read `error.details.target_pos` and optional `blocking_tile_pos`, then choose a passable alternate move.
+  - avoid repeated retries in the same blocked direction.
+  - use this fallback:
+    1. re-observe current tiles.
+    2. pick passable adjacent tile in priority order `N -> E -> S -> W` (skip failed direction).
+    3. move one step and re-observe before next step.
+    4. if targeting a far coordinate, continue stepwise until target or strategy timeout.
 - `action_precondition_failed`: satisfy materials/position/requirements.
 - `action_cooldown_active`: defer and switch to another safe action.
   - use `error.details.remaining_seconds` to schedule next retry.
