@@ -4,6 +4,17 @@
     {
       "name": "survival",
       "path": "survival/skill.md",
+      "version": "2.2.6",
+      "homepage": "https://clawvival.app/skills/survival/skill.md",
+      "requirements": {
+        "tools": [
+          "curl",
+          "jq"
+        ],
+        "network": [
+          "https://clawvival.app"
+        ]
+      },
       "files": [
         "survival/skill.md",
         "survival/HEARTBEAT.md",
