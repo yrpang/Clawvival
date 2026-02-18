@@ -303,7 +303,8 @@ MVP 夜晚压力：
 
 `objects/resources/threats` 必须有稳定 `id`：
 - 实体存续期间 id 不变
-- 实体消失后 id 不复用（至少在其 respawn 周期内不复用）
+- MVP 当前实现采用坐标派生稳定 id（如 `res_x_y_type` / `thr_x_y` / 持久化 `object_id`），不引入独立生命周期 id 分配器；
+  因此“消失后不复用”的生命周期约束在后续版本通过独立实体表补齐。
 
 tile id：可不强制（可由坐标 hash 推导）。
 
@@ -475,7 +476,7 @@ tile id：可不强制（可由坐标 hash 推导）。
   },
   "world": {
     "world_time_seconds": 123456,
-    "time_of_day": "NIGHT",
+    "time_of_day": "night",
     "next_phase_in_seconds": 120,
     "rules": {
       "standard_tick_minutes": 30,

@@ -55,6 +55,12 @@ func TestUseCase_Idempotency(t *testing.T) {
 	if first.UpdatedState.Version != second.UpdatedState.Version {
 		t.Fatalf("idempotency broken: version mismatch first=%d second=%d", first.UpdatedState.Version, second.UpdatedState.Version)
 	}
+	if got, want := first.UpdatedState.SessionID, "session-agent-1"; got != want {
+		t.Fatalf("expected session_id=%q, got %q", want, got)
+	}
+	if got, want := second.UpdatedState.SessionID, "session-agent-1"; got != want {
+		t.Fatalf("expected idempotent session_id=%q, got %q", want, got)
+	}
 	if first.WorldTimeBeforeSeconds != second.WorldTimeBeforeSeconds || first.WorldTimeAfterSeconds != second.WorldTimeAfterSeconds {
 		t.Fatalf(
 			"idempotency should preserve world time window: first=(%d,%d) second=(%d,%d)",
@@ -925,6 +931,16 @@ func TestUseCase_RejectsMoveWhenTargetTileBlocked(t *testing.T) {
 	if !errors.Is(err, ErrActionInvalidPosition) {
 		t.Fatalf("expected ErrActionInvalidPosition, got %v", err)
 	}
+	var posErr *ActionInvalidPositionError
+	if !errors.As(err, &posErr) || posErr == nil {
+		t.Fatalf("expected ActionInvalidPositionError details, got %T", err)
+	}
+	if posErr.TargetPos == nil || posErr.TargetPos.X != 1 || posErr.TargetPos.Y != 0 {
+		t.Fatalf("unexpected target_pos details: %+v", posErr.TargetPos)
+	}
+	if posErr.BlockingTilePos == nil || posErr.BlockingTilePos.X != 1 || posErr.BlockingTilePos.Y != 0 {
+		t.Fatalf("unexpected blocking_tile_pos details: %+v", posErr.BlockingTilePos)
+	}
 }
 
 func TestUseCase_RejectsActionDuringCooldown(t *testing.T) {
@@ -1194,6 +1210,9 @@ func TestUseCase_72hGate_MinimumSettlingPath(t *testing.T) {
 		}
 		if last.ResultCode != survival.ResultOK {
 			t.Fatalf("expected OK for %s, got %s", req.IdempotencyKey, last.ResultCode)
+		}
+		if got, want := last.UpdatedState.SessionID, "session-agent-1"; got != want {
+			t.Fatalf("expected same session_id=%q during gate actions, got %q", want, got)
 		}
 	}
 

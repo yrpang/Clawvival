@@ -38,6 +38,9 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if resp.NextPhaseInSeconds != 123 {
 		t.Fatalf("expected next phase 123, got %d", resp.NextPhaseInSeconds)
 	}
+	if got, want := resp.State.SessionID, "session-agent-1"; got != want {
+		t.Fatalf("expected session_id=%q, got %q", want, got)
+	}
 	if resp.World.Rules.StandardTickMinutes != 30 {
 		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
 	}

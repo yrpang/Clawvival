@@ -27,6 +27,19 @@ var (
 	ErrContainerFull            = errors.New("container full")
 )
 
+type ActionInvalidPositionError struct {
+	TargetPos       *survival.Position
+	BlockingTilePos *survival.Position
+}
+
+func (e *ActionInvalidPositionError) Error() string {
+	return ErrActionInvalidPosition.Error()
+}
+
+func (e *ActionInvalidPositionError) Unwrap() error {
+	return ErrActionInvalidPosition
+}
+
 const (
 	defaultHeartbeatDeltaMinutes = 30
 	minHeartbeatDeltaMinutes     = 1
@@ -75,11 +88,15 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		exec, err := u.ActionRepo.GetByIdempotencyKey(txCtx, req.AgentID, req.IdempotencyKey)
 		if err == nil && exec != nil {
 			before, after := worldTimeWindowFromExecution(exec)
+			updatedState := exec.Result.UpdatedState
+			if strings.TrimSpace(updatedState.SessionID) == "" {
+				updatedState.SessionID = "session-" + req.AgentID
+			}
 			out = Response{
 				SettledDTMinutes:       exec.DT,
 				WorldTimeBeforeSeconds: before,
 				WorldTimeAfterSeconds:  after,
-				UpdatedState:           exec.Result.UpdatedState,
+				UpdatedState:           updatedState,
 				Events:                 exec.Result.Events,
 				Settlement:             settlementSummary(exec.Result.Events),
 				ResultCode:             exec.Result.ResultCode,
@@ -94,6 +111,8 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err != nil {
 			return err
 		}
+		sessionID := "session-" + req.AgentID
+		state.SessionID = sessionID
 		nowAt := nowFn()
 		finalized, err := finalizeOngoingAction(txCtx, u, req.AgentID, state, nowAt, req.Intent.Type == survival.ActionTerminate)
 		if err != nil {
@@ -134,7 +153,6 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if !resourcePreconditionsSatisfied(state, req.Intent) {
 			return ErrActionPreconditionFailed
 		}
-		sessionID := "session-" + req.AgentID
 		if u.SessionRepo != nil {
 			if err := u.SessionRepo.EnsureActive(txCtx, sessionID, req.AgentID, state.Version); err != nil {
 				return err
@@ -152,8 +170,8 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err != nil {
 			return err
 		}
-		if !positionPreconditionsSatisfied(state, req.Intent, snapshot) {
-			return ErrActionInvalidPosition
+		if moveErr := validateMovePosition(state, req.Intent, snapshot); moveErr != nil {
+			return moveErr
 		}
 		if err := ensureCooldownReady(txCtx, u.EventRepo, req.AgentID, req.Intent.Type, nowAt); err != nil {
 			return err
@@ -374,23 +392,30 @@ func resourcePreconditionsSatisfied(state survival.AgentStateAggregate, intent s
 	}
 }
 
-func positionPreconditionsSatisfied(state survival.AgentStateAggregate, intent survival.ActionIntent, snapshot world.Snapshot) bool {
+func validateMovePosition(state survival.AgentStateAggregate, intent survival.ActionIntent, snapshot world.Snapshot) error {
 	if intent.Type != survival.ActionMove {
-		return true
+		return nil
 	}
 	dx := intent.DX
 	dy := intent.DY
-	if abs(dx) > 1 || abs(dy) > 1 {
-		return false
-	}
 	targetX := state.Position.X + dx
 	targetY := state.Position.Y + dy
+	targetPos := &survival.Position{X: targetX, Y: targetY}
+	if abs(dx) > 1 || abs(dy) > 1 {
+		return &ActionInvalidPositionError{TargetPos: targetPos}
+	}
 	for _, tile := range snapshot.VisibleTiles {
 		if tile.X == targetX && tile.Y == targetY {
-			return tile.Passable
+			if tile.Passable {
+				return nil
+			}
+			return &ActionInvalidPositionError{
+				TargetPos:       targetPos,
+				BlockingTilePos: &survival.Position{X: targetX, Y: targetY},
+			}
 		}
 	}
-	return false
+	return &ActionInvalidPositionError{TargetPos: targetPos}
 }
 
 var actionCooldowns = map[survival.ActionType]time.Duration{

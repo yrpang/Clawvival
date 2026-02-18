@@ -25,6 +25,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	state.SessionID = "session-" + req.AgentID
 	snapshot, err := u.World.SnapshotForAgent(ctx, req.AgentID, world.Point{X: state.Position.X, Y: state.Position.Y})
 	if err != nil {
 		return Response{}, err

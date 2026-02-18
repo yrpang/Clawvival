@@ -15,6 +15,7 @@ type Position struct {
 
 type AgentStateAggregate struct {
 	AgentID           string             `json:"agent_id"`
+	SessionID         string             `json:"session_id,omitempty"`
 	Vitals            Vitals             `json:"vitals"`
 	Position          Position           `json:"position"`
 	Home              Position           `json:"home"`

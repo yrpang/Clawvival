@@ -150,6 +150,43 @@ func TestWriteError_ActionCooldownActive(t *testing.T) {
 	}
 }
 
+func TestWriteActionRejectedFromErr_ActionInvalidPositionWithDetails(t *testing.T) {
+	ctx := &app.RequestContext{}
+	err := &action.ActionInvalidPositionError{
+		TargetPos:       &survival.Position{X: 2, Y: 1},
+		BlockingTilePos: &survival.Position{X: 2, Y: 1},
+	}
+	if ok := writeActionRejectedFromErr(ctx, err); !ok {
+		t.Fatalf("expected handled error")
+	}
+	if got, want := ctx.Response.StatusCode(), consts.StatusConflict; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	var body map[string]any
+	if e := json.Unmarshal(ctx.Response.Body(), &body); e != nil {
+		t.Fatalf("unmarshal response: %v", e)
+	}
+	errObj, _ := body["error"].(map[string]any)
+	if got, want := errObj["code"], "action_invalid_position"; got != want {
+		t.Fatalf("error code mismatch: got=%v want=%v", got, want)
+	}
+	details, _ := errObj["details"].(map[string]any)
+	target, _ := details["target_pos"].(map[string]any)
+	if got, want := int(target["x"].(float64)), 2; got != want {
+		t.Fatalf("target_pos.x mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := int(target["y"].(float64)), 1; got != want {
+		t.Fatalf("target_pos.y mismatch: got=%d want=%d", got, want)
+	}
+	blocking, _ := details["blocking_tile_pos"].(map[string]any)
+	if got, want := int(blocking["x"].(float64)), 2; got != want {
+		t.Fatalf("blocking_tile_pos.x mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := int(blocking["y"].(float64)), 1; got != want {
+		t.Fatalf("blocking_tile_pos.y mismatch: got=%d want=%d", got, want)
+	}
+}
+
 func TestWriteActionRejectedFromErr_TargetNotVisible(t *testing.T) {
 	ctx := &app.RequestContext{}
 	if ok := writeActionRejectedFromErr(ctx, action.ErrTargetNotVisible); !ok {

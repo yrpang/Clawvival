@@ -338,7 +338,26 @@ func writeErrorBody(ctx *app.RequestContext, status int, code, message string) {
 func writeActionRejectedFromErr(ctx *app.RequestContext, err error) bool {
 	switch {
 	case errors.Is(err, action.ErrActionInvalidPosition):
-		writeActionRejected(ctx, consts.StatusConflict, "action_invalid_position", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
+		details := map[string]any{}
+		var posErr *action.ActionInvalidPositionError
+		if errors.As(err, &posErr) && posErr != nil {
+			if posErr.TargetPos != nil {
+				details["target_pos"] = map[string]int{
+					"x": posErr.TargetPos.X,
+					"y": posErr.TargetPos.Y,
+				}
+			}
+			if posErr.BlockingTilePos != nil {
+				details["blocking_tile_pos"] = map[string]int{
+					"x": posErr.BlockingTilePos.X,
+					"y": posErr.BlockingTilePos.Y,
+				}
+			}
+		}
+		if len(details) == 0 {
+			details = nil
+		}
+		writeActionRejected(ctx, consts.StatusConflict, "action_invalid_position", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, details)
 		return true
 	case errors.Is(err, action.ErrActionCooldownActive):
 		writeActionRejected(ctx, consts.StatusConflict, "action_cooldown_active", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)

@@ -135,6 +135,28 @@ func TestSettlementService_GameOverEventContainsLastObservableSnapshot(t *testin
 	if got, ok := before["world_time_seconds"].(int64); !ok || got != 1234 {
 		t.Fatalf("expected world_time_seconds=1234, got=%v", before["world_time_seconds"])
 	}
+	if _, ok := before["position"].(map[string]int); !ok {
+		t.Fatalf("expected state_before_last_action.position object, got=%T", before["position"])
+	}
+	if _, ok := before["inventory_summary"].(map[string]any); !ok {
+		t.Fatalf("expected state_before_last_action.inventory_summary object, got=%T", before["inventory_summary"])
+	}
+	after, ok := gameOver.Payload["state_after_last_action"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected state_after_last_action object")
+	}
+	if _, ok := after["position"].(map[string]int); !ok {
+		t.Fatalf("expected state_after_last_action.position object, got=%T", after["position"])
+	}
+	if _, ok := after["inventory_summary"].(map[string]any); !ok {
+		t.Fatalf("expected state_after_last_action.inventory_summary object, got=%T", after["inventory_summary"])
+	}
+	if home, ok := gameOver.Payload["last_safe_home"].(map[string]int); !ok || home["x"] != 0 || home["y"] != 0 {
+		t.Fatalf("expected last_safe_home={0,0}, got=%v", gameOver.Payload["last_safe_home"])
+	}
+	if got := gameOver.Payload["last_known_threat"]; got != nil {
+		t.Fatalf("expected last_known_threat nil by default, got=%v", got)
+	}
 }
 
 func abs(v int) int {

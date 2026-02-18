@@ -52,6 +52,9 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if resp.View.Center.X != 7 || resp.View.Center.Y != -2 {
 		t.Fatalf("unexpected view center: %+v", resp.View.Center)
 	}
+	if got, want := resp.State.SessionID, "session-agent-1"; got != want {
+		t.Fatalf("expected session_id=%q, got %q", want, got)
+	}
 	if resp.WorldTimeSeconds != 0 || resp.TimeOfDay != "" || resp.NextPhaseInSeconds != 0 {
 		t.Fatalf("unexpected default time projection: world_time=%d time_of_day=%q next_phase=%d", resp.WorldTimeSeconds, resp.TimeOfDay, resp.NextPhaseInSeconds)
 	}
