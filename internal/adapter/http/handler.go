@@ -376,6 +376,15 @@ func writeActionRejectedFromErr(ctx *app.RequestContext, err error) bool {
 			"is_visible": false,
 		})
 		return true
+	case errors.Is(err, action.ErrResourceDepleted):
+		details := map[string]any{}
+		var depletedErr *action.ResourceDepletedError
+		if errors.As(err, &depletedErr) && depletedErr != nil {
+			details["target_id"] = depletedErr.TargetID
+			details["remaining_seconds"] = depletedErr.RemainingSeconds
+		}
+		writeActionRejected(ctx, consts.StatusConflict, "RESOURCE_DEPLETED", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, details)
+		return true
 	case errors.Is(err, action.ErrActionPreconditionFailed):
 		writeActionRejected(ctx, consts.StatusConflict, "action_precondition_failed", err.Error(), false, []string{"REQUIREMENT_NOT_MET"}, nil)
 		return true

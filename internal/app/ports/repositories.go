@@ -57,6 +57,21 @@ type WorldObjectRepository interface {
 	Update(ctx context.Context, agentID string, obj WorldObjectRecord) error
 }
 
+type AgentResourceNodeRecord struct {
+	AgentID       string
+	TargetID      string
+	ResourceType  string
+	X             int
+	Y             int
+	DepletedUntil time.Time
+}
+
+type AgentResourceNodeRepository interface {
+	Upsert(ctx context.Context, record AgentResourceNodeRecord) error
+	GetByTargetID(ctx context.Context, agentID, targetID string) (AgentResourceNodeRecord, error)
+	ListByAgentID(ctx context.Context, agentID string) ([]AgentResourceNodeRecord, error)
+}
+
 type AgentSessionRepository interface {
 	EnsureActive(ctx context.Context, sessionID, agentID string, startTick int64) error
 	Close(ctx context.Context, sessionID string, cause survival.DeathCause, endedAt time.Time) error

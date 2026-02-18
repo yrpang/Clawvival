@@ -12,6 +12,7 @@ import (
 	"clawvival/internal/adapter/repo/gorm/model"
 	worldmock "clawvival/internal/adapter/world/mock"
 	worldruntime "clawvival/internal/adapter/world/runtime"
+	"clawvival/internal/app/observe"
 	"clawvival/internal/domain/survival"
 	"clawvival/internal/domain/world"
 )
@@ -853,5 +854,202 @@ func TestUseCase_E2E_FarmPlantHarvest_UsesFarmObjectStateMachine(t *testing.T) {
 	}
 	if got, ok := state["state"].(string); !ok || got != "IDLE" {
 		t.Fatalf("expected farm state IDLE after harvest, got %v", state["state"])
+	}
+}
+
+func TestUseCase_E2E_GatherDepletesNodeThenRespawnsAtSamePosition(t *testing.T) {
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	agentID := "it-gather-node-respawn"
+	ctx := context.Background()
+	_ = db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM agent_resource_nodes WHERE agent_id = ?", agentID).Error
+	_ = db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	resourceRepo := gormrepo.NewAgentResourceNodeRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	if err := stateRepo.SaveWithVersion(ctx, survival.AgentStateAggregate{
+		AgentID:   agentID,
+		Vitals:    survival.Vitals{HP: 100, Hunger: 90, Energy: 90},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   1,
+	}, 0); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	now := time.Unix(1700030000, 0)
+	worldProvider := worldmock.Provider{Snapshot: world.Snapshot{
+		TimeOfDay:      "day",
+		ThreatLevel:    1,
+		NearbyResource: map[string]int{"wood": 1},
+		VisibleTiles: []world.Tile{
+			{X: 0, Y: 0, Passable: true, Resource: "wood"},
+		},
+	}}
+	observeUC := observe.UseCase{
+		StateRepo:    stateRepo,
+		ResourceRepo: resourceRepo,
+		World:        worldProvider,
+		Now:          func() time.Time { return now },
+	}
+	actionUC := UseCase{
+		TxManager:    txManager,
+		StateRepo:    stateRepo,
+		ActionRepo:   actionRepo,
+		EventRepo:    eventRepo,
+		ResourceRepo: resourceRepo,
+		World:        worldProvider,
+		Settle:       survival.SettlementService{},
+		Now:          func() time.Time { return now },
+	}
+
+	before, err := observeUC.Execute(ctx, observe.Request{AgentID: agentID})
+	if err != nil {
+		t.Fatalf("observe before gather: %v", err)
+	}
+	if len(before.Resources) != 1 || before.Resources[0].ID != "res_0_0_wood" {
+		t.Fatalf("expected wood visible before gather, got %+v", before.Resources)
+	}
+
+	if _, err := actionUC.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "gather-respawn-1",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	}); err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+
+	if _, err := actionUC.Execute(ctx, Request{
+		AgentID:        agentID,
+		IdempotencyKey: "gather-respawn-2",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	}); !errors.Is(err, ErrResourceDepleted) {
+		t.Fatalf("expected ErrResourceDepleted before respawn, got %v", err)
+	}
+
+	mid, err := observeUC.Execute(ctx, observe.Request{AgentID: agentID})
+	if err != nil {
+		t.Fatalf("observe after gather before respawn: %v", err)
+	}
+	if len(mid.Resources) != 0 {
+		t.Fatalf("expected depleted node hidden before respawn, got %+v", mid.Resources)
+	}
+	for _, tile := range mid.Snapshot.VisibleTiles {
+		if tile.X == 0 && tile.Y == 0 && tile.Resource != "" {
+			t.Fatalf("expected snapshot tile resource cleared after gather, got=%q", tile.Resource)
+		}
+	}
+
+	now = now.Add(61 * time.Minute)
+	after, err := observeUC.Execute(ctx, observe.Request{AgentID: agentID})
+	if err != nil {
+		t.Fatalf("observe after respawn: %v", err)
+	}
+	if len(after.Resources) != 1 || after.Resources[0].ID != "res_0_0_wood" {
+		t.Fatalf("expected same-position resource respawn, got %+v", after.Resources)
+	}
+}
+
+func TestUseCase_E2E_GatherDepletionIsPerAgentMapState(t *testing.T) {
+	dsn := os.Getenv("CLAWVIVAL_DB_DSN")
+	if dsn == "" {
+		t.Skip("CLAWVIVAL_DB_DSN is required for integration test")
+	}
+
+	db, err := gormrepo.OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+
+	ctx := context.Background()
+	agentA := "it-map-state-agent-a"
+	agentB := "it-map-state-agent-b"
+	for _, agentID := range []string{agentA, agentB} {
+		_ = db.Exec("DELETE FROM action_executions WHERE agent_id = ?", agentID).Error
+		_ = db.Exec("DELETE FROM domain_events WHERE agent_id = ?", agentID).Error
+		_ = db.Exec("DELETE FROM agent_resource_nodes WHERE agent_id = ?", agentID).Error
+		_ = db.Exec("DELETE FROM agent_states WHERE agent_id = ?", agentID).Error
+	}
+
+	stateRepo := gormrepo.NewAgentStateRepo(db)
+	actionRepo := gormrepo.NewActionExecutionRepo(db)
+	eventRepo := gormrepo.NewEventRepo(db)
+	resourceRepo := gormrepo.NewAgentResourceNodeRepo(db)
+	txManager := gormrepo.NewTxManager(db)
+
+	for _, agentID := range []string{agentA, agentB} {
+		if err := stateRepo.SaveWithVersion(ctx, survival.AgentStateAggregate{
+			AgentID:   agentID,
+			Vitals:    survival.Vitals{HP: 100, Hunger: 90, Energy: 90},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		}, 0); err != nil {
+			t.Fatalf("seed state %s: %v", agentID, err)
+		}
+	}
+
+	now := time.Unix(1700040000, 0)
+	worldProvider := worldmock.Provider{Snapshot: world.Snapshot{
+		TimeOfDay:      "day",
+		ThreatLevel:    1,
+		NearbyResource: map[string]int{"wood": 1},
+		VisibleTiles: []world.Tile{
+			{X: 0, Y: 0, Passable: true, Resource: "wood"},
+		},
+	}}
+	observeUC := observe.UseCase{
+		StateRepo:    stateRepo,
+		ResourceRepo: resourceRepo,
+		World:        worldProvider,
+		Now:          func() time.Time { return now },
+	}
+	actionUC := UseCase{
+		TxManager:    txManager,
+		StateRepo:    stateRepo,
+		ActionRepo:   actionRepo,
+		EventRepo:    eventRepo,
+		ResourceRepo: resourceRepo,
+		World:        worldProvider,
+		Settle:       survival.SettlementService{},
+		Now:          func() time.Time { return now },
+	}
+
+	if _, err := actionUC.Execute(ctx, Request{
+		AgentID:        agentA,
+		IdempotencyKey: "agent-a-gather",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	}); err != nil {
+		t.Fatalf("agent A gather: %v", err)
+	}
+
+	obsA, err := observeUC.Execute(ctx, observe.Request{AgentID: agentA})
+	if err != nil {
+		t.Fatalf("observe A: %v", err)
+	}
+	if len(obsA.Resources) != 0 {
+		t.Fatalf("expected depleted resource hidden for agent A, got %+v", obsA.Resources)
+	}
+
+	obsB, err := observeUC.Execute(ctx, observe.Request{AgentID: agentB})
+	if err != nil {
+		t.Fatalf("observe B: %v", err)
+	}
+	if len(obsB.Resources) != 1 || obsB.Resources[0].ID != "res_0_0_wood" {
+		t.Fatalf("expected resource still visible for agent B, got %+v", obsB.Resources)
 	}
 }

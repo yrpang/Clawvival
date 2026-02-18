@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"clawvival/internal/app/ports"
 	"clawvival/internal/domain/survival"
@@ -225,6 +226,57 @@ func TestUseCase_NightVisibilityRadiusMasksOuterTiles(t *testing.T) {
 	}
 }
 
+func TestUseCase_HidesDepletedGatherTargetAndUpdatesNearbySummary(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	uc := UseCase{
+		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+			AgentID:  "agent-1",
+			Position: survival.Position{X: 0, Y: 0},
+		}},
+		ResourceRepo: observeResourceRepo{recordsByAgent: map[string][]ports.AgentResourceNodeRecord{
+			"agent-1": {
+				{
+					AgentID:       "agent-1",
+					TargetID:      "res_0_0_wood",
+					ResourceType:  "wood",
+					X:             0,
+					Y:             0,
+					DepletedUntil: now.Add(50 * time.Minute),
+				},
+			},
+		}},
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay: "day",
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Kind: world.TileTree, Passable: false, Resource: "wood"},
+				{X: 1, Y: 0, Kind: world.TileRock, Passable: false, Resource: "stone"},
+			},
+		}},
+		Now: func() time.Time { return now },
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	for _, res := range resp.Resources {
+		if res.ID == "res_0_0_wood" {
+			t.Fatalf("expected depleted wood to be hidden from resources, got %+v", resp.Resources)
+		}
+	}
+	for _, tile := range resp.Snapshot.VisibleTiles {
+		if tile.X == 0 && tile.Y == 0 && tile.Resource != "" {
+			t.Fatalf("expected depleted wood removed from snapshot tiles, got resource=%q", tile.Resource)
+		}
+	}
+	if got := resp.Snapshot.NearbyResource["stone"]; got != 1 {
+		t.Fatalf("expected stone nearby count=1, got=%d", got)
+	}
+	if got := resp.Snapshot.NearbyResource["wood"]; got != 0 {
+		t.Fatalf("expected depleted wood nearby count=0, got=%d", got)
+	}
+}
+
 type observeStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error
@@ -244,6 +296,11 @@ func (r observeStateRepo) SaveWithVersion(_ context.Context, _ survival.AgentSta
 type observeWorldProvider struct {
 	snapshot world.Snapshot
 	err      error
+}
+
+type observeResourceRepo struct {
+	recordsByAgent map[string][]ports.AgentResourceNodeRecord
+	err            error
 }
 
 type observeObjectRepo struct {
@@ -270,6 +327,27 @@ func (r observeObjectRepo) Update(_ context.Context, _ string, _ ports.WorldObje
 	return nil
 }
 
+func (r observeResourceRepo) Upsert(_ context.Context, _ ports.AgentResourceNodeRecord) error {
+	return nil
+}
+
+func (r observeResourceRepo) GetByTargetID(_ context.Context, _ string, _ string) (ports.AgentResourceNodeRecord, error) {
+	return ports.AgentResourceNodeRecord{}, ports.ErrNotFound
+}
+
+func (r observeResourceRepo) ListByAgentID(_ context.Context, agentID string) ([]ports.AgentResourceNodeRecord, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	records := r.recordsByAgent[agentID]
+	if len(records) == 0 {
+		return nil, ports.ErrNotFound
+	}
+	out := make([]ports.AgentResourceNodeRecord, len(records))
+	copy(out, records)
+	return out, nil
+}
+
 func (p observeWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ world.Point) (world.Snapshot, error) {
 	if p.err != nil {
 		return world.Snapshot{}, p.err
@@ -280,3 +358,4 @@ func (p observeWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ wo
 var _ ports.AgentStateRepository = observeStateRepo{}
 var _ ports.WorldProvider = observeWorldProvider{}
 var _ ports.WorldObjectRepository = observeObjectRepo{}
+var _ ports.AgentResourceNodeRepository = observeResourceRepo{}

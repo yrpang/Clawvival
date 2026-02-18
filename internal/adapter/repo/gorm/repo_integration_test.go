@@ -389,3 +389,52 @@ func TestAgentCredentialRepo_CreateGetAndConflict(t *testing.T) {
 		t.Fatalf("expected not found on missing credential, got %v", err)
 	}
 }
+
+func TestAgentResourceNodeRepo_UpsertAndListByAgentID(t *testing.T) {
+	dsn := requireDSN(t)
+	db, err := OpenPostgres(dsn)
+	if err != nil {
+		t.Fatalf("open postgres: %v", err)
+	}
+	ctx := context.Background()
+	agentID := "it-agent-resource-node"
+	_ = db.Exec("DELETE FROM agent_resource_nodes WHERE agent_id = ?", agentID).Error
+
+	repo := NewAgentResourceNodeRepo(db)
+	firstUntil := time.Unix(2000, 0).UTC()
+	if err := repo.Upsert(ctx, ports.AgentResourceNodeRecord{
+		AgentID:       agentID,
+		TargetID:      "res_1_2_wood",
+		ResourceType:  "wood",
+		X:             1,
+		Y:             2,
+		DepletedUntil: firstUntil,
+	}); err != nil {
+		t.Fatalf("upsert first: %v", err)
+	}
+	secondUntil := firstUntil.Add(30 * time.Minute)
+	if err := repo.Upsert(ctx, ports.AgentResourceNodeRecord{
+		AgentID:       agentID,
+		TargetID:      "res_1_2_wood",
+		ResourceType:  "wood",
+		X:             1,
+		Y:             2,
+		DepletedUntil: secondUntil,
+	}); err != nil {
+		t.Fatalf("upsert second: %v", err)
+	}
+	got, err := repo.GetByTargetID(ctx, agentID, "res_1_2_wood")
+	if err != nil {
+		t.Fatalf("get by target: %v", err)
+	}
+	if !got.DepletedUntil.Equal(secondUntil) {
+		t.Fatalf("expected updated depleted_until=%v, got=%v", secondUntil, got.DepletedUntil)
+	}
+	list, err := repo.ListByAgentID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("list by agent: %v", err)
+	}
+	if len(list) != 1 || list[0].TargetID != "res_1_2_wood" {
+		t.Fatalf("unexpected list: %+v", list)
+	}
+}
