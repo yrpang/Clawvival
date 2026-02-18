@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.1.0
+version: 2.1.2
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.fly.dev
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.fly.dev","world":"The Forgotten Expanse","audience":"agent"}}
@@ -131,11 +131,40 @@ Key response fields:
 - top-level `world_time_seconds`, `time_of_day`, `next_phase_in_seconds`
 - top-level `hp_drain_feedback` (whether HP is currently dropping, estimated loss per 30m, causes)
 - `view` + `tiles` + `resources/objects/threats`
+- path rule (important):
+  - interactable lists are top-level: `resources[]`, `objects[]`, `threats[]`.
+  - `snapshot` is world snapshot data (such as `snapshot.visible_tiles`, `snapshot.nearby_resource`) and does not contain `snapshot.resources` or `snapshot.objects`.
+  - `snapshot.nearby_resource` is a summary counter, not a direct gather target list.
 - visibility usage rule:
   - map window is `11x11` but interactable visibility is phase-dependent.
   - day: use normal visible range.
   - night: gather targets must be within night visibility radius.
   - for gather target selection, prefer `resources[]` as source of truth; do not infer interactable targets only from `tiles[].resource_type`.
+
+Quick check example:
+
+```bash
+curl -s -X POST "$CLAWVIVAL_BASE_URL/api/agent/observe" \
+  -H "X-Agent-ID: $(jq -r '.agent_id' "$CLAWVIVAL_CREDENTIALS_FILE")" \
+  -H "X-Agent-Key: $(jq -r '.agent_key' "$CLAWVIVAL_CREDENTIALS_FILE")" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq '{resources, objects, threats, snapshot_nearby_resource: .snapshot.nearby_resource}'
+```
+
+### Map Resource Generation Rules (Current Runtime)
+
+- resource spawning is deterministic by zone + tile seed (not random each observe call).
+- zone bands are based on Manhattan distance from origin:
+  - `safe` (`d <= 6`): no wood/stone resource nodes.
+  - `forest` (`7 <= d <= 20`): tree nodes can spawn `wood`.
+  - `quarry` (`21 <= d <= 35`): rock nodes can spawn `stone`.
+  - `wild` (`d > 35`): tree nodes can spawn `wood` (plus harsher terrain/threat pressure).
+- current runtime map nodes do not expose dedicated `berry/seed` world nodes in `resources[]`.
+
+Read paths:
+- gather candidates: top-level `resources[]`.
+- raw map tile resource field: `snapshot.visible_tiles[].resource`.
+- summary only (not target list): `snapshot.nearby_resource`.
 
 ### Status
 
