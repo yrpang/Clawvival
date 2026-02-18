@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.2.6
+version: 2.2.7
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.app
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.app","world":"The Forgotten Expanse","audience":"agent"}}
