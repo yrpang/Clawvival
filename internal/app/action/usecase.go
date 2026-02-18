@@ -986,8 +986,12 @@ func resolveRetreatIntent(intent survival.ActionIntent, pos survival.Position, t
 	if !ok {
 		return intent
 	}
-	intent.DX = stepAway(pos.X, target.X)
-	intent.DY = stepAway(pos.Y, target.Y)
+	dx, dy, ok := bestRetreatStep(pos, target, tiles)
+	if !ok {
+		return intent
+	}
+	intent.DX = dx
+	intent.DY = dy
 	return intent
 }
 
@@ -1001,6 +1005,9 @@ func highestThreatTile(pos survival.Position, tiles []world.Tile) (world.Tile, b
 			continue
 		}
 		dist := abs(t.X-pos.X) + abs(t.Y-pos.Y)
+		if dist == 0 {
+			continue
+		}
 		if !bestFound || t.BaseThreat > bestThreat || (t.BaseThreat == bestThreat && dist < bestDist) {
 			best = t
 			bestFound = true
@@ -1011,15 +1018,43 @@ func highestThreatTile(pos survival.Position, tiles []world.Tile) (world.Tile, b
 	return best, bestFound
 }
 
-func stepAway(from, threat int) int {
-	switch {
-	case threat > from:
-		return -1
-	case threat < from:
-		return 1
-	default:
-		return 0
+func bestRetreatStep(pos survival.Position, threat world.Tile, tiles []world.Tile) (int, int, bool) {
+	type dir struct {
+		dx int
+		dy int
 	}
+	candidates := []dir{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
+	visible := make(map[string]world.Tile, len(tiles))
+	for _, t := range tiles {
+		visible[posKey(t.X, t.Y)] = t
+	}
+
+	bestDX, bestDY := 0, 0
+	bestFound := false
+	bestDist := -1
+	bestRisk := 9999
+	for _, c := range candidates {
+		tx := pos.X + c.dx
+		ty := pos.Y + c.dy
+		tile, ok := visible[posKey(tx, ty)]
+		if !ok || !tile.Passable {
+			continue
+		}
+		dist := abs(tx-threat.X) + abs(ty-threat.Y)
+		risk := tile.BaseThreat
+		if !bestFound || dist > bestDist || (dist == bestDist && risk < bestRisk) {
+			bestFound = true
+			bestDist = dist
+			bestRisk = risk
+			bestDX = c.dx
+			bestDY = c.dy
+		}
+	}
+	return bestDX, bestDY, bestFound
+}
+
+func posKey(x, y int) string {
+	return fmt.Sprintf("%d:%d", x, y)
 }
 
 func toNum(v any) float64 {

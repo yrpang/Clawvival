@@ -24,7 +24,7 @@ func TestSettlementService_NightCombatHigherRisk(t *testing.T) {
 	}
 }
 
-func TestSettlementService_RetreatMovesTowardHome(t *testing.T) {
+func TestSettlementService_RetreatMovesByIntentDirection(t *testing.T) {
 	svc := SettlementService{}
 	state := AgentStateAggregate{
 		AgentID:  "a-1",
@@ -34,15 +34,15 @@ func TestSettlementService_RetreatMovesTowardHome(t *testing.T) {
 		Version:  1,
 	}
 
-	out, err := svc.Settle(state, ActionIntent{Type: ActionRetreat}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{TimeOfDay: "night", ThreatLevel: 4})
+	out, err := svc.Settle(state, ActionIntent{Type: ActionRetreat, DX: -1, DY: 1}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{TimeOfDay: "night", ThreatLevel: 4})
 	if err != nil {
 		t.Fatalf("settle error: %v", err)
 	}
 	if abs(out.UpdatedState.Position.X) >= abs(state.Position.X) {
-		t.Fatalf("expected retreat to reduce X distance")
+		t.Fatalf("expected retreat to reduce X distance from risk direction")
 	}
 	if abs(out.UpdatedState.Position.Y) >= abs(state.Position.Y) {
-		t.Fatalf("expected retreat to reduce Y distance")
+		t.Fatalf("expected retreat to reduce Y distance from risk direction")
 	}
 }
 

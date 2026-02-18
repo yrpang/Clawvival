@@ -964,10 +964,10 @@ func TestUseCase_RetreatMovesAwayFromHighestThreatTile(t *testing.T) {
 			TimeOfDay:        "night",
 			ThreatLevel:      3,
 			VisibleTiles: []world.Tile{
-				{X: 1, Y: 0, BaseThreat: 4},  // east threat
-				{X: -1, Y: 0, BaseThreat: 1}, // west safer
-				{X: 0, Y: 1, BaseThreat: 2},
-				{X: 0, Y: -1, BaseThreat: 2},
+				{X: 1, Y: 0, Passable: true, BaseThreat: 4},  // east threat
+				{X: -1, Y: 0, Passable: true, BaseThreat: 1}, // west safer
+				{X: 0, Y: 1, Passable: true, BaseThreat: 2},
+				{X: 0, Y: -1, Passable: true, BaseThreat: 2},
 			},
 		}},
 		Settle: survival.SettlementService{},
@@ -983,5 +983,96 @@ func TestUseCase_RetreatMovesAwayFromHighestThreatTile(t *testing.T) {
 	}
 	if out.UpdatedState.Position.X != -1 || out.UpdatedState.Position.Y != 0 {
 		t.Fatalf("expected retreat move west to (-1,0), got (%d,%d)", out.UpdatedState.Position.X, out.UpdatedState.Position.Y)
+	}
+}
+
+func TestUseCase_RetreatIgnoresCenterThreatAndStillMovesAway(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Home:      survival.Position{X: 5, Y: 5},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 10,
+			TimeOfDay:        "night",
+			ThreatLevel:      3,
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true, BaseThreat: 4},  // center threat
+				{X: 1, Y: 0, Passable: true, BaseThreat: 4},  // east threat
+				{X: -1, Y: 0, Passable: true, BaseThreat: 1}, // west safer
+				{X: 0, Y: 1, Passable: true, BaseThreat: 2},
+				{X: 0, Y: -1, Passable: true, BaseThreat: 2},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700005000, 0) },
+	}
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-retreat-center-threat",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if out.UpdatedState.Position.X == 0 && out.UpdatedState.Position.Y == 0 {
+		t.Fatalf("expected retreat to move away from threat, got no movement")
+	}
+}
+
+func TestUseCase_RetreatAvoidsBlockedTile(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Home:      survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 10,
+			TimeOfDay:        "night",
+			ThreatLevel:      3,
+			VisibleTiles: []world.Tile{
+				{X: 1, Y: 0, Passable: true, BaseThreat: 4},   // threat east
+				{X: -1, Y: 0, Passable: false, BaseThreat: 1}, // west is blocked
+				{X: 0, Y: 1, Passable: true, BaseThreat: 1},   // safe passable
+				{X: 0, Y: -1, Passable: true, BaseThreat: 1},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700006000, 0) },
+	}
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-retreat-blocked",
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if out.UpdatedState.Position.X == -1 && out.UpdatedState.Position.Y == 0 {
+		t.Fatalf("retreat selected blocked tile")
 	}
 }
