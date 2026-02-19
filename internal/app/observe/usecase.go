@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"clawvival/internal/app/cooldown"
 	"clawvival/internal/app/ports"
-	"clawvival/internal/app/resourcestate"
-	"clawvival/internal/app/stateview"
+	"clawvival/internal/app/shared/cooldown"
+	"clawvival/internal/app/shared/resourcestate"
+	"clawvival/internal/app/shared/stateview"
 	"clawvival/internal/domain/survival"
 	"clawvival/internal/domain/world"
 )

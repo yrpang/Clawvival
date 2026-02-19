@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"clawvival/internal/app/ports"
-	"clawvival/internal/app/resourcestate"
+	"clawvival/internal/app/shared/resourcestate"
 	"clawvival/internal/domain/survival"
 	"clawvival/internal/domain/world"
 )
