@@ -84,6 +84,54 @@ func TestRequireAuthenticatedAgent_InvalidCredentials(t *testing.T) {
 	}
 }
 
+func TestRequireReadableAgentID_FromBody(t *testing.T) {
+	ctx := &app.RequestContext{}
+
+	got, err := requireReadableAgentID(ctx, "agent-body")
+	if err != nil {
+		t.Fatalf("requireReadableAgentID error: %v", err)
+	}
+	if got != "agent-body" {
+		t.Fatalf("unexpected agent id: %q", got)
+	}
+}
+
+func TestRequireReadableAgentID_FromQuery(t *testing.T) {
+	ctx := &app.RequestContext{}
+	ctx.Request.SetRequestURI("/api/agent/replay?agent_id=agent-query")
+
+	got, err := requireReadableAgentID(ctx, "")
+	if err != nil {
+		t.Fatalf("requireReadableAgentID error: %v", err)
+	}
+	if got != "agent-query" {
+		t.Fatalf("unexpected agent id: %q", got)
+	}
+}
+
+func TestRequireReadableAgentID_PrefersHeader(t *testing.T) {
+	ctx := &app.RequestContext{}
+	ctx.Request.SetRequestURI("/api/agent/replay?agent_id=agent-query")
+	ctx.Request.Header.Set(agentIDHeader, "agent-header")
+
+	got, err := requireReadableAgentID(ctx, "agent-body")
+	if err != nil {
+		t.Fatalf("requireReadableAgentID error: %v", err)
+	}
+	if got != "agent-header" {
+		t.Fatalf("unexpected agent id: %q", got)
+	}
+}
+
+func TestRequireReadableAgentID_Missing(t *testing.T) {
+	ctx := &app.RequestContext{}
+
+	_, err := requireReadableAgentID(ctx, "")
+	if err != ErrMissingAgentID {
+		t.Fatalf("expected ErrMissingAgentID, got %v", err)
+	}
+}
+
 func TestWriteError_InvalidActionParams(t *testing.T) {
 	ctx := &app.RequestContext{}
 	writeError(ctx, action.ErrInvalidActionParams)

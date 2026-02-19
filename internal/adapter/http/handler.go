@@ -37,6 +37,7 @@ type Handler struct {
 }
 
 func (h Handler) RegisterRoutes(s *server.Hertz) {
+	s.Use(corsMiddleware())
 	agent := s.Group("/api/agent")
 	agent.POST("/register", h.register)
 	agent.POST("/observe", h.observe)
@@ -81,15 +82,14 @@ type actionIntent struct {
 }
 
 func (h Handler) observe(c context.Context, ctx *app.RequestContext) {
-	agentID, err := h.requireAuthenticatedAgent(c, ctx)
-	if err != nil {
-		writeError(ctx, err)
-		return
-	}
-
 	var body observeRequest
 	if err := decodeJSON(ctx, &body); err != nil {
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
+		return
+	}
+	agentID, err := requireReadableAgentID(ctx, body.AgentID)
+	if err != nil {
+		writeError(ctx, err)
 		return
 	}
 
@@ -151,15 +151,14 @@ func (h Handler) action(c context.Context, ctx *app.RequestContext) {
 }
 
 func (h Handler) status(c context.Context, ctx *app.RequestContext) {
-	agentID, err := h.requireAuthenticatedAgent(c, ctx)
-	if err != nil {
-		writeError(ctx, err)
-		return
-	}
-
 	var body statusRequest
 	if err := decodeJSON(ctx, &body); err != nil {
 		writeErrorBody(ctx, consts.StatusBadRequest, "invalid_json", "invalid json")
+		return
+	}
+	agentID, err := requireReadableAgentID(ctx, body.AgentID)
+	if err != nil {
+		writeError(ctx, err)
 		return
 	}
 
@@ -173,7 +172,7 @@ func (h Handler) status(c context.Context, ctx *app.RequestContext) {
 }
 
 func (h Handler) replay(c context.Context, ctx *app.RequestContext) {
-	agentID, err := h.requireAuthenticatedAgent(c, ctx)
+	agentID, err := requireReadableAgentID(ctx, "")
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -264,6 +263,21 @@ func hasJSONField(body []byte, key string) bool {
 var ErrMissingAgentIDHeader = errors.New("missing x-agent-id header")
 var ErrMissingAgentKeyHeader = errors.New("missing x-agent-key header")
 var ErrMissingAgentCredentials = errors.New("missing agent credentials")
+var ErrMissingAgentID = errors.New("missing agent_id")
+
+func requireReadableAgentID(ctx *app.RequestContext, bodyAgentID string) (string, error) {
+	agentID := strings.TrimSpace(string(ctx.GetHeader(agentIDHeader)))
+	if agentID == "" {
+		agentID = strings.TrimSpace(bodyAgentID)
+	}
+	if agentID == "" {
+		agentID = strings.TrimSpace(string(ctx.Query("agent_id")))
+	}
+	if agentID == "" {
+		return "", ErrMissingAgentID
+	}
+	return agentID, nil
+}
 
 func (h Handler) requireAuthenticatedAgent(c context.Context, ctx *app.RequestContext) (string, error) {
 	agentID := strings.TrimSpace(string(ctx.GetHeader(agentIDHeader)))
@@ -291,6 +305,8 @@ func writeError(ctx *app.RequestContext, err error) {
 	case errors.Is(err, ErrMissingAgentCredentials):
 		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_credentials", err.Error())
 	case errors.Is(err, ErrMissingAgentIDHeader):
+		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_id", err.Error())
+	case errors.Is(err, ErrMissingAgentID):
 		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_id", err.Error())
 	case errors.Is(err, ErrMissingAgentKeyHeader):
 		writeErrorBody(ctx, consts.StatusBadRequest, "missing_agent_key", err.Error())
