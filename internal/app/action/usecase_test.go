@@ -219,6 +219,168 @@ func TestUseCase_RejectsUnknownIntentType(t *testing.T) {
 	}
 }
 
+func TestUseCase_MetricsRecordsSuccessOnExecuteSuccess(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	metrics := &stubActionMetrics{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		Metrics:    metrics,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 1000,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+			NearbyResource:   map[string]int{"wood": 1},
+			VisibleTiles:     []world.Tile{{X: 0, Y: 0, Passable: true, Resource: "wood"}},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "metrics-success",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+	if metrics.successCalls != 1 || metrics.failureCalls != 0 || metrics.conflictCalls != 0 {
+		t.Fatalf("unexpected metrics calls: success=%d failure=%d conflict=%d", metrics.successCalls, metrics.failureCalls, metrics.conflictCalls)
+	}
+}
+
+func TestUseCase_MetricsRecordsConflictOnVersionConflict(t *testing.T) {
+	stateRepo := &conflictOnSaveStateRepo{stubStateRepo: stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	metrics := &stubActionMetrics{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		Metrics:    metrics,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 1000,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+			NearbyResource:   map[string]int{"wood": 1},
+			VisibleTiles:     []world.Tile{{X: 0, Y: 0, Passable: true, Resource: "wood"}},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "metrics-conflict",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if !errors.Is(err, ports.ErrConflict) {
+		t.Fatalf("expected ports.ErrConflict, got %v", err)
+	}
+	if metrics.successCalls != 0 || metrics.failureCalls != 0 || metrics.conflictCalls != 1 {
+		t.Fatalf("unexpected metrics calls: success=%d failure=%d conflict=%d", metrics.successCalls, metrics.failureCalls, metrics.conflictCalls)
+	}
+}
+
+func TestUseCase_MetricsRecordsFailureOnUnexpectedError(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {AgentID: "agent-1", Vitals: survival.Vitals{HP: 100, Hunger: 80, Energy: 60}, Version: 1},
+	}}
+	actionRepo := &errorActionRepo{err: errors.New("db down")}
+	eventRepo := &stubEventRepo{}
+	metrics := &stubActionMetrics{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		Metrics:    metrics,
+		World:      worldmock.Provider{Snapshot: world.Snapshot{TimeOfDay: "day", ThreatLevel: 1}},
+		Settle:     survival.SettlementService{},
+		Now:        func() time.Time { return time.Unix(1700000000, 0) },
+	}
+
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "metrics-failure",
+		Intent:         survival.ActionIntent{Type: survival.ActionGather, TargetID: "res_0_0_wood"},
+	})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if metrics.successCalls != 0 || metrics.failureCalls != 1 || metrics.conflictCalls != 0 {
+		t.Fatalf("unexpected metrics calls: success=%d failure=%d conflict=%d", metrics.successCalls, metrics.failureCalls, metrics.conflictCalls)
+	}
+}
+
+func TestUseCase_RestStartPersistsExecutionStateAndEvent(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			WorldTimeSeconds: 3600,
+			TimeOfDay:        "day",
+			ThreatLevel:      1,
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "rest-persist-check",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionRest,
+			RestMinutes: 30,
+		},
+	})
+	if err != nil {
+		t.Fatalf("start rest: %v", err)
+	}
+	if out.UpdatedState.OngoingAction == nil {
+		t.Fatalf("expected ongoing action in response")
+	}
+	if _, ok := actionRepo.byKey["agent-1|rest-persist-check"]; !ok {
+		t.Fatalf("expected action execution persisted for rest start")
+	}
+	savedState, ok := stateRepo.byAgent["agent-1"]
+	if !ok || savedState.OngoingAction == nil {
+		t.Fatalf("expected state persisted with ongoing rest")
+	}
+	if len(eventRepo.events) == 0 || eventRepo.events[0].Type != "rest_started" {
+		t.Fatalf("expected rest_started event persisted")
+	}
+}
+
 type stubTxManager struct{}
 
 func (stubTxManager) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
@@ -271,6 +433,18 @@ func (r *stubActionRepo) SaveExecution(_ context.Context, execution ports.Action
 	return nil
 }
 
+type errorActionRepo struct {
+	err error
+}
+
+func (r *errorActionRepo) GetByIdempotencyKey(_ context.Context, _, _ string) (*ports.ActionExecutionRecord, error) {
+	return nil, r.err
+}
+
+func (r *errorActionRepo) SaveExecution(_ context.Context, _ ports.ActionExecutionRecord) error {
+	return r.err
+}
+
 type stubEventRepo struct {
 	events []survival.DomainEvent
 }
@@ -287,6 +461,34 @@ func (r *stubEventRepo) ListByAgentID(_ context.Context, _ string, limit int) ([
 	out := make([]survival.DomainEvent, limit)
 	copy(out, r.events[:limit])
 	return out, nil
+}
+
+type stubActionMetrics struct {
+	successCalls  int
+	conflictCalls int
+	failureCalls  int
+	lastResult    survival.ResultCode
+}
+
+func (m *stubActionMetrics) RecordSuccess(resultCode survival.ResultCode) {
+	m.successCalls++
+	m.lastResult = resultCode
+}
+
+func (m *stubActionMetrics) RecordConflict() {
+	m.conflictCalls++
+}
+
+func (m *stubActionMetrics) RecordFailure() {
+	m.failureCalls++
+}
+
+type conflictOnSaveStateRepo struct {
+	stubStateRepo
+}
+
+func (r *conflictOnSaveStateRepo) SaveWithVersion(_ context.Context, _ survival.AgentStateAggregate, _ int64) error {
+	return ports.ErrConflict
 }
 
 type stubObjectRepo struct {

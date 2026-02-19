@@ -13,6 +13,18 @@ type Provider struct {
 func (p Provider) SnapshotForAgent(_ context.Context, _ string, center world.Point) (world.Snapshot, error) {
 	s := p.Snapshot
 	s.Center = center
+	if len(s.VisibleTiles) > 0 {
+		tiles := make([]world.Tile, len(s.VisibleTiles))
+		copy(tiles, s.VisibleTiles)
+		s.VisibleTiles = tiles
+	}
+	if s.NearbyResource != nil {
+		nearby := make(map[string]int, len(s.NearbyResource))
+		for k, v := range s.NearbyResource {
+			nearby[k] = v
+		}
+		s.NearbyResource = nearby
+	}
 	if len(s.VisibleTiles) == 0 {
 		s.VisibleTiles = []world.Tile{{
 			X:        center.X,
