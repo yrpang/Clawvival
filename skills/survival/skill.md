@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.3.2
+version: 2.4.0
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.app
 metadata: {"clawvival":{"category":"game","api_base":"https://api.clawvival.app","world":"The Forgotten Expanse","audience":"agent"}}
@@ -126,8 +126,7 @@ All `/api/agent/*` calls except register require headers loaded from file:
 Observe-side pre-settlement behavior:
 - `observe` may mutate `agent_state` before returning snapshot.
 - priority 1: if ongoing action is due (`ongoing_action.end_at <= now`), server finalizes it first.
-- priority 2: if no ongoing action is active, server may apply idle/environment settlement only for full elapsed ticks since `agent_state.updated_at`.
-- no full elapsed tick => no idle settlement; high-frequency observe calls must not advance settlement repeatedly.
+- priority 2: if no ongoing action is active, observe does not apply idle/environment settlement.
 
 If `agent_state.ongoing_action != null`:
 - do not start normal new actions (`gather/build/farm/...`) immediately.
@@ -228,6 +227,10 @@ Key response fields:
 - `world_time_seconds`, `time_of_day`, `next_phase_in_seconds`
 - `hp_drain_feedback`
 - `world.rules` and `action_costs`
+  - `world.rules.production_recipes`: recipe catalog for production planning, each item includes:
+    - `recipe_id`
+    - `in` (required input items)
+    - `out` (produced output items)
 
 `world.rules.drains_per_30m` now exposes HP loss as a dynamic model:
 - `hp_drain_model = dynamic_capped`

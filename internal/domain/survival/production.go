@@ -88,6 +88,12 @@ type BuiltObject struct {
 	Y    int
 }
 
+type ProductionRecipeRule struct {
+	RecipeID int
+	In       map[string]int
+	Out      map[string]int
+}
+
 func ApplyGather(state *AgentStateAggregate, snapshot WorldSnapshot) {
 	if state.Inventory == nil {
 		state.Inventory = map[string]int{}
@@ -149,6 +155,23 @@ func CanCraft(state AgentStateAggregate, recipeID RecipeID) bool {
 		return false
 	}
 	return hasEnough(&state, recipe.In)
+}
+
+func ProductionRecipeRules() []ProductionRecipeRule {
+	ordered := []RecipeID{RecipePlank, RecipeBread}
+	out := make([]ProductionRecipeRule, 0, len(ordered))
+	for _, rid := range ordered {
+		def, ok := recipeDefs[rid]
+		if !ok {
+			continue
+		}
+		out = append(out, ProductionRecipeRule{
+			RecipeID: int(rid),
+			In:       cloneIntMap(def.In),
+			Out:      cloneIntMap(def.Out),
+		})
+	}
+	return out
 }
 
 func CanBuild(state AgentStateAggregate, kind BuildKind) bool {
@@ -261,4 +284,15 @@ func kindToObjectType(kind BuildKind) string {
 	default:
 		return ""
 	}
+}
+
+func cloneIntMap(in map[string]int) map[string]int {
+	if len(in) == 0 {
+		return map[string]int{}
+	}
+	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

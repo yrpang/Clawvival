@@ -44,6 +44,7 @@ type Rules struct {
 	Visibility          Visibility   `json:"visibility"`
 	Farming             Farming      `json:"farming"`
 	Seed                Seed         `json:"seed"`
+	ProductionRecipes   []ProductionRecipe `json:"production_recipes"`
 }
 
 type DrainsPer30m struct {
@@ -75,6 +76,12 @@ type Farming struct {
 type Seed struct {
 	SeedDropChance   float64 `json:"seed_drop_chance"`
 	SeedPityMaxFails int     `json:"seed_pity_max_fails"`
+}
+
+type ProductionRecipe struct {
+	RecipeID int            `json:"recipe_id"`
+	In       map[string]int `json:"in"`
+	Out      map[string]int `json:"out"`
 }
 
 type ActionCost struct {

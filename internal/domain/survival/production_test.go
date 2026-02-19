@@ -146,3 +146,51 @@ func TestBuildCosts_MVPv1MinimumSet(t *testing.T) {
 		t.Fatalf("expected seed not consumed by build, got=%d", got)
 	}
 }
+
+func TestProductionRecipeRules_ExposeStableCatalog(t *testing.T) {
+	rules := ProductionRecipeRules()
+	if len(rules) < 2 {
+		t.Fatalf("expected at least 2 production recipes, got=%d", len(rules))
+	}
+	if got := rules[0]; got.RecipeID != int(RecipePlank) || got.In["wood"] != 2 || got.Out["plank"] != 1 {
+		t.Fatalf("unexpected first production recipe: %+v", got)
+	}
+	if got := rules[1]; got.RecipeID != int(RecipeBread) || got.In["wheat"] != 2 || got.Out["bread"] != 1 {
+		t.Fatalf("unexpected second production recipe: %+v", got)
+	}
+}
+
+func TestProductionRecipeRules_CoversAllRuntimeRecipes(t *testing.T) {
+	rules := ProductionRecipeRules()
+	if got, want := len(rules), len(recipeDefs); got != want {
+		t.Fatalf("production recipe count mismatch: got=%d want=%d", got, want)
+	}
+	exported := map[int]ProductionRecipeRule{}
+	for _, r := range rules {
+		exported[r.RecipeID] = r
+	}
+	for id, def := range recipeDefs {
+		r, ok := exported[int(id)]
+		if !ok {
+			t.Fatalf("missing exported recipe for runtime recipe_id=%d", id)
+		}
+		if !sameRecipeMap(r.In, def.In) {
+			t.Fatalf("recipe_id=%d input mismatch: got=%v want=%v", id, r.In, def.In)
+		}
+		if !sameRecipeMap(r.Out, def.Out) {
+			t.Fatalf("recipe_id=%d output mismatch: got=%v want=%v", id, r.Out, def.Out)
+		}
+	}
+}
+
+func sameRecipeMap(got, want map[string]int) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for k, v := range want {
+		if got[k] != v {
+			return false
+		}
+	}
+	return true
+}

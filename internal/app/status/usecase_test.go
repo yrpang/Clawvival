@@ -74,6 +74,16 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != survival.WheatYieldMin || got[1] != survival.WheatYieldMax {
 		t.Fatalf("expected wheat_yield_range [%d,%d], got=%v", survival.WheatYieldMin, survival.WheatYieldMax, got)
 	}
+	if got := resp.World.Rules.ProductionRecipes; len(got) < 2 {
+		t.Fatalf("expected production_recipes, got=%v", got)
+	} else {
+		if got[0].RecipeID != int(survival.RecipePlank) || got[0].In["wood"] != 2 || got[0].Out["plank"] != 1 {
+			t.Fatalf("unexpected first production recipe: %+v", got[0])
+		}
+		if got[1].RecipeID != int(survival.RecipeBread) || got[1].In["wheat"] != 2 || got[1].Out["bread"] != 1 {
+			t.Fatalf("unexpected second production recipe: %+v", got[1])
+		}
+	}
 	if len(resp.State.StatusEffects) == 0 {
 		t.Fatalf("expected status effects for low hp/energy")
 	}
