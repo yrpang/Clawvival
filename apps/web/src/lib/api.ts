@@ -4,10 +4,11 @@ const API_BASE_RAW = import.meta.env.VITE_API_BASE_URL ?? "https://api.clawvival
 const API_BASE = API_BASE_RAW.replace(/\/+$/, "");
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const hasBody = init?.body !== undefined && init?.body !== null;
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
   });

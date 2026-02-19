@@ -18,11 +18,39 @@ function asRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => stableSerialize(v)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(obj[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function buildHistoryItemId(event: DomainEvent, payload: Record<string, unknown>): string {
+  const decision = asRecord(payload.decision);
+  const result = asRecord(payload.result);
+  const stateBefore = asRecord(payload.state_before);
+  const stateAfter = asRecord(payload.state_after);
+  return [
+    event.occurred_at,
+    stableSerialize(decision),
+    stableSerialize(result),
+    stableSerialize(stateBefore),
+    stableSerialize(stateAfter),
+    String(payload.world_time_before_seconds ?? ""),
+    String(payload.world_time_after_seconds ?? ""),
+  ].join("|");
+}
+
 export function buildActionHistory(events: DomainEvent[]): ActionHistoryItem[] {
   const settled = events.filter((event) => event.type === "action_settled");
 
   return settled
-    .map((event, index) => {
+    .map((event) => {
       const payload = asRecord(event.payload);
       const decision = asRecord(payload.decision);
       const params = asRecord(decision.params);
@@ -34,7 +62,7 @@ export function buildActionHistory(events: DomainEvent[]): ActionHistoryItem[] {
       const resultCode = typeof payload.result_code === "string" ? payload.result_code : "OK";
 
       return {
-        id: `${event.occurred_at}-${index}`,
+        id: buildHistoryItemId(event, payload),
         occurred_at: event.occurred_at,
         action_type: actionType,
         result_code: resultCode,

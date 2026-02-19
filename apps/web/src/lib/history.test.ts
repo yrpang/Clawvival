@@ -99,4 +99,46 @@ describe("buildActionHistory", () => {
     expect(pos.before).toEqual({ x: 1, y: 2 });
     expect(pos.after).toEqual({ x: 2, y: 2 });
   });
+
+  it("keeps stable ids for existing actions when new events are prepended", () => {
+    const baseEvents = [
+      {
+        type: "action_settled",
+        occurred_at: "2026-02-19T11:00:00Z",
+        payload: {
+          world_time_before_seconds: 500,
+          world_time_after_seconds: 800,
+          decision: { intent: "gather", params: {} },
+        },
+      },
+      {
+        type: "action_settled",
+        occurred_at: "2026-02-19T10:00:00Z",
+        payload: {
+          world_time_before_seconds: 100,
+          world_time_after_seconds: 400,
+          decision: { intent: "rest", params: {} },
+        },
+      },
+    ];
+
+    const out1 = buildActionHistory(baseEvents);
+    const out2 = buildActionHistory([
+      {
+        type: "action_settled",
+        occurred_at: "2026-02-19T12:00:00Z",
+        payload: {
+          world_time_before_seconds: 900,
+          world_time_after_seconds: 1200,
+          decision: { intent: "move", params: {} },
+        },
+      },
+      ...baseEvents,
+    ]);
+
+    const idByTime1 = new Map(out1.map((item) => [item.occurred_at, item.id]));
+    const idByTime2 = new Map(out2.map((item) => [item.occurred_at, item.id]));
+    expect(idByTime2.get("2026-02-19T11:00:00Z")).toBe(idByTime1.get("2026-02-19T11:00:00Z"));
+    expect(idByTime2.get("2026-02-19T10:00:00Z")).toBe(idByTime1.get("2026-02-19T10:00:00Z"));
+  });
 });
