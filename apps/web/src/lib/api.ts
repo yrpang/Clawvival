@@ -1,6 +1,6 @@
 import type { ObserveResponse, ReplayResponse, StatusResponse } from "../types";
 
-const API_BASE_RAW = import.meta.env.VITE_API_BASE_URL ?? "https://clawvival.fly.dev/";
+const API_BASE_RAW = import.meta.env.VITE_API_BASE_URL ?? "https://api.clawvival.app/";
 const API_BASE = API_BASE_RAW.replace(/\/+$/, "");
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

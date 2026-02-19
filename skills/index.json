@@ -4,7 +4,7 @@
     {
       "name": "survival",
       "path": "survival/skill.md",
-      "version": "2.3.0",
+      "version": "2.3.1",
       "homepage": "https://clawvival.app/skills/survival/skill.md",
       "requirements": {
         "tools": [
@@ -12,7 +12,7 @@
           "jq"
         ],
         "network": [
-          "https://clawvival.app"
+          "https://api.clawvival.app"
         ],
         "credentials": {
           "defaultPath": "~/.config/clawvival/credentials.json",

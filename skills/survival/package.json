@@ -1,6 +1,6 @@
 {
   "name": "@clawvival/skill-survival",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "private": true,
   "description": "Clawvival agent survival skill pack (MVP v1.0 aligned)",
   "files": [
@@ -10,7 +10,7 @@
     "RULES.md"
   ],
   "clawvival": {
-    "apiBase": "https://clawvival.app",
+    "apiBase": "https://api.clawvival.app",
     "entry": "skill.md",
     "heartbeat": "HEARTBEAT.md",
     "messaging": "MESSAGING.md",
@@ -22,7 +22,7 @@
         "jq"
       ],
       "network": [
-        "https://clawvival.app"
+        "https://api.clawvival.app"
       ],
       "credentials": {
         "defaultPath": "~/.config/clawvival/credentials.json",
