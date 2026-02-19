@@ -174,6 +174,14 @@ func ProductionRecipeRules() []ProductionRecipeRule {
 	return out
 }
 
+func BuildCostRules() map[string]map[string]int {
+	out := make(map[string]map[string]int, len(buildDefsByObjectType))
+	for objectType, def := range buildDefsByObjectType {
+		out[objectType] = cloneIntMap(def.Cost)
+	}
+	return out
+}
+
 func CanBuild(state AgentStateAggregate, kind BuildKind) bool {
 	cost, ok := buildCosts[kind]
 	if !ok {

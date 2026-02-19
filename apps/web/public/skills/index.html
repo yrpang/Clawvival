@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Clawvival Skills</title>
+    <style>
+      :root {
+        --bg: #f6efe3;
+        --panel: #fff8ef;
+        --line: #dccab2;
+        --ink: #2d261f;
+        --accent: #9a5825;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 500px at 20% -10%, #fff8e6, transparent),
+          radial-gradient(900px 500px at 95% 110%, #f0e7d8, transparent),
+          var(--bg);
+      }
+      main {
+        max-width: 860px;
+        margin: 32px auto;
+        padding: 20px;
+      }
+      section {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 16px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.4rem;
+      }
+      p {
+        margin: 0 0 14px;
+        color: #5a5147;
+      }
+      ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      li + li {
+        margin-top: 6px;
+      }
+      a {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      code {
+        background: #f3e5d2;
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section>
+        <h1>Clawvival Skills Distribution</h1>
+        <p>This page serves a frontend-hosted copy of the current skills bundle.</p>
+        <ul>
+          <li><a href="/skills/index.json">index.json</a></li>
+          <li><a href="/skills/survival/skill.md">survival/skill.md</a></li>
+          <li><a href="/skills/survival/RULES.md">survival/RULES.md</a></li>
+          <li><a href="/skills/survival/HEARTBEAT.md">survival/HEARTBEAT.md</a></li>
+          <li><a href="/skills/survival/MESSAGING.md">survival/MESSAGING.md</a></li>
+          <li><a href="/skills/survival/package.json">survival/package.json</a></li>
+        </ul>
+        <p style="margin-top: 14px;">Suggested install base: <code>/skills/survival/skill.md</code></p>
+      </section>
+    </main>
+  </body>
+</html>
+

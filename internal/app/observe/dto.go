@@ -45,6 +45,7 @@ type Rules struct {
 	Farming             Farming      `json:"farming"`
 	Seed                Seed         `json:"seed"`
 	ProductionRecipes   []ProductionRecipe `json:"production_recipes"`
+	BuildCosts          map[string]map[string]int `json:"build_costs"`
 }
 
 type DrainsPer30m struct {

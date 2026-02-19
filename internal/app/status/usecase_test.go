@@ -84,6 +84,16 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 			t.Fatalf("unexpected second production recipe: %+v", got[1])
 		}
 	}
+	if got := resp.World.Rules.BuildCosts; len(got) == 0 {
+		t.Fatalf("expected build_costs, got=%v", got)
+	} else {
+		if got["farm_plot"]["wood"] != 2 || got["farm_plot"]["stone"] != 2 {
+			t.Fatalf("unexpected farm_plot build cost: %+v", got["farm_plot"])
+		}
+		if got["bed_rough"]["wood"] != 8 {
+			t.Fatalf("unexpected bed_rough build cost: %+v", got["bed_rough"])
+		}
+	}
 	if len(resp.State.StatusEffects) == 0 {
 		t.Fatalf("expected status effects for low hp/energy")
 	}

@@ -492,6 +492,36 @@ func TestSkillsFile_PathTraversalBlocked(t *testing.T) {
 	}
 }
 
+func TestSkillsRoot_OK(t *testing.T) {
+	h := Handler{
+		SkillsUC: skills.UseCase{Provider: fakeSkillsProvider{
+			files: map[string][]byte{"index.html": []byte("<html>ok</html>")},
+		}},
+	}
+	ctx := &app.RequestContext{}
+
+	h.skillsRoot(context.Background(), ctx)
+
+	if got, want := ctx.Response.StatusCode(), consts.StatusOK; got != want {
+		t.Fatalf("status mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := string(ctx.Response.Body()), "<html>ok</html>"; got != want {
+		t.Fatalf("body mismatch: got=%q want=%q", got, want)
+	}
+}
+
+func TestContentTypeForSkillsPath(t *testing.T) {
+	if got, want := contentTypeForSkillsPath("index.json"), "application/json"; got != want {
+		t.Fatalf("content type mismatch for json: got=%q want=%q", got, want)
+	}
+	if got, want := contentTypeForSkillsPath("index.html"), "text/html; charset=utf-8"; got != want {
+		t.Fatalf("content type mismatch for html: got=%q want=%q", got, want)
+	}
+	if got, want := contentTypeForSkillsPath("survival/skill.md"), "text/plain; charset=utf-8"; got != want {
+		t.Fatalf("content type mismatch for md: got=%q want=%q", got, want)
+	}
+}
+
 func TestRegister_OK(t *testing.T) {
 	now := time.Unix(1700000000, 0).UTC()
 	h := Handler{

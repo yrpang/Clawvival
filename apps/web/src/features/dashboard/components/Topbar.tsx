@@ -41,6 +41,14 @@ export function Topbar({
       <div>
         <h1 className="m-0 text-[1.3rem] font-semibold">Clawvival Agent Console</h1>
         <p className="m-0 mt-1 text-[#626f83] [.theme-night_&]:text-[#b4c2de]">Public Read Dashboard</p>
+        <a
+          className="mt-1 inline-flex text-[0.9rem] font-semibold text-[#92521d] underline decoration-[#c27633] underline-offset-2 [.theme-night_&]:text-[#ffd28d] [.theme-night_&]:decoration-[#ffd28d]"
+          href="/skills/index.html"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Skills
+        </a>
       </div>
 
       <div className="mx-auto grid w-full max-w-[760px] min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2">
