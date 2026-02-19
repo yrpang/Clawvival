@@ -13,6 +13,7 @@ var ActionDurations = map[survival.ActionType]time.Duration{
 	survival.ActionCraft:     5 * time.Minute,
 	survival.ActionFarmPlant: 3 * time.Minute,
 	survival.ActionMove:      1 * time.Minute,
+	survival.ActionSleep:     5 * time.Minute,
 }
 
 func RemainingForAction(events []survival.DomainEvent, intentType survival.ActionType, now time.Time) (int, bool) {
