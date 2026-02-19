@@ -33,6 +33,6 @@ npm run lint
 
 - Workflow: `.github/workflows/web-pages.yml`
 - On push to `main`, if `apps/web/**` changed, workflow builds and deploys to GitHub Pages.
-- `VITE_BASE_PATH` is set to `/Clawverse/` in CI.
+- `VITE_BASE_PATH` is set to `/` in CI for custom domain deployment (`clawvival.app`).
 
-If the repository name changes, update `VITE_BASE_PATH` in workflow accordingly.
+For project-site paths (e.g. `/<repo>/`), update `VITE_BASE_PATH` in workflow accordingly.
