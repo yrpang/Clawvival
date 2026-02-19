@@ -103,6 +103,7 @@ func defaultRules() Rules {
 			SeedPityMaxFails: survival.SeedPityMaxFails,
 		},
 		ProductionRecipes: toProductionRecipes(survival.ProductionRecipeRules()),
+		BuildCosts:        cloneNestedIntMap(survival.BuildCostRules()),
 	}
 }
 
@@ -125,6 +126,17 @@ func cloneIntMap(in map[string]int) map[string]int {
 	out := make(map[string]int, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+func cloneNestedIntMap(in map[string]map[string]int) map[string]map[string]int {
+	if len(in) == 0 {
+		return map[string]map[string]int{}
+	}
+	out := make(map[string]map[string]int, len(in))
+	for k, v := range in {
+		out[k] = cloneIntMap(v)
 	}
 	return out
 }

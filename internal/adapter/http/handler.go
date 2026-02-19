@@ -45,6 +45,8 @@ func (h Handler) RegisterRoutes(s *server.Hertz) {
 	agent.POST("/status", h.status)
 	agent.GET("/replay", h.replay)
 
+	s.GET("/skills", h.skillsRoot)
+	s.GET("/skills/", h.skillsRoot)
 	s.GET("/skills/index.json", h.skillsIndex)
 	s.GET("/skills/*filepath", h.skillsFile)
 	s.GET("/ops/kpi", h.kpi)
@@ -216,7 +218,28 @@ func (h Handler) skillsFile(c context.Context, ctx *app.RequestContext) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.Data(http.StatusOK, "text/plain; charset=utf-8", b)
+	ctx.Data(http.StatusOK, contentTypeForSkillsPath(path), b)
+}
+
+func (h Handler) skillsRoot(c context.Context, ctx *app.RequestContext) {
+	b, err := h.SkillsUC.File(c, "index.html")
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.Data(http.StatusOK, "text/html; charset=utf-8", b)
+}
+
+func contentTypeForSkillsPath(path string) string {
+	lower := strings.ToLower(strings.TrimSpace(path))
+	switch {
+	case strings.HasSuffix(lower, ".json"):
+		return "application/json"
+	case strings.HasSuffix(lower, ".html"):
+		return "text/html; charset=utf-8"
+	default:
+		return "text/plain; charset=utf-8"
+	}
 }
 
 func (h Handler) register(c context.Context, ctx *app.RequestContext) {

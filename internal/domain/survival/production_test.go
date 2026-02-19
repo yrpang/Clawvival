@@ -183,6 +183,22 @@ func TestProductionRecipeRules_CoversAllRuntimeRecipes(t *testing.T) {
 	}
 }
 
+func TestBuildCostRules_CoversAllRuntimeBuildDefs(t *testing.T) {
+	rules := BuildCostRules()
+	if got, want := len(rules), len(buildDefsByObjectType); got != want {
+		t.Fatalf("build cost count mismatch: got=%d want=%d", got, want)
+	}
+	for objectType, def := range buildDefsByObjectType {
+		cost, ok := rules[objectType]
+		if !ok {
+			t.Fatalf("missing exported build cost for object_type=%s", objectType)
+		}
+		if !sameRecipeMap(cost, def.Cost) {
+			t.Fatalf("object_type=%s build cost mismatch: got=%v want=%v", objectType, cost, def.Cost)
+		}
+	}
+}
+
 func sameRecipeMap(got, want map[string]int) bool {
 	if len(got) != len(want) {
 		return false
