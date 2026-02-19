@@ -99,7 +99,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 			"build":              {BaseMinutes: 3, DeltaHunger: 0, DeltaEnergy: -14, Requirements: []string{"BUILD_MATERIALS", "VALID_POS"}},
 			"eat":                {BaseMinutes: 1, DeltaHunger: 12, DeltaEnergy: 0, Requirements: []string{"HAS_ITEM"}},
 			"rest":               {BaseMinutes: 30, DeltaHunger: 0, DeltaEnergy: 10, Requirements: []string{}},
-			"sleep":              {BaseMinutes: 60, DeltaHunger: 0, DeltaEnergy: 18, Requirements: []string{"BED_ID"}},
+			"sleep":              {BaseMinutes: 0, DeltaHunger: 0, DeltaEnergy: 24, Requirements: []string{"BED_ID"}},
 			"farm_plant":         {BaseMinutes: 2, DeltaHunger: -1, DeltaEnergy: -10, Requirements: []string{"FARM_ID", "HAS_SEED"}},
 			"farm_harvest":       {BaseMinutes: 2, DeltaHunger: 0, DeltaEnergy: -8, Requirements: []string{"FARM_ID", "FARM_READY"}},
 			"container_deposit":  {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: -4, Requirements: []string{"CONTAINER_ID", "HAS_ITEMS"}},

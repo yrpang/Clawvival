@@ -79,6 +79,8 @@ const (
 	seedPityMaxFails             = 8
 	actionNightVisionRadius      = 3
 	defaultInventoryCapacity     = 30
+	sleepBaseEnergyRecovery      = 24
+	sleepBaseHPRecovery          = 8
 )
 
 type UseCase struct {
@@ -214,36 +216,44 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		if err := ensureCooldownReady(eventsBeforeAction, req.Intent.Type, nowAt); err != nil {
 			return err
 		}
-		deltaMinutes, err := resolveHeartbeatDeltaMinutes(txCtx, u.EventRepo, req.AgentID, nowAt)
-		if err != nil {
-			return err
-		}
 		req.Intent = resolveRetreatIntent(req.Intent, state.Position, snapshot.VisibleTiles)
-		settleNearby := snapshot.NearbyResource
-		if req.Intent.Type == survival.ActionGather {
-			settleNearby = filterGatherNearbyResource(req.Intent.TargetID, snapshot.NearbyResource)
-		}
-
-		result, err := u.Settle.Settle(
-			state,
-			req.Intent,
-			survival.HeartbeatDelta{Minutes: deltaMinutes},
-			nowAt,
-			survival.WorldSnapshot{
-				TimeOfDay:         snapshot.TimeOfDay,
-				ThreatLevel:       snapshot.ThreatLevel,
-				VisibilityPenalty: snapshot.VisibilityPenalty,
-				NearbyResource:    settleNearby,
-				WorldTimeSeconds:  snapshot.WorldTimeSeconds,
-			},
-		)
-		if err != nil {
-			return err
+		deltaMinutes := 0
+		var result survival.SettlementResult
+		if req.Intent.Type == survival.ActionSleep {
+			if preparedObj == nil {
+				return ErrActionPreconditionFailed
+			}
+			result = settleInstantSleepAction(state, req.Intent, preparedObj.record, nowAt, snapshot)
+		} else {
+			deltaMinutes, err = resolveHeartbeatDeltaMinutes(txCtx, u.EventRepo, req.AgentID, nowAt)
+			if err != nil {
+				return err
+			}
+			settleNearby := snapshot.NearbyResource
+			if req.Intent.Type == survival.ActionGather {
+				settleNearby = filterGatherNearbyResource(req.Intent.TargetID, snapshot.NearbyResource)
+			}
+			result, err = u.Settle.Settle(
+				state,
+				req.Intent,
+				survival.HeartbeatDelta{Minutes: deltaMinutes},
+				nowAt,
+				survival.WorldSnapshot{
+					TimeOfDay:         snapshot.TimeOfDay,
+					ThreatLevel:       snapshot.ThreatLevel,
+					VisibilityPenalty: snapshot.VisibilityPenalty,
+					NearbyResource:    settleNearby,
+					WorldTimeSeconds:  snapshot.WorldTimeSeconds,
+				},
+			)
+			if err != nil {
+				return err
+			}
 		}
 		result.UpdatedState = stateview.Enrich(result.UpdatedState, snapshot.TimeOfDay, isCurrentTileLit(snapshot.TimeOfDay))
 		result.UpdatedState.CurrentZone = stateview.CurrentZoneAtPosition(result.UpdatedState.Position, snapshot.VisibleTiles)
 		result.UpdatedState.ActionCooldowns = cooldown.RemainingByActionWithCurrent(eventsBeforeAction, nowAt, req.Intent.Type)
-		if snapshot.PhaseChanged {
+		if snapshot.PhaseChanged && deltaMinutes > 0 {
 			result.Events = append(result.Events, survival.DomainEvent{
 				Type:       "world_phase_changed",
 				OccurredAt: nowAt,
@@ -1146,6 +1156,101 @@ func buildObjectDefaults(intentObjectType string) (objectType, quality string, c
 	}
 }
 
+func settleInstantSleepAction(state survival.AgentStateAggregate, intent survival.ActionIntent, bed ports.WorldObjectRecord, nowAt time.Time, snapshot world.Snapshot) survival.SettlementResult {
+	next := state
+	if next.Inventory != nil {
+		inv := make(map[string]int, len(next.Inventory))
+		for k, v := range next.Inventory {
+			inv[k] = v
+		}
+		next.Inventory = inv
+	}
+	if next.StatusEffects != nil {
+		next.StatusEffects = append([]string(nil), next.StatusEffects...)
+	}
+	energyMultiplierNum, energyMultiplierDen := sleepMultiplierByQuality(bed.Quality)
+	energyRecovery := (sleepBaseEnergyRecovery*energyMultiplierNum + energyMultiplierDen - 1) / energyMultiplierDen
+	hpRecovery := (sleepBaseHPRecovery*energyMultiplierNum + energyMultiplierDen - 1) / energyMultiplierDen
+
+	before := state.Vitals
+	next.Vitals.Energy += energyRecovery
+	next.Vitals.HP += hpRecovery
+	if next.Vitals.HP > 100 {
+		next.Vitals.HP = 100
+	}
+	hpRecovery = next.Vitals.HP - before.HP
+	next.Version++
+	next.UpdatedAt = nowAt
+
+	event := survival.DomainEvent{
+		Type:       "action_settled",
+		OccurredAt: nowAt,
+		Payload: map[string]any{
+			"world_time_before_seconds": snapshot.WorldTimeSeconds,
+			"world_time_after_seconds":  snapshot.WorldTimeSeconds,
+			"settled_dt_minutes":        0,
+			"state_before": map[string]any{
+				"hp":             state.Vitals.HP,
+				"hunger":         state.Vitals.Hunger,
+				"energy":         state.Vitals.Energy,
+				"x":              state.Position.X,
+				"y":              state.Position.Y,
+				"pos":            map[string]int{"x": state.Position.X, "y": state.Position.Y},
+				"inventory_used": inventoryUsedCount(state.Inventory),
+			},
+			"decision": map[string]any{
+				"intent": string(intent.Type),
+				"params": map[string]any{
+					"bed_id":      intent.BedID,
+					"bed_quality": strings.ToUpper(strings.TrimSpace(bed.Quality)),
+				},
+				"dt_minutes": 0,
+			},
+			"state_after": map[string]any{
+				"hp":             next.Vitals.HP,
+				"hunger":         next.Vitals.Hunger,
+				"energy":         next.Vitals.Energy,
+				"x":              next.Position.X,
+				"y":              next.Position.Y,
+				"pos":            map[string]int{"x": next.Position.X, "y": next.Position.Y},
+				"inventory_used": inventoryUsedCount(next.Inventory),
+			},
+			"result": map[string]any{
+				"hp_loss":         0,
+				"inventory_delta": map[string]int{},
+				"vitals_delta": map[string]int{
+					"hp":     next.Vitals.HP - state.Vitals.HP,
+					"hunger": next.Vitals.Hunger - state.Vitals.Hunger,
+					"energy": next.Vitals.Energy - state.Vitals.Energy,
+				},
+				"vitals_change_reasons": map[string]any{
+					"hp": []map[string]any{
+						{"code": "ACTION_SLEEP_RECOVERY", "delta": hpRecovery},
+					},
+					"hunger": []map[string]any{},
+					"energy": []map[string]any{
+						{"code": "ACTION_SLEEP_RECOVERY", "delta": energyRecovery},
+					},
+				},
+			},
+		},
+	}
+	return survival.SettlementResult{
+		UpdatedState: next,
+		Events:       []survival.DomainEvent{event},
+		ResultCode:   survival.ResultOK,
+	}
+}
+
+func sleepMultiplierByQuality(quality string) (int, int) {
+	switch strings.ToUpper(strings.TrimSpace(quality)) {
+	case "GOOD":
+		return 3, 2
+	default:
+		return 1, 1
+	}
+}
+
 func applySeedPityIfNeeded(ctx context.Context, intent survival.ActionIntent, result *survival.SettlementResult, before survival.AgentStateAggregate, repo ports.EventRepository, agentID string) {
 	if intent.Type != survival.ActionGather || result == nil {
 		return
@@ -1360,6 +1465,16 @@ func toNum(v any) float64 {
 	default:
 		return 0
 	}
+}
+
+func inventoryUsedCount(inventory map[string]int) int {
+	total := 0
+	for _, count := range inventory {
+		if count > 0 {
+			total += count
+		}
+	}
+	return total
 }
 
 func min(a, b int) int {
