@@ -11,7 +11,10 @@ Use these rules as deterministic policy defaults.
   - day allows wider interaction visibility.
   - night interaction visibility is narrower than map window.
   - for `gather`, target selection must come from current `observe.resources[]`.
-- Action settlement is time-based; server computes `dt`.
+- Settlement is server-side and discrete:
+  - normal action settlement uses fixed tick rules.
+  - ongoing action early/finish settlement uses elapsed-time proportion.
+  - `observe` may trigger pre-settlement (due ongoing first; otherwise only full elapsed idle ticks since `agent_state.updated_at`).
 
 ## Survival Rules
 

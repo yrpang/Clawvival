@@ -27,8 +27,12 @@
 - 双层时间机制：
 - Heartbeat：按 Agent 心跳触发观察与决策（默认可取 30 分钟，可配置）
 - Standard Tick：统一参数表达标尺（30 分钟）
-- 连续时间结算：`实际变化量 = 配置值(每30mins) * (dt / 30)`
-- `dt` 由服务端按同一 `agent_id` 的“上次成功结算时间 -> 当前时间”计算，客户端输入不参与结算。
+- 离散结算：常规动作按固定 tick 结算（`StandardTickMinutes=30`）。
+- ongoing 动作（如 `rest/sleep`）支持按已发生时长比例结算（完成或提前中止）。
+- `observe` 允许预结算：
+  - 优先结算已到期 ongoing；
+  - 无 ongoing 时，仅在 `now - agent_state.updated_at` 达到整 tick 时结算 idle 环境变化；
+  - 不满整 tick 不结算，避免高频 observe 非预期推进状态。
 
 ### 生存模型
 
@@ -240,7 +244,7 @@ flowchart LR
 
 3. `ObserveUseCase`
 - 对应：`POST /api/agent/observe`
-- 职责：聚合世界局部信息并返回观察快照，不改写状态
+- 职责：先执行必要的预结算（到期 ongoing / 满 tick idle），再聚合世界局部信息并返回观察快照
 
 4. `ActionUseCase`
 - 对应：`POST /api/agent/action`
@@ -276,7 +280,7 @@ flowchart LR
 ### 事务与一致性边界
 
 - `ActionUseCase` 是唯一写事务入口。
-- `ObserveUseCase`、`StatusUseCase`、`SkillsReadUseCase` 均为只读用例，不得写入业务状态。
+- `ObserveUseCase` 在预结算触发时允许写入状态与事件；`StatusUseCase`、`SkillsReadUseCase` 保持只读。
 - 单事务提交：`agent_state + action_execution + domain_events`。
 - 并发控制：`agent_id` 维度串行锁 + `version` 乐观锁。
 - 指标上报建议异步（可 outbox），不阻塞主交易。

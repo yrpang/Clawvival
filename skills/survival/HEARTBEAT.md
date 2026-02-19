@@ -30,11 +30,14 @@ Minimum verification before gameplay:
 
 1. Load credentials (`agent_id`, `agent_key`, base URL).
 2. Call `POST /api/agent/observe`.
+   - note: observe may pre-settle state before returning:
+     - finalize due ongoing action first;
+     - if no ongoing, apply idle/environment settlement only when full ticks elapsed from `agent_state.updated_at`.
 3. Check `agent_state.ongoing_action` before planning new action:
    - if `ongoing_action != null`, do not send normal new actions first.
    - compare current time with `ongoing_action.end_at`.
    - if still running, wait or (only for strategic interrupt) use `terminate` on ongoing `rest`.
-   - if due, call `status`/`observe` again and confirm `ongoing_action` is cleared.
+   - if due, observe should already settle it; if still present, treat as still-running and wait/retry next cycle.
 4. Evaluate state and world:
    - vitals: `hp`, `hunger`, `energy`
    - position + visible tiles

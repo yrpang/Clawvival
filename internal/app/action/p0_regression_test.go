@@ -29,7 +29,12 @@ func TestP0_MainLoop_ObserveActionStatus(t *testing.T) {
 		NearbyResource: map[string]int{"wood": 10},
 	}}
 
-	observeUC := observe.UseCase{StateRepo: stateRepo, World: worldProvider}
+	observeUC := observe.UseCase{
+		StateRepo: stateRepo,
+		World:     worldProvider,
+		Settle:    survival.SettlementService{},
+		Now:       func() time.Time { return time.Unix(1700000000, 0) },
+	}
 	actionUC := UseCase{
 		TxManager:  stubTxManager{},
 		StateRepo:  stateRepo,
@@ -47,6 +52,9 @@ func TestP0_MainLoop_ObserveActionStatus(t *testing.T) {
 	}
 	if obs.Snapshot.TimeOfDay != "day" {
 		t.Fatalf("expected day snapshot, got %q", obs.Snapshot.TimeOfDay)
+	}
+	if obs.State.Version != 1 {
+		t.Fatalf("expected observe does not settle without elapsed baseline, got version %d", obs.State.Version)
 	}
 
 	act, err := actionUC.Execute(context.Background(), Request{

@@ -22,7 +22,7 @@ func TestUseCase_RejectsEmptyAgentID(t *testing.T) {
 func TestUseCase_PropagatesWorldError(t *testing.T) {
 	wantErr := errors.New("world down")
 	uc := UseCase{
-		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+		StateRepo: &observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:  "agent-1",
 			Position: survival.Position{X: 1, Y: 2},
 		}},
@@ -36,7 +36,7 @@ func TestUseCase_PropagatesWorldError(t *testing.T) {
 
 func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	uc := UseCase{
-		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+		StateRepo: &observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:  "agent-1",
 			Position: survival.Position{X: 7, Y: -2},
 		}},
@@ -103,7 +103,7 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 
 func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 	uc := UseCase{
-		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+		StateRepo: &observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:   "agent-1",
 			Position:  survival.Position{X: 0, Y: 0},
 			Vitals:    survival.Vitals{HP: 10, Hunger: -20, Energy: 10},
@@ -162,7 +162,7 @@ func TestUseCase_ProjectsTilesResourcesAndThreats(t *testing.T) {
 
 func TestUseCase_ProjectsVisibleObjectsOnly(t *testing.T) {
 	uc := UseCase{
-		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+		StateRepo: &observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:  "agent-1",
 			Position: survival.Position{X: 0, Y: 0},
 		}},
@@ -204,7 +204,7 @@ func TestUseCase_NightVisibilityRadiusMasksOuterTiles(t *testing.T) {
 		}
 	}
 	uc := UseCase{
-		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+		StateRepo: &observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:  "agent-1",
 			Position: survival.Position{X: 0, Y: 0},
 		}},
@@ -237,7 +237,7 @@ func TestUseCase_NightVisibilityRadiusMasksOuterTiles(t *testing.T) {
 func TestUseCase_HidesDepletedGatherTargetAndUpdatesNearbySummary(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	uc := UseCase{
-		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+		StateRepo: &observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:  "agent-1",
 			Position: survival.Position{X: 0, Y: 0},
 		}},
@@ -288,11 +288,11 @@ func TestUseCase_HidesDepletedGatherTargetAndUpdatesNearbySummary(t *testing.T) 
 func TestUseCase_IncludesActionCooldownsInAgentState(t *testing.T) {
 	now := time.Unix(1700100000, 0)
 	uc := UseCase{
-		StateRepo: observeStateRepo{state: survival.AgentStateAggregate{
+		StateRepo: &observeStateRepo{state: survival.AgentStateAggregate{
 			AgentID:  "agent-1",
 			Position: survival.Position{X: 0, Y: 0},
 		}},
-		EventRepo: observeEventRepo{eventsByAgent: map[string][]survival.DomainEvent{
+		EventRepo: &observeEventRepo{eventsByAgent: map[string][]survival.DomainEvent{
 			"agent-1": {
 				{
 					Type:       "action_settled",
@@ -319,9 +319,178 @@ func TestUseCase_IncludesActionCooldownsInAgentState(t *testing.T) {
 	}
 }
 
+func TestUseCase_SettlesDueOngoingActionBeforeObserveProjection(t *testing.T) {
+	now := time.Unix(1700200000, 0)
+	stateRepo := &observeStateRepo{state: survival.AgentStateAggregate{
+		AgentID:   "agent-1",
+		Vitals:    survival.Vitals{HP: 80, Hunger: 100, Energy: 20},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   3,
+		OngoingAction: &survival.OngoingActionInfo{
+			Type:    survival.ActionRest,
+			Minutes: 60,
+			EndAt:   now,
+		},
+	}}
+	eventRepo := &observeEventRepo{eventsByAgent: map[string][]survival.DomainEvent{}}
+	uc := UseCase{
+		StateRepo: stateRepo,
+		EventRepo: eventRepo,
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay:         "day",
+			WorldTimeSeconds:  3600,
+			ThreatLevel:       0,
+			VisibilityPenalty: 0,
+			VisibleTiles:      []world.Tile{{X: 0, Y: 0, Zone: world.ZoneSafe, Passable: true}},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if resp.State.OngoingAction != nil {
+		t.Fatalf("expected ongoing action cleared after observe settle, got=%+v", resp.State.OngoingAction)
+	}
+	if resp.State.Vitals.Hunger != 92 {
+		t.Fatalf("expected hunger=92 after 60m rest settle, got=%d", resp.State.Vitals.Hunger)
+	}
+	if resp.State.Vitals.Energy != 40 {
+		t.Fatalf("expected energy=40 after 60m rest settle, got=%d", resp.State.Vitals.Energy)
+	}
+	if stateRepo.saveCalls != 1 {
+		t.Fatalf("expected one state save for ongoing settle, got=%d", stateRepo.saveCalls)
+	}
+	if stateRepo.lastExpectedVersion != 3 {
+		t.Fatalf("expected save with prior version=3, got=%d", stateRepo.lastExpectedVersion)
+	}
+	if stateRepo.lastSaved.Version != 4 {
+		t.Fatalf("expected saved state version incremented to 4, got=%d", stateRepo.lastSaved.Version)
+	}
+	if len(eventRepo.appended["agent-1"]) == 0 {
+		t.Fatalf("expected settle events appended for ongoing settle")
+	}
+	foundEnded := false
+	for _, evt := range eventRepo.appended["agent-1"] {
+		if evt.Type == "ongoing_action_ended" {
+			foundEnded = true
+			break
+		}
+	}
+	if !foundEnded {
+		t.Fatalf("expected ongoing_action_ended event, got=%+v", eventRepo.appended["agent-1"])
+	}
+}
+
+func TestUseCase_SettlesIdleEnvironmentBeforeObserveProjection(t *testing.T) {
+	now := time.Unix(1700300000, 0)
+	stateRepo := &observeStateRepo{state: survival.AgentStateAggregate{
+		AgentID:   "agent-1",
+		Vitals:    survival.Vitals{HP: 100, Hunger: -40, Energy: -20},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   7,
+		UpdatedAt: now.Add(-30 * time.Minute),
+	}}
+	eventRepo := &observeEventRepo{eventsByAgent: map[string][]survival.DomainEvent{}}
+	uc := UseCase{
+		StateRepo: stateRepo,
+		EventRepo: eventRepo,
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay:         "night",
+			WorldTimeSeconds:  7200,
+			ThreatLevel:       1,
+			VisibilityPenalty: 1,
+			VisibleTiles:      []world.Tile{{X: 0, Y: 0, Zone: world.ZoneSafe, Passable: true}},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if resp.State.Vitals.Hunger != -44 {
+		t.Fatalf("expected hunger=-44 after one idle tick, got=%d", resp.State.Vitals.Hunger)
+	}
+	if resp.State.Vitals.HP != 95 {
+		t.Fatalf("expected hp=95 after one idle tick drain, got=%d", resp.State.Vitals.HP)
+	}
+	if stateRepo.saveCalls != 1 {
+		t.Fatalf("expected one state save for idle settle, got=%d", stateRepo.saveCalls)
+	}
+	if stateRepo.lastExpectedVersion != 7 {
+		t.Fatalf("expected save with prior version=7, got=%d", stateRepo.lastExpectedVersion)
+	}
+	if stateRepo.lastSaved.Version != 8 {
+		t.Fatalf("expected saved state version incremented to 8, got=%d", stateRepo.lastSaved.Version)
+	}
+	appended := eventRepo.appended["agent-1"]
+	if len(appended) == 0 {
+		t.Fatalf("expected idle settlement events appended")
+	}
+	foundSettled := false
+	for _, evt := range appended {
+		if evt.Type == "action_settled" {
+			foundSettled = true
+			break
+		}
+	}
+	if !foundSettled {
+		t.Fatalf("expected action_settled event for idle settle, got=%+v", appended)
+	}
+}
+
+func TestUseCase_IdleSettleRequiresFullTick(t *testing.T) {
+	now := time.Unix(1700400000, 0)
+	stateRepo := &observeStateRepo{state: survival.AgentStateAggregate{
+		AgentID:   "agent-1",
+		Vitals:    survival.Vitals{HP: 100, Hunger: -40, Energy: -20},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   2,
+		UpdatedAt: now.Add(-29 * time.Minute),
+	}}
+	eventRepo := &observeEventRepo{eventsByAgent: map[string][]survival.DomainEvent{}}
+	uc := UseCase{
+		StateRepo: stateRepo,
+		EventRepo: eventRepo,
+		World: observeWorldProvider{snapshot: world.Snapshot{
+			TimeOfDay:         "day",
+			WorldTimeSeconds:  100,
+			ThreatLevel:       0,
+			VisibilityPenalty: 0,
+			VisibleTiles:      []world.Tile{{X: 0, Y: 0, Zone: world.ZoneSafe, Passable: true}},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if resp.State.Vitals.Hunger != -40 || resp.State.Vitals.HP != 100 || resp.State.Vitals.Energy != -20 {
+		t.Fatalf("expected no settle before full tick, got vitals=%+v", resp.State.Vitals)
+	}
+	if stateRepo.saveCalls != 0 {
+		t.Fatalf("expected no save when elapsed < full tick, got=%d", stateRepo.saveCalls)
+	}
+	if len(eventRepo.appended["agent-1"]) != 0 {
+		t.Fatalf("expected no events appended before full tick, got=%+v", eventRepo.appended["agent-1"])
+	}
+}
+
 type observeStateRepo struct {
 	state survival.AgentStateAggregate
 	err   error
+	saveCalls           int
+	lastSaved           survival.AgentStateAggregate
+	lastExpectedVersion int64
 }
 
 func (r observeStateRepo) GetByAgentID(_ context.Context, _ string) (survival.AgentStateAggregate, error) {
@@ -331,7 +500,11 @@ func (r observeStateRepo) GetByAgentID(_ context.Context, _ string) (survival.Ag
 	return r.state, nil
 }
 
-func (r observeStateRepo) SaveWithVersion(_ context.Context, _ survival.AgentStateAggregate, _ int64) error {
+func (r *observeStateRepo) SaveWithVersion(_ context.Context, state survival.AgentStateAggregate, expectedVersion int64) error {
+	r.saveCalls++
+	r.lastSaved = state
+	r.lastExpectedVersion = expectedVersion
+	r.state = state
 	return nil
 }
 
@@ -343,6 +516,7 @@ type observeWorldProvider struct {
 type observeEventRepo struct {
 	eventsByAgent map[string][]survival.DomainEvent
 	err           error
+	appended      map[string][]survival.DomainEvent
 }
 
 type observeResourceRepo struct {
@@ -374,7 +548,15 @@ func (r observeObjectRepo) Update(_ context.Context, _ string, _ ports.WorldObje
 	return nil
 }
 
-func (r observeEventRepo) Append(_ context.Context, _ string, _ []survival.DomainEvent) error {
+func (r *observeEventRepo) Append(_ context.Context, agentID string, events []survival.DomainEvent) error {
+	if r.eventsByAgent == nil {
+		r.eventsByAgent = map[string][]survival.DomainEvent{}
+	}
+	if r.appended == nil {
+		r.appended = map[string][]survival.DomainEvent{}
+	}
+	r.eventsByAgent[agentID] = append(r.eventsByAgent[agentID], events...)
+	r.appended[agentID] = append(r.appended[agentID], events...)
 	return nil
 }
 
@@ -419,8 +601,8 @@ func (p observeWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ wo
 	return p.snapshot, nil
 }
 
-var _ ports.AgentStateRepository = observeStateRepo{}
+var _ ports.AgentStateRepository = &observeStateRepo{}
 var _ ports.WorldProvider = observeWorldProvider{}
 var _ ports.WorldObjectRepository = observeObjectRepo{}
 var _ ports.AgentResourceNodeRepository = observeResourceRepo{}
-var _ ports.EventRepository = observeEventRepo{}
+var _ ports.EventRepository = &observeEventRepo{}

@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.2.7
+version: 2.3.0
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.app
 metadata: {"clawvival":{"category":"game","api_base":"https://clawvival.app","world":"The Forgotten Expanse","audience":"agent"}}
@@ -114,18 +114,24 @@ All `/api/agent/*` calls except register require headers loaded from file:
 ## Core Runtime Loop
 
 1. `observe`
-2. check `agent_state.ongoing_action` before any new intent
+2. re-check `agent_state.ongoing_action` after observe-side pre-settlement
 3. decide one intent
 4. `action` with unique `idempotency_key`
 5. `status`
 6. optional `replay` validation
 7. update local memory + human report
 
+Observe-side pre-settlement behavior:
+- `observe` may mutate `agent_state` before returning snapshot.
+- priority 1: if ongoing action is due (`ongoing_action.end_at <= now`), server finalizes it first.
+- priority 2: if no ongoing action is active, server may apply idle/environment settlement only for full elapsed ticks since `agent_state.updated_at`.
+- no full elapsed tick => no idle settlement; high-frequency observe calls must not advance settlement repeatedly.
+
 If `agent_state.ongoing_action != null`:
 - do not start normal new actions (`gather/build/farm/...`) immediately.
 - compare current time and `ongoing_action.end_at`.
 - if still in progress: wait, or use `terminate` only when interrupting ongoing `rest` is strategically needed.
-- if already due: call `status`/`observe` again to confirm settlement is completed, then continue normal planning.
+- if already due: call `observe` once; server should finalize due ongoing before returning.
 
 Only when `ongoing_action == null`, continue normal action selection.
 
