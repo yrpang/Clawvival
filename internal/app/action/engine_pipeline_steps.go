@@ -42,7 +42,6 @@ func (u UseCase) ReplayIdempotent(ctx context.Context, ac *ActionContext) (Respo
 			updatedState.SessionID = ac.In.SessionID
 		}
 		return Response{
-			SettledDTMinutes:       exec.DT,
 			WorldTimeBeforeSeconds: before,
 			WorldTimeAfterSeconds:  after,
 			UpdatedState:           updatedState,

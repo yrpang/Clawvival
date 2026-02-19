@@ -17,7 +17,6 @@ type ActionExecutionRecord struct {
 	AgentID        string
 	IdempotencyKey string
 	IntentType     string
-	DT             int
 	Result         ActionResult
 	AppliedAt      time.Time
 }

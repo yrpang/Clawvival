@@ -10,7 +10,6 @@ type Request struct {
 }
 
 type Response struct {
-	SettledDTMinutes       int                          `json:"settled_dt_minutes"`
 	WorldTimeBeforeSeconds int64                        `json:"world_time_before_seconds"`
 	WorldTimeAfterSeconds  int64                        `json:"world_time_after_seconds"`
 	UpdatedState           survival.AgentStateAggregate `json:"updated_state"`

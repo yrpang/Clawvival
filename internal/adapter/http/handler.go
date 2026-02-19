@@ -414,7 +414,6 @@ func writeActionRejectedFromErr(ctx *app.RequestContext, err error) bool {
 func writeActionRejected(ctx *app.RequestContext, status int, code, message string, retryable bool, blockedBy []string, details map[string]any) {
 	ctx.JSON(status, map[string]any{
 		"result_code":               "REJECTED",
-		"settled_dt_minutes":        0,
 		"world_time_before_seconds": 0,
 		"world_time_after_seconds":  0,
 		"error": map[string]any{

@@ -24,7 +24,6 @@ func (h terminateActionHandler) ExecuteActionAndPlan(_ context.Context, _ UseCas
 		AgentID:        ac.In.AgentID,
 		IdempotencyKey: ac.In.IdempotencyKey,
 		IntentType:     string(ac.Tmp.ResolvedIntent.Type),
-		DT:             ac.View.Finalized.DTMinutes,
 		Result: actionResult{
 			UpdatedState: ac.View.Finalized.UpdatedState,
 			Events:       ac.View.Finalized.Events,
@@ -36,7 +35,6 @@ func (h terminateActionHandler) ExecuteActionAndPlan(_ context.Context, _ UseCas
 	ac.Plan.ShouldPersist = true
 	ac.Tmp.Completed = true
 	ac.Tmp.Response = Response{
-		SettledDTMinutes:       ac.View.Finalized.DTMinutes,
 		WorldTimeBeforeSeconds: ac.View.Finalized.WorldTimeBeforeSeconds,
 		WorldTimeAfterSeconds:  ac.View.Finalized.WorldTimeAfterSeconds,
 		UpdatedState:           ac.View.Finalized.UpdatedState,

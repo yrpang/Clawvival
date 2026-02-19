@@ -36,6 +36,8 @@ type OngoingActionInfo struct {
 	Type    ActionType `json:"type"`
 	Minutes int        `json:"minutes"`
 	EndAt   time.Time  `json:"end_at"`
+	BedID   string     `json:"bed_id,omitempty"`
+	Quality string     `json:"quality,omitempty"`
 }
 
 type ActionType string
@@ -76,13 +78,13 @@ type ActionIntent struct {
 	DY          int          `json:"-"`
 }
 
+type HeartbeatDelta struct {
+	Minutes int `json:"minutes"`
+}
+
 type ItemAmount struct {
 	ItemType string `json:"item_type"`
 	Count    int    `json:"count"`
-}
-
-type HeartbeatDelta struct {
-	Minutes int `json:"minutes"`
 }
 
 type ResultCode string

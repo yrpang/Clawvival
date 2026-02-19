@@ -13,7 +13,7 @@ func TestDefaultActionCostProfiles(t *testing.T) {
 	if !ok {
 		t.Fatal("expected gather profile")
 	}
-	if gather.BaseMinutes != StandardTickMinutes || gather.DeltaHunger != -7 || gather.DeltaEnergy != -18 {
+	if gather.DeltaHunger != -7 || gather.DeltaEnergy != -18 {
 		t.Fatalf("unexpected gather profile: %+v", gather)
 	}
 
@@ -21,7 +21,7 @@ func TestDefaultActionCostProfiles(t *testing.T) {
 	if !ok {
 		t.Fatal("expected rest profile")
 	}
-	if rest.BaseMinutes != StandardTickMinutes || rest.DeltaHunger != -4 || rest.DeltaEnergy != 10 {
+	if rest.DeltaHunger != -4 || rest.DeltaEnergy != 10 {
 		t.Fatalf("unexpected rest profile: %+v", rest)
 	}
 
@@ -29,7 +29,7 @@ func TestDefaultActionCostProfiles(t *testing.T) {
 	if !ok {
 		t.Fatal("expected sleep profile")
 	}
-	if sleep.BaseMinutes != StandardTickMinutes || sleep.DeltaHunger != -4 || sleep.DeltaEnergy != SleepBaseEnergyRecovery || sleep.DeltaHP != SleepBaseHPRecovery {
+	if sleep.DeltaHunger != -4 || sleep.DeltaEnergy != SleepBaseEnergyRecovery || sleep.DeltaHP != SleepBaseHPRecovery {
 		t.Fatalf("unexpected sleep profile: %+v", sleep)
 	}
 	if got, ok := sleep.Variants["bed_quality_good"]; !ok {

@@ -603,7 +603,7 @@ func TestUseCase_E2E_RejectsMoveDuringCooldown(t *testing.T) {
 			Type:       "action_settled",
 			OccurredAt: now.Add(-30 * time.Second),
 			Payload: map[string]any{
-				"decision": map[string]any{"intent": "move", "dt_minutes": 30},
+				"decision": map[string]any{"intent": "move"},
 			},
 		},
 	}); err != nil {

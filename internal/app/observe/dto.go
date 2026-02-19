@@ -78,7 +78,6 @@ type Seed struct {
 }
 
 type ActionCost struct {
-	BaseMinutes  int                          `json:"base_minutes"`
 	DeltaHunger  int                          `json:"delta_hunger"`
 	DeltaEnergy  int                          `json:"delta_energy"`
 	DeltaHP      int                          `json:"delta_hp,omitempty"`

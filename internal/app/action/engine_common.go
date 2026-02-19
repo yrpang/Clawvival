@@ -27,13 +27,12 @@ type ongoingFinalizeResult struct {
 	UpdatedState           survival.AgentStateAggregate
 	Events                 []survival.DomainEvent
 	ResultCode             survival.ResultCode
-	DTMinutes              int
 	WorldTimeBeforeSeconds int64
 	WorldTimeAfterSeconds  int64
 }
 
 func isInterruptibleOngoingActionType(t survival.ActionType) bool {
-	return t == survival.ActionRest
+	return t == survival.ActionRest || t == survival.ActionSleep
 }
 
 func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state survival.AgentStateAggregate, nowAt time.Time, forceTerminate bool) (ongoingFinalizeResult, error) {
@@ -55,9 +54,6 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 	if deltaMinutes > ongoing.Minutes {
 		deltaMinutes = ongoing.Minutes
 	}
-	if deltaMinutes < survival.MinHeartbeatDeltaMinutes && !nowAt.Before(ongoing.EndAt) {
-		deltaMinutes = survival.MinHeartbeatDeltaMinutes
-	}
 
 	snapshot, err := u.World.SnapshotForAgent(ctx, agentID, world.Point{X: state.Position.X, Y: state.Position.Y})
 	if err != nil {
@@ -66,9 +62,14 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 
 	var result survival.SettlementResult
 	if deltaMinutes > 0 {
+		intent := survival.ActionIntent{Type: ongoing.Type}
+		if ongoing.Type == survival.ActionSleep {
+			intent.BedID = ongoing.BedID
+			intent.BedQuality = ongoing.Quality
+		}
 		result, err = u.Settle.Settle(
 			state,
-			survival.ActionIntent{Type: ongoing.Type},
+			intent,
 			survival.HeartbeatDelta{Minutes: deltaMinutes},
 			nowAt,
 			survival.WorldSnapshot{
@@ -109,7 +110,6 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 			"session_id":      sessionID,
 			"action_type":     string(ongoing.Type),
 			"planned_minutes": ongoing.Minutes,
-			"actual_minutes":  deltaMinutes,
 			"forced":          forceTerminate,
 		},
 	})
@@ -130,7 +130,6 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 		UpdatedState:           result.UpdatedState,
 		Events:                 result.Events,
 		ResultCode:             result.ResultCode,
-		DTMinutes:              deltaMinutes,
 		WorldTimeBeforeSeconds: worldTimeBefore,
 		WorldTimeAfterSeconds:  worldTimeAfter,
 	}, nil
@@ -166,7 +165,7 @@ func worldTimeWindowFromExecution(exec *ports.ActionExecutionRecord) (int64, int
 	if before, after, ok := worldTimeWindowFromEventPayload(exec.Result.Events); ok {
 		return before, after
 	}
-	return worldTimeWindow(0, exec.DT)
+	return 0, 0
 }
 
 func worldTimeWindowFromEvents(events []survival.DomainEvent, fallbackBefore int64, dtMinutes int) (int64, int64) {

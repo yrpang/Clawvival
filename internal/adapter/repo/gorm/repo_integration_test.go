@@ -203,7 +203,6 @@ func TestActionExecutionRepo_SaveAndGetRoundTrip(t *testing.T) {
 		AgentID:        agentID,
 		IdempotencyKey: "key-1",
 		IntentType:     "gather",
-		DT:             30,
 		Result: ports.ActionResult{
 			UpdatedState: survival.AgentStateAggregate{
 				AgentID:  agentID,

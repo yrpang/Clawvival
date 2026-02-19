@@ -117,7 +117,6 @@ func defaultActionCosts() map[string]ActionCost {
 			}
 		}
 		out[string(action)] = ActionCost{
-			BaseMinutes:  profile.BaseMinutes,
 			DeltaHunger:  profile.DeltaHunger,
 			DeltaEnergy:  profile.DeltaEnergy,
 			DeltaHP:      profile.DeltaHP,

@@ -95,7 +95,7 @@ func actionRegistry() map[survival.ActionType]ActionSpec {
 	return map[survival.ActionType]ActionSpec{
 		survival.ActionGather:            {Type: survival.ActionGather, Mode: ActionModeSettle, Handler: gatherActionHandler{}},
 		survival.ActionRest:              {Type: survival.ActionRest, Mode: ActionModeStartOngoing, CanTerminate: true, Handler: restActionHandler{}},
-		survival.ActionSleep:             {Type: survival.ActionSleep, Mode: ActionModeSettle, Handler: sleepActionHandler{}},
+		survival.ActionSleep:             {Type: survival.ActionSleep, Mode: ActionModeStartOngoing, CanTerminate: true, Handler: sleepActionHandler{}},
 		survival.ActionMove:              {Type: survival.ActionMove, Mode: ActionModeSettle, Handler: moveActionHandler{}},
 		survival.ActionBuild:             {Type: survival.ActionBuild, Mode: ActionModeSettle, Handler: buildActionHandler{}},
 		survival.ActionFarmPlant:         {Type: survival.ActionFarmPlant, Mode: ActionModeSettle, Handler: farmPlantActionHandler{}},

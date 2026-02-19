@@ -2,7 +2,6 @@ package action
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -36,39 +35,6 @@ func ensureCooldownReady(events []survival.DomainEvent, intentType survival.Acti
 	}
 }
 
-func resolveHeartbeatDeltaMinutes(ctx context.Context, repo ports.EventRepository, agentID string, now time.Time) (int, error) {
-	if repo == nil {
-		return survival.DefaultHeartbeatDeltaMinutes, nil
-	}
-	events, err := repo.ListByAgentID(ctx, agentID, 50)
-	if err != nil {
-		if errors.Is(err, ports.ErrNotFound) {
-			return survival.DefaultHeartbeatDeltaMinutes, nil
-		}
-		return 0, err
-	}
-	lastAt := time.Time{}
-	for _, evt := range events {
-		if evt.Type != "action_settled" {
-			continue
-		}
-		if evt.OccurredAt.After(lastAt) {
-			lastAt = evt.OccurredAt
-		}
-	}
-	if lastAt.IsZero() {
-		return survival.DefaultHeartbeatDeltaMinutes, nil
-	}
-	delta := int(now.Sub(lastAt).Minutes())
-	if delta < survival.MinHeartbeatDeltaMinutes {
-		return survival.MinHeartbeatDeltaMinutes, nil
-	}
-	if delta > survival.MaxHeartbeatDeltaMinutes {
-		return survival.MaxHeartbeatDeltaMinutes, nil
-	}
-	return delta, nil
-}
-
 func abs(v int) int {
 	if v < 0 {
 		return -v
@@ -86,12 +52,7 @@ type settleOptions struct {
 
 func settleViaDomainOrInstant(ctx context.Context, uc UseCase, ac *ActionContext, opts settleOptions) (ExecuteMode, error) {
 	intent := ac.Tmp.ResolvedIntent
-	deltaMinutes := 0
-	var err error
-	deltaMinutes, err = resolveHeartbeatDeltaMinutes(ctx, uc.EventRepo, ac.In.AgentID, ac.In.NowAt)
-	if err != nil {
-		return ExecuteModeContinue, err
-	}
+	deltaMinutes := survival.StandardTickMinutes
 	settleNearby := ac.View.Snapshot.NearbyResource
 	if opts.filterGatherNearby {
 		settleNearby = filterGatherNearbyResource(intent.TargetID, ac.View.Snapshot.NearbyResource)
@@ -140,7 +101,6 @@ func settleViaDomainOrInstant(ctx context.Context, uc UseCase, ac *ActionContext
 		AgentID:        ac.In.AgentID,
 		IdempotencyKey: ac.In.IdempotencyKey,
 		IntentType:     string(intent.Type),
-		DT:             deltaMinutes,
 		Result: actionResult{
 			UpdatedState: result.UpdatedState,
 			Events:       result.Events,
@@ -158,7 +118,6 @@ func settleViaDomainOrInstant(ctx context.Context, uc UseCase, ac *ActionContext
 
 	before, after := worldTimeWindow(ac.View.Snapshot.WorldTimeSeconds, deltaMinutes)
 	ac.Tmp.Response = Response{
-		SettledDTMinutes:       deltaMinutes,
 		WorldTimeBeforeSeconds: before,
 		WorldTimeAfterSeconds:  after,
 		UpdatedState:           result.UpdatedState,

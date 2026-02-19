@@ -11,10 +11,6 @@ const (
 	HPDrainFromHungerCoeff = 0.08
 	HPDrainFromEnergyCoeff = 0.05
 
-	DefaultHeartbeatDeltaMinutes = 30
-	MinHeartbeatDeltaMinutes     = 1
-	MaxHeartbeatDeltaMinutes     = 120
-
 	MinRestMinutes = 1
 	MaxRestMinutes = 120
 
@@ -41,55 +37,42 @@ const (
 	VisionRadiusNight = 3
 	TorchLightRadius  = 3
 
-	ActionMoveBaseMinutes = StandardTickMinutes
 	ActionMoveDeltaHunger = -1
 	ActionMoveDeltaEnergy = -6
 
-	ActionGatherBaseMinutes = StandardTickMinutes
 	ActionGatherDeltaHunger = -3
 	ActionGatherDeltaEnergy = -18
 
-	ActionCraftBaseMinutes = StandardTickMinutes
 	ActionCraftDeltaHunger = 0
 	ActionCraftDeltaEnergy = -12
 
-	ActionBuildBaseMinutes = StandardTickMinutes
 	ActionBuildDeltaHunger = 0
 	ActionBuildDeltaEnergy = -14
 
-	ActionEatBaseMinutes = StandardTickMinutes
 	ActionEatDeltaHunger = 12
 	ActionEatDeltaEnergy = 0
 
-	ActionRestBaseMinutes = StandardTickMinutes
 	ActionRestDeltaHunger = 0
 	ActionRestDeltaEnergy = 10
 
-	ActionSleepBaseMinutes = StandardTickMinutes
 	ActionSleepDeltaHunger = 0
 	ActionSleepDeltaEnergy = SleepBaseEnergyRecovery
 
-	ActionFarmPlantBaseMinutes = StandardTickMinutes
 	ActionFarmPlantDeltaHunger = -1
 	ActionFarmPlantDeltaEnergy = -10
 
-	ActionFarmHarvestBaseMinutes = StandardTickMinutes
 	ActionFarmHarvestDeltaHunger = 0
 	ActionFarmHarvestDeltaEnergy = -8
 
-	ActionContainerDepositBaseMinutes = StandardTickMinutes
 	ActionContainerDepositDeltaHunger = 0
 	ActionContainerDepositDeltaEnergy = -4
 
-	ActionContainerWithdrawBaseMinutes = StandardTickMinutes
 	ActionContainerWithdrawDeltaHunger = 0
 	ActionContainerWithdrawDeltaEnergy = -4
 
-	ActionRetreatBaseMinutes = StandardTickMinutes
 	ActionRetreatDeltaHunger = 0
 	ActionRetreatDeltaEnergy = -8
 
-	ActionTerminateBaseMinutes = 1
 	ActionTerminateDeltaHunger = 0
 	ActionTerminateDeltaEnergy = 0
 )

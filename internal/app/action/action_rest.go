@@ -50,7 +50,6 @@ func (h restActionHandler) ExecuteActionAndPlan(_ context.Context, _ UseCase, ac
 		AgentID:        ac.In.AgentID,
 		IdempotencyKey: ac.In.IdempotencyKey,
 		IntentType:     string(ac.Tmp.ResolvedIntent.Type),
-		DT:             0,
 		Result: actionResult{
 			UpdatedState: next,
 			Events:       []survival.DomainEvent{event},
@@ -62,7 +61,6 @@ func (h restActionHandler) ExecuteActionAndPlan(_ context.Context, _ UseCase, ac
 	ac.Plan.ShouldPersist = true
 	ac.Tmp.Completed = true
 	ac.Tmp.Response = Response{
-		SettledDTMinutes:       0,
 		WorldTimeBeforeSeconds: ac.View.Snapshot.WorldTimeSeconds,
 		WorldTimeAfterSeconds:  ac.View.Snapshot.WorldTimeSeconds,
 		UpdatedState:           next,

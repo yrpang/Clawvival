@@ -18,12 +18,6 @@ func TestGameplayTuning_Defaults(t *testing.T) {
 	if HPDrainFromHungerCoeff != 0.08 || HPDrainFromEnergyCoeff != 0.05 {
 		t.Fatalf("hp drain coeffs = (%v,%v), want (0.08,0.05)", HPDrainFromHungerCoeff, HPDrainFromEnergyCoeff)
 	}
-	if DefaultHeartbeatDeltaMinutes != 30 {
-		t.Fatalf("DefaultHeartbeatDeltaMinutes = %d, want 30", DefaultHeartbeatDeltaMinutes)
-	}
-	if MinHeartbeatDeltaMinutes != 1 || MaxHeartbeatDeltaMinutes != 120 {
-		t.Fatalf("heartbeat bounds = (%d,%d), want (1,120)", MinHeartbeatDeltaMinutes, MaxHeartbeatDeltaMinutes)
-	}
 	if MinRestMinutes != 1 || MaxRestMinutes != 120 {
 		t.Fatalf("rest bounds = (%d,%d), want (1,120)", MinRestMinutes, MaxRestMinutes)
 	}

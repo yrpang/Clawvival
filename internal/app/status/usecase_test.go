@@ -54,10 +54,10 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if resp.World.Rules.DrainsPer30m.HungerDrain != survival.BaseHungerDrainPer30 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
 		t.Fatalf("unexpected drains_per_30m: %+v", resp.World.Rules.DrainsPer30m)
 	}
-	if got := resp.ActionCosts["gather"]; got.BaseMinutes != survival.StandardTickMinutes || got.DeltaHunger != -7 || got.DeltaEnergy != -18 {
+	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -7 || got.DeltaEnergy != -18 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
 	}
-	if got := resp.ActionCosts["sleep"]; got.BaseMinutes != survival.StandardTickMinutes || got.DeltaHunger != -4 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
+	if got := resp.ActionCosts["sleep"]; got.DeltaHunger != -4 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
 		t.Fatalf("sleep action cost mismatch: %+v", got)
 	}
 	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != -4 || got.DeltaEnergy != 36 || got.DeltaHP != 12 {
@@ -65,7 +65,7 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {
 		t.Fatalf("expected terminate action cost configured")
-	} else if got.BaseMinutes != 1 || got.DeltaHunger != 0 || got.DeltaEnergy != 0 {
+	} else if got.DeltaHunger != 0 || got.DeltaEnergy != 0 {
 		t.Fatalf("terminate action cost mismatch: %+v", got)
 	}
 	if resp.State.InventoryUsed != 3 {

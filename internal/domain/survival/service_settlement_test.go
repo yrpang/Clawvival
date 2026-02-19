@@ -288,9 +288,6 @@ func TestSettlementService_ActionSettledIncludesWorldTimeFields(t *testing.T) {
 	if got, ok := settled.Payload["world_time_after_seconds"].(int64); !ok || got != 3000 {
 		t.Fatalf("expected world_time_after_seconds=3000, got=%v", settled.Payload["world_time_after_seconds"])
 	}
-	if got, ok := settled.Payload["settled_dt_minutes"].(int); !ok || got != 30 {
-		t.Fatalf("expected settled_dt_minutes=30, got=%v", settled.Payload["settled_dt_minutes"])
-	}
 	before, ok := settled.Payload["state_before"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected state_before object, got=%T", settled.Payload["state_before"])
