@@ -21,7 +21,7 @@ const (
 
 	DefaultInventoryCapacity = 30
 
-	SleepBaseEnergyRecovery = 24
+	SleepBaseEnergyRecovery = 30
 	SleepBaseHPRecovery     = 8
 
 	CriticalHPThreshold = 15
@@ -52,10 +52,10 @@ const (
 	ActionEatDeltaHunger = 12
 	ActionEatDeltaEnergy = 0
 
-	ActionRestDeltaHunger = 0
-	ActionRestDeltaEnergy = 10
+	ActionRestDeltaHunger = 14
+	ActionRestDeltaEnergy = 18
 
-	ActionSleepDeltaHunger = 0
+	ActionSleepDeltaHunger = 24
 	ActionSleepDeltaEnergy = SleepBaseEnergyRecovery
 
 	ActionFarmPlantDeltaHunger = -1

@@ -112,7 +112,6 @@ func (u UseCase) settleBeforeObserve(ctx context.Context, agentID string, state 
 		return state, nil
 	}
 
-	settledOngoing := false
 	ongoing := state.OngoingAction
 	if ongoing != nil {
 		if nowAt.Before(ongoing.EndAt) {
@@ -144,6 +143,10 @@ func (u UseCase) settleBeforeObserve(ctx context.Context, agentID string, state 
 				intent.BedID = ongoing.BedID
 				intent.BedQuality = ongoing.Quality
 			}
+			worldTimeBefore := snapshot.WorldTimeSeconds - int64(deltaMinutes*60)
+			if worldTimeBefore < 0 {
+				worldTimeBefore = 0
+			}
 			result, err = u.Settle.Settle(
 				state,
 				intent,
@@ -154,7 +157,7 @@ func (u UseCase) settleBeforeObserve(ctx context.Context, agentID string, state 
 					ThreatLevel:       snapshot.ThreatLevel,
 					VisibilityPenalty: snapshot.VisibilityPenalty,
 					NearbyResource:    snapshot.NearbyResource,
-					WorldTimeSeconds:  snapshot.WorldTimeSeconds,
+					WorldTimeSeconds:  worldTimeBefore,
 				},
 			)
 			if err != nil {
@@ -192,62 +195,9 @@ func (u UseCase) settleBeforeObserve(ctx context.Context, agentID string, state 
 				return survival.AgentStateAggregate{}, err
 			}
 		}
-		state = result.UpdatedState
-		settledOngoing = true
+		return result.UpdatedState, nil
 	}
-
-	if settledOngoing {
-		return state, nil
-	}
-	if state.UpdatedAt.IsZero() || !nowAt.After(state.UpdatedAt) {
-		return state, nil
-	}
-	elapsedMinutes := int(nowAt.Sub(state.UpdatedAt).Minutes())
-	ticks := elapsedMinutes / survival.StandardTickMinutes
-	if ticks <= 0 {
-		return state, nil
-	}
-	deltaMinutes := ticks * survival.StandardTickMinutes
-	settleAt := state.UpdatedAt.Add(time.Duration(deltaMinutes) * time.Minute)
-
-	snapshot, err := u.World.SnapshotForAgent(ctx, agentID, world.Point{X: state.Position.X, Y: state.Position.Y})
-	if err != nil {
-		return survival.AgentStateAggregate{}, err
-	}
-	result, err := u.Settle.Settle(
-		state,
-		survival.ActionIntent{Type: survival.ActionTerminate},
-		survival.HeartbeatDelta{Minutes: deltaMinutes},
-		settleAt,
-		survival.WorldSnapshot{
-			TimeOfDay:         snapshot.TimeOfDay,
-			ThreatLevel:       snapshot.ThreatLevel,
-			VisibilityPenalty: snapshot.VisibilityPenalty,
-			NearbyResource:    snapshot.NearbyResource,
-			WorldTimeSeconds:  snapshot.WorldTimeSeconds,
-		},
-	)
-	if err != nil {
-		return survival.AgentStateAggregate{}, err
-	}
-	result.UpdatedState.UpdatedAt = settleAt
-	if err := u.StateRepo.SaveWithVersion(ctx, result.UpdatedState, state.Version); err != nil {
-		return survival.AgentStateAggregate{}, err
-	}
-	if u.EventRepo != nil {
-		sessionID := "session-" + agentID
-		for i := range result.Events {
-			if result.Events[i].Payload == nil {
-				result.Events[i].Payload = map[string]any{}
-			}
-			result.Events[i].Payload["agent_id"] = agentID
-			result.Events[i].Payload["session_id"] = sessionID
-		}
-		if err := u.EventRepo.Append(ctx, agentID, result.Events); err != nil {
-			return survival.AgentStateAggregate{}, err
-		}
-	}
-	return result.UpdatedState, nil
+	return state, nil
 }
 
 func defaultActionCosts() map[string]ActionCost {

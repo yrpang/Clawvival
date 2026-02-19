@@ -21,7 +21,7 @@ func TestDefaultActionCostProfiles(t *testing.T) {
 	if !ok {
 		t.Fatal("expected rest profile")
 	}
-	if rest.DeltaHunger != -4 || rest.DeltaEnergy != 10 {
+	if rest.DeltaHunger != 10 || rest.DeltaEnergy != 18 {
 		t.Fatalf("unexpected rest profile: %+v", rest)
 	}
 
@@ -29,12 +29,12 @@ func TestDefaultActionCostProfiles(t *testing.T) {
 	if !ok {
 		t.Fatal("expected sleep profile")
 	}
-	if sleep.DeltaHunger != -4 || sleep.DeltaEnergy != SleepBaseEnergyRecovery || sleep.DeltaHP != SleepBaseHPRecovery {
+	if sleep.DeltaHunger != 20 || sleep.DeltaEnergy != SleepBaseEnergyRecovery || sleep.DeltaHP != SleepBaseHPRecovery {
 		t.Fatalf("unexpected sleep profile: %+v", sleep)
 	}
 	if got, ok := sleep.Variants["bed_quality_good"]; !ok {
 		t.Fatalf("expected bed_quality_good variant: %+v", sleep.Variants)
-	} else if got.DeltaHunger != -4 || got.DeltaEnergy != 36 || got.DeltaHP != 12 {
+	} else if got.DeltaHunger != 20 || got.DeltaEnergy != 45 || got.DeltaHP != 12 {
 		t.Fatalf("unexpected bed_quality_good variant: %+v", got)
 	}
 }

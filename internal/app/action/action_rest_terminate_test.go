@@ -12,6 +12,24 @@ import (
 	"clawvival/internal/domain/world"
 )
 
+type dynamicWorldProvider struct {
+	startAt       time.Time
+	startWorldSec int64
+	nowFn         func() time.Time
+	baseSnapshot  world.Snapshot
+}
+
+func (p dynamicWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ world.Point) (world.Snapshot, error) {
+	s := p.baseSnapshot
+	nowAt := p.nowFn()
+	elapsed := int64(nowAt.Sub(p.startAt).Seconds())
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	s.WorldTimeSeconds = p.startWorldSec + elapsed
+	return s, nil
+}
+
 func TestUseCase_RestStartPersistsExecutionStateAndEvent(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
@@ -219,17 +237,17 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 	if out.UpdatedState.OngoingAction != nil {
 		t.Fatalf("expected ongoing action cleared by terminate")
 	}
-	if got, want := out.UpdatedState.Vitals.Energy, 63; got != want {
+	if got, want := out.UpdatedState.Vitals.Energy, 66; got != want {
 		t.Fatalf("expected proportional rest settlement energy=%d, got=%d", want, got)
 	}
-	if got, want := out.UpdatedState.Vitals.Hunger, 79; got != want {
+	if got, want := out.UpdatedState.Vitals.Hunger, 84; got != want {
 		t.Fatalf("expected proportional rest settlement hunger=%d, got=%d", want, got)
 	}
 	_ = actionRepo.byKey["agent-1|rest-terminate"]
-	if got, want := out.WorldTimeBeforeSeconds, int64(3600); got != want {
+	if got, want := out.WorldTimeBeforeSeconds, int64(3000); got != want {
 		t.Fatalf("expected world_time_before_seconds=%d, got=%d", want, got)
 	}
-	if got, want := out.WorldTimeAfterSeconds, int64(4200); got != want {
+	if got, want := out.WorldTimeAfterSeconds, int64(3600); got != want {
 		t.Fatalf("expected world_time_after_seconds=%d, got=%d", want, got)
 	}
 	foundEnded := false
@@ -251,6 +269,90 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("gather after terminate should succeed, got: %v", err)
+	}
+}
+
+func TestUseCase_TerminateRestEventWorldTimeMatchesElapsedWindow(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	baseNow := now
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		World: dynamicWorldProvider{
+			startAt:       baseNow,
+			startWorldSec: 3600,
+			nowFn:         func() time.Time { return now },
+			baseSnapshot: world.Snapshot{
+				TimeOfDay:    "day",
+				ThreatLevel:  1,
+				NearbyResource: map[string]int{
+					"wood": 1,
+				},
+				VisibleTiles: []world.Tile{
+					{X: 0, Y: 0, Passable: true, Resource: "wood"},
+					{X: 1, Y: 0, Passable: true},
+				},
+			},
+		},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	if _, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "rest-start-dynamic-world-time",
+		Intent: survival.ActionIntent{
+			Type:        survival.ActionRest,
+			RestMinutes: 30,
+		},
+	}); err != nil {
+		t.Fatalf("start rest: %v", err)
+	}
+
+	now = now.Add(10 * time.Minute)
+	out, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "rest-terminate-dynamic-world-time",
+		Intent:         survival.ActionIntent{Type: survival.ActionTerminate},
+	})
+	if err != nil {
+		t.Fatalf("terminate rest: %v", err)
+	}
+	if got, want := out.WorldTimeBeforeSeconds, int64(3600); got != want {
+		t.Fatalf("expected world_time_before_seconds=%d, got=%d", want, got)
+	}
+	if got, want := out.WorldTimeAfterSeconds, int64(4200); got != want {
+		t.Fatalf("expected world_time_after_seconds=%d, got=%d", want, got)
+	}
+	foundSettled := false
+	for _, evt := range out.Events {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		foundSettled = true
+		if got, ok := evt.Payload["world_time_before_seconds"].(int64); !ok || got != 3600 {
+			t.Fatalf("expected action_settled world_time_before_seconds=3600, got=%v", evt.Payload["world_time_before_seconds"])
+		}
+		if got, ok := evt.Payload["world_time_after_seconds"].(int64); !ok || got != 4200 {
+			t.Fatalf("expected action_settled world_time_after_seconds=4200, got=%v", evt.Payload["world_time_after_seconds"])
+		}
+	}
+	if !foundSettled {
+		t.Fatalf("expected action_settled event in terminate response")
 	}
 }
 

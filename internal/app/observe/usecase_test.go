@@ -68,10 +68,10 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -7 || got.DeltaEnergy != -18 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
 	}
-	if got := resp.ActionCosts["sleep"]; got.DeltaHunger != -4 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
+	if got := resp.ActionCosts["sleep"]; got.DeltaHunger != 20 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
 		t.Fatalf("sleep action cost mismatch: %+v", got)
 	}
-	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != -4 || got.DeltaEnergy != 36 || got.DeltaHP != 12 {
+	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != 20 || got.DeltaEnergy != 45 || got.DeltaHP != 12 {
 		t.Fatalf("sleep good-bed variant mismatch: %+v", got)
 	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {
@@ -355,11 +355,11 @@ func TestUseCase_SettlesDueOngoingActionBeforeObserveProjection(t *testing.T) {
 	if resp.State.OngoingAction != nil {
 		t.Fatalf("expected ongoing action cleared after observe settle, got=%+v", resp.State.OngoingAction)
 	}
-	if resp.State.Vitals.Hunger != 92 {
-		t.Fatalf("expected hunger=92 after 60m rest settle, got=%d", resp.State.Vitals.Hunger)
+	if resp.State.Vitals.Hunger != 120 {
+		t.Fatalf("expected hunger=120 after 60m rest settle, got=%d", resp.State.Vitals.Hunger)
 	}
-	if resp.State.Vitals.Energy != 40 {
-		t.Fatalf("expected energy=40 after 60m rest settle, got=%d", resp.State.Vitals.Energy)
+	if resp.State.Vitals.Energy != 56 {
+		t.Fatalf("expected energy=56 after 60m rest settle, got=%d", resp.State.Vitals.Energy)
 	}
 	if stateRepo.saveCalls != 1 {
 		t.Fatalf("expected one state save for ongoing settle, got=%d", stateRepo.saveCalls)
@@ -385,7 +385,68 @@ func TestUseCase_SettlesDueOngoingActionBeforeObserveProjection(t *testing.T) {
 	}
 }
 
-func TestUseCase_SettlesIdleEnvironmentBeforeObserveProjection(t *testing.T) {
+func TestUseCase_OngoingSettleEventWorldTimeMatchesElapsedWindow(t *testing.T) {
+	now := time.Unix(1700200000, 0)
+	baseNow := now
+	stateRepo := &observeStateRepo{state: survival.AgentStateAggregate{
+		AgentID:   "agent-1",
+		Vitals:    survival.Vitals{HP: 80, Hunger: 100, Energy: 20},
+		Position:  survival.Position{X: 0, Y: 0},
+		Inventory: map[string]int{},
+		Version:   3,
+		OngoingAction: &survival.OngoingActionInfo{
+			Type:    survival.ActionRest,
+			Minutes: 60,
+			EndAt:   now,
+		},
+	}}
+	eventRepo := &observeEventRepo{eventsByAgent: map[string][]survival.DomainEvent{}}
+	uc := UseCase{
+		StateRepo: stateRepo,
+		EventRepo: eventRepo,
+		World: observeDynamicWorldProvider{
+			startAt:       baseNow,
+			startWorldSec: 3600,
+			nowFn:         func() time.Time { return now },
+			baseSnapshot: world.Snapshot{
+				TimeOfDay:         "day",
+				ThreatLevel:       0,
+				VisibilityPenalty: 0,
+				VisibleTiles:      []world.Tile{{X: 0, Y: 0, Zone: world.ZoneSafe, Passable: true}},
+			},
+		},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return now },
+	}
+
+	now = now.Add(60 * time.Minute)
+	resp, err := uc.Execute(context.Background(), Request{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if got, want := resp.WorldTimeSeconds, int64(7200); got != want {
+		t.Fatalf("expected projected world_time_seconds=%d, got=%d", want, got)
+	}
+	appended := eventRepo.appended["agent-1"]
+	foundSettled := false
+	for _, evt := range appended {
+		if evt.Type != "action_settled" || evt.Payload == nil {
+			continue
+		}
+		foundSettled = true
+		if got, ok := evt.Payload["world_time_before_seconds"].(int64); !ok || got != 3600 {
+			t.Fatalf("expected action_settled world_time_before_seconds=3600, got=%v", evt.Payload["world_time_before_seconds"])
+		}
+		if got, ok := evt.Payload["world_time_after_seconds"].(int64); !ok || got != 7200 {
+			t.Fatalf("expected action_settled world_time_after_seconds=7200, got=%v", evt.Payload["world_time_after_seconds"])
+		}
+	}
+	if !foundSettled {
+		t.Fatalf("expected action_settled event appended for ongoing settle")
+	}
+}
+
+func TestUseCase_DoesNotSettleIdleEnvironmentDuringObserve(t *testing.T) {
 	now := time.Unix(1700300000, 0)
 	stateRepo := &observeStateRepo{state: survival.AgentStateAggregate{
 		AgentID:   "agent-1",
@@ -414,38 +475,24 @@ func TestUseCase_SettlesIdleEnvironmentBeforeObserveProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if resp.State.Vitals.Hunger != -44 {
-		t.Fatalf("expected hunger=-44 after one idle tick, got=%d", resp.State.Vitals.Hunger)
+	if resp.State.Vitals.Hunger != -40 {
+		t.Fatalf("expected hunger unchanged during observe idle, got=%d", resp.State.Vitals.Hunger)
 	}
-	if resp.State.Vitals.HP != 95 {
-		t.Fatalf("expected hp=95 after one idle tick drain, got=%d", resp.State.Vitals.HP)
+	if resp.State.Vitals.HP != 100 {
+		t.Fatalf("expected hp unchanged during observe idle, got=%d", resp.State.Vitals.HP)
 	}
-	if stateRepo.saveCalls != 1 {
-		t.Fatalf("expected one state save for idle settle, got=%d", stateRepo.saveCalls)
+	if resp.State.Vitals.Energy != -20 {
+		t.Fatalf("expected energy unchanged during observe idle, got=%d", resp.State.Vitals.Energy)
 	}
-	if stateRepo.lastExpectedVersion != 7 {
-		t.Fatalf("expected save with prior version=7, got=%d", stateRepo.lastExpectedVersion)
+	if stateRepo.saveCalls != 0 {
+		t.Fatalf("expected no state save for idle observe, got=%d", stateRepo.saveCalls)
 	}
-	if stateRepo.lastSaved.Version != 8 {
-		t.Fatalf("expected saved state version incremented to 8, got=%d", stateRepo.lastSaved.Version)
-	}
-	appended := eventRepo.appended["agent-1"]
-	if len(appended) == 0 {
-		t.Fatalf("expected idle settlement events appended")
-	}
-	foundSettled := false
-	for _, evt := range appended {
-		if evt.Type == "action_settled" {
-			foundSettled = true
-			break
-		}
-	}
-	if !foundSettled {
-		t.Fatalf("expected action_settled event for idle settle, got=%+v", appended)
+	if len(eventRepo.appended["agent-1"]) != 0 {
+		t.Fatalf("expected no idle settlement events appended, got=%+v", eventRepo.appended["agent-1"])
 	}
 }
 
-func TestUseCase_IdleSettleRequiresFullTick(t *testing.T) {
+func TestUseCase_DoesNotSettleIdleEvenAfterFullTick(t *testing.T) {
 	now := time.Unix(1700400000, 0)
 	stateRepo := &observeStateRepo{state: survival.AgentStateAggregate{
 		AgentID:   "agent-1",
@@ -475,13 +522,13 @@ func TestUseCase_IdleSettleRequiresFullTick(t *testing.T) {
 		t.Fatalf("Execute error: %v", err)
 	}
 	if resp.State.Vitals.Hunger != -40 || resp.State.Vitals.HP != 100 || resp.State.Vitals.Energy != -20 {
-		t.Fatalf("expected no settle before full tick, got vitals=%+v", resp.State.Vitals)
+		t.Fatalf("expected no idle settle on observe, got vitals=%+v", resp.State.Vitals)
 	}
 	if stateRepo.saveCalls != 0 {
-		t.Fatalf("expected no save when elapsed < full tick, got=%d", stateRepo.saveCalls)
+		t.Fatalf("expected no save for idle observe, got=%d", stateRepo.saveCalls)
 	}
 	if len(eventRepo.appended["agent-1"]) != 0 {
-		t.Fatalf("expected no events appended before full tick, got=%+v", eventRepo.appended["agent-1"])
+		t.Fatalf("expected no events appended for idle observe, got=%+v", eventRepo.appended["agent-1"])
 	}
 }
 
@@ -511,6 +558,13 @@ func (r *observeStateRepo) SaveWithVersion(_ context.Context, state survival.Age
 type observeWorldProvider struct {
 	snapshot world.Snapshot
 	err      error
+}
+
+type observeDynamicWorldProvider struct {
+	startAt       time.Time
+	startWorldSec int64
+	nowFn         func() time.Time
+	baseSnapshot  world.Snapshot
 }
 
 type observeEventRepo struct {
@@ -601,8 +655,20 @@ func (p observeWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ wo
 	return p.snapshot, nil
 }
 
+func (p observeDynamicWorldProvider) SnapshotForAgent(_ context.Context, _ string, _ world.Point) (world.Snapshot, error) {
+	s := p.baseSnapshot
+	nowAt := p.nowFn()
+	elapsed := int64(nowAt.Sub(p.startAt).Seconds())
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	s.WorldTimeSeconds = p.startWorldSec + elapsed
+	return s, nil
+}
+
 var _ ports.AgentStateRepository = &observeStateRepo{}
 var _ ports.WorldProvider = observeWorldProvider{}
+var _ ports.WorldProvider = observeDynamicWorldProvider{}
 var _ ports.WorldObjectRepository = observeObjectRepo{}
 var _ ports.AgentResourceNodeRepository = observeResourceRepo{}
 var _ ports.EventRepository = &observeEventRepo{}

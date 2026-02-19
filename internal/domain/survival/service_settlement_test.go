@@ -205,6 +205,58 @@ func TestSettlementService_SleepRecoversEnergyAndHp(t *testing.T) {
 	if out.UpdatedState.Vitals.HP <= state.Vitals.HP {
 		t.Fatalf("expected sleep to recover hp, before=%d after=%d", state.Vitals.HP, out.UpdatedState.Vitals.HP)
 	}
+	if out.UpdatedState.Vitals.Hunger <= state.Vitals.Hunger {
+		t.Fatalf("expected sleep to recover hunger, before=%d after=%d", state.Vitals.Hunger, out.UpdatedState.Vitals.Hunger)
+	}
+}
+
+func TestSettlementService_TwoSleepTicksReachTargetRecovery(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 80, Hunger: 20, Energy: 20},
+		Position: Position{X: 0, Y: 0},
+		Version:  1,
+	}
+
+	first, err := svc.Settle(state, ActionIntent{
+		Type: ActionSleep,
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("first sleep settle error: %v", err)
+	}
+	second, err := svc.Settle(first.UpdatedState, ActionIntent{
+		Type: ActionSleep,
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("second sleep settle error: %v", err)
+	}
+	if got, want := second.UpdatedState.Vitals.Hunger, 60; got != want {
+		t.Fatalf("expected hunger=%d after two sleep ticks, got=%d", want, got)
+	}
+	if got, want := second.UpdatedState.Vitals.Energy, 80; got != want {
+		t.Fatalf("expected energy=%d after two sleep ticks, got=%d", want, got)
+	}
+}
+
+func TestSettlementService_RestRecoversHungerSlightly(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 80, Hunger: 80, Energy: 20},
+		Position: Position{X: 0, Y: 0},
+		Version:  1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{
+		Type: ActionRest,
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if got, want := out.UpdatedState.Vitals.Hunger, 90; got != want {
+		t.Fatalf("expected rest hunger=%d, got=%d", want, got)
+	}
 }
 
 func TestSettlementService_SleepGoodBedAppliesQualityMultiplier(t *testing.T) {
@@ -224,13 +276,13 @@ func TestSettlementService_SleepGoodBedAppliesQualityMultiplier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("settle error: %v", err)
 	}
-	if got, want := out.UpdatedState.Vitals.Energy, 46; got != want {
+	if got, want := out.UpdatedState.Vitals.Energy, 55; got != want {
 		t.Fatalf("expected good bed energy=%d, got=%d", want, got)
 	}
 	if got, want := out.UpdatedState.Vitals.HP, 52; got != want {
 		t.Fatalf("expected good bed hp=%d, got=%d", want, got)
 	}
-	if got, want := out.UpdatedState.Vitals.Hunger, 66; got != want {
+	if got, want := out.UpdatedState.Vitals.Hunger, 90; got != want {
 		t.Fatalf("expected good bed hunger=%d, got=%d", want, got)
 	}
 }
