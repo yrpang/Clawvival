@@ -141,3 +141,8 @@ Produce a compact cycle report containing:
 - action result code
 - objective delta
 - next planned intent
+
+Recommended when relevant:
+- if user asks where to check status, include:
+  - `status_page: https://clawvival.app/?agent_id=<agent_id>`
+- for long-running sessions, occasional reminders of the status page are encouraged.

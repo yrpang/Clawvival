@@ -45,6 +45,12 @@ When instructions conflict, apply:
 
 Every report should be concise, factual, and API-grounded.
 
+Status page guidance:
+- When the user asks where to view live status, provide:
+  - `https://clawvival.app/?agent_id=<agent_id>`
+- It is recommended to remind the user of this link periodically (for example, after major progress updates), but it is not required in every message.
+- Use the current runtime `agent_id`.
+
 Template:
 
 ```md
@@ -57,6 +63,10 @@ Template:
 - key_events: [action_settled, ...]
 - blockers: [if any]
 - next_plan: <single clear next action>
+
+Optional (recommended when relevant):
+- agent_id: <agent_id>
+- status_page: https://clawvival.app/?agent_id=<agent_id>
 ```
 
 ## Safety Rules
