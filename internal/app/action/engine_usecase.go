@@ -62,20 +62,6 @@ func (e *ActionInvalidPositionError) Unwrap() error {
 	return ErrActionInvalidPosition
 }
 
-const (
-	defaultHeartbeatDeltaMinutes = 30
-	minHeartbeatDeltaMinutes     = 1
-	maxHeartbeatDeltaMinutes     = 120
-	minRestMinutes               = 1
-	maxRestMinutes               = 120
-	defaultFarmGrowMinutes       = 60
-	seedPityMaxFails             = 8
-	actionNightVisionRadius      = 3
-	defaultInventoryCapacity     = 30
-	sleepBaseEnergyRecovery      = 24
-	sleepBaseHPRecovery          = 8
-)
-
 type UseCase struct {
 	TxManager    ports.TxManager
 	StateRepo    ports.AgentStateRepository

@@ -3,12 +3,11 @@ package survival
 import (
 	"errors"
 	"math"
+	"strings"
 	"time"
 )
 
 var ErrInvalidDelta = errors.New("invalid delta minutes")
-
-const criticalHPThreshold = 15
 
 type SettlementService struct{}
 
@@ -24,30 +23,31 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 	hungerReasons := make([]map[string]any, 0, 4)
 	energyReasons := make([]map[string]any, 0, 4)
 
-	// Baseline drains per 30 mins.
-	applyReasonedDelta(&next.Vitals.Hunger, -scaledInt(4, delta.Minutes), "BASE_HUNGER_DRAIN", &hungerReasons)
+	// Baseline drains per standard tick.
+	applyReasonedDelta(&next.Vitals.Hunger, -scaledInt(BaseHungerDrainPer30, delta.Minutes), "BASE_HUNGER_DRAIN", &hungerReasons)
 
 	switch intent.Type {
 	case ActionGather:
-		applyReasonedDelta(&next.Vitals.Energy, -scaledInt(18, delta.Minutes), "ACTION_GATHER_COST", &energyReasons)
-		applyReasonedDelta(&next.Vitals.Hunger, -scaledInt(3, delta.Minutes), "ACTION_GATHER_COST", &hungerReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionGatherDeltaEnergy, delta.Minutes), "ACTION_GATHER_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionGatherDeltaHunger, delta.Minutes), "ACTION_GATHER_COST", &hungerReasons)
 		ApplyGather(&next, snapshot)
 	case ActionRest:
-		applyReasonedDelta(&next.Vitals.Energy, scaledInt(10, delta.Minutes), "ACTION_REST_RECOVERY", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionRestDeltaEnergy, delta.Minutes), "ACTION_REST_RECOVERY", &energyReasons)
 	case ActionSleep:
-		applyReasonedDelta(&next.Vitals.Energy, scaledInt(18, delta.Minutes), "ACTION_SLEEP_RECOVERY", &energyReasons)
-		applyReasonedHPDelta(&next.Vitals.HP, scaledInt(4, delta.Minutes), "ACTION_SLEEP_RECOVERY", &hpReasons)
+		multiplier := sleepQualityMultiplier(intent.BedQuality)
+		applyReasonedDelta(&next.Vitals.Energy, int(math.Round(scaledFloat(float64(SleepBaseEnergyRecovery)*multiplier, delta.Minutes))), "ACTION_SLEEP_RECOVERY", &energyReasons)
+		applyReasonedHPDelta(&next.Vitals.HP, int(math.Round(scaledFloat(float64(SleepBaseHPRecovery)*multiplier, delta.Minutes))), "ACTION_SLEEP_RECOVERY", &hpReasons)
 	case ActionMove:
-		moveEnergyCost := scaledInt(6, delta.Minutes)
+		moveEnergyCost := scaledInt(-ActionMoveDeltaEnergy, delta.Minutes)
 		if moveEnergyCost < 1 {
 			moveEnergyCost = 1
 		}
 		applyReasonedDelta(&next.Vitals.Energy, -moveEnergyCost, "ACTION_MOVE_COST", &energyReasons)
-		applyReasonedDelta(&next.Vitals.Hunger, -scaledInt(1, delta.Minutes), "ACTION_MOVE_COST", &hungerReasons)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionMoveDeltaHunger, delta.Minutes), "ACTION_MOVE_COST", &hungerReasons)
 		next.Position.X += intent.DX
 		next.Position.Y += intent.DY
 	case ActionBuild:
-		applyReasonedDelta(&next.Vitals.Energy, -scaledInt(14, delta.Minutes), "ACTION_BUILD_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionBuildDeltaEnergy, delta.Minutes), "ACTION_BUILD_COST", &energyReasons)
 		if _, ok := buildKindFromIntent(intent.ObjectType); !ok {
 			break
 		}
@@ -69,26 +69,26 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 			})
 		}
 	case ActionFarm, ActionFarmPlant:
-		applyReasonedDelta(&next.Vitals.Energy, -scaledInt(10, delta.Minutes), "ACTION_FARM_COST", &energyReasons)
-		applyReasonedDelta(&next.Vitals.Hunger, -scaledInt(1, delta.Minutes), "ACTION_FARM_COST", &hungerReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionFarmPlantDeltaEnergy, delta.Minutes), "ACTION_FARM_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionFarmPlantDeltaHunger, delta.Minutes), "ACTION_FARM_COST", &hungerReasons)
 		_, _ = PlantSeed(&next)
 	case ActionFarmHarvest:
-		applyReasonedDelta(&next.Vitals.Energy, -scaledInt(8, delta.Minutes), "ACTION_FARM_HARVEST_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionFarmHarvestDeltaEnergy, delta.Minutes), "ACTION_FARM_HARVEST_COST", &energyReasons)
 		next.AddItem("wheat", 2)
 		if shouldReturnHarvestSeed(now) {
 			next.AddItem("seed", 1)
 		}
 	case ActionContainerDeposit, ActionContainerWithdraw:
-		applyReasonedDelta(&next.Vitals.Energy, -scaledInt(4, delta.Minutes), "ACTION_CONTAINER_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionContainerDepositDeltaEnergy, delta.Minutes), "ACTION_CONTAINER_COST", &energyReasons)
 		applyContainerTransfer(&next, intent)
 	case ActionRetreat:
-		applyReasonedDelta(&next.Vitals.Energy, -scaledInt(8, delta.Minutes), "ACTION_RETREAT_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionRetreatDeltaEnergy, delta.Minutes), "ACTION_RETREAT_COST", &energyReasons)
 		if intent.DX != 0 || intent.DY != 0 {
 			next.Position.X += clampStep(intent.DX)
 			next.Position.Y += clampStep(intent.DY)
 		}
 	case ActionCraft:
-		applyReasonedDelta(&next.Vitals.Energy, -scaledInt(12, delta.Minutes), "ACTION_CRAFT_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionCraftDeltaEnergy, delta.Minutes), "ACTION_CRAFT_COST", &energyReasons)
 		_ = Craft(&next, RecipeID(intent.RecipeID))
 	case ActionEat:
 		beforeHunger := next.Vitals.Hunger
@@ -104,9 +104,9 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		appendReason(&hungerReasons, "ACTION_EAT_RECOVERY", next.Vitals.Hunger-beforeHunger)
 	}
 
-	hungerLossPotential := int(math.Round(scaledFloat(0.08*float64(absMinZero(next.Vitals.Hunger)), delta.Minutes)))
-	energyLossPotential := int(math.Round(scaledFloat(0.05*float64(absMinZero(next.Vitals.Energy)), delta.Minutes)))
-	hpCap := scaledInt(12, delta.Minutes)
+	hungerLossPotential := int(math.Round(scaledFloat(HPDrainFromHungerCoeff*float64(absMinZero(next.Vitals.Hunger)), delta.Minutes)))
+	energyLossPotential := int(math.Round(scaledFloat(HPDrainFromEnergyCoeff*float64(absMinZero(next.Vitals.Energy)), delta.Minutes)))
+	hpCap := scaledInt(HPDrainCapPer30, delta.Minutes)
 	hungerApplied, energyApplied := applyDualCap(hungerLossPotential, energyLossPotential, hpCap)
 	hpLoss := hungerApplied + energyApplied
 	if hungerApplied > 0 {
@@ -200,7 +200,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 			},
 		})
 		resultCode = ResultGameOver
-	} else if next.Vitals.HP <= criticalHPThreshold {
+	} else if next.Vitals.HP <= CriticalHPThreshold {
 		next.Position = moveToward(next.Position, next.Home)
 		events = append(events, DomainEvent{Type: "critical_hp", OccurredAt: now})
 		events = append(events, DomainEvent{Type: "force_retreat", OccurredAt: now})
@@ -271,6 +271,9 @@ func intentDecisionParams(intent ActionIntent) map[string]any {
 	if intent.BedID != "" {
 		out["bed_id"] = intent.BedID
 	}
+	if strings.TrimSpace(intent.BedQuality) != "" {
+		out["bed_quality"] = strings.ToUpper(strings.TrimSpace(intent.BedQuality))
+	}
 	if intent.FarmID != "" {
 		out["farm_id"] = intent.FarmID
 	}
@@ -306,11 +309,11 @@ func applyContainerTransfer(state *AgentStateAggregate, intent ActionIntent) {
 }
 
 func scaledInt(per30 int, dt int) int {
-	return int(math.Round(float64(per30) * float64(dt) / 30.0))
+	return int(math.Round(float64(per30) * float64(dt) / float64(StandardTickMinutes)))
 }
 
 func scaledFloat(per30 float64, dt int) float64 {
-	return per30 * float64(dt) / 30.0
+	return per30 * float64(dt) / float64(StandardTickMinutes)
 }
 
 func absMinZero(v int) int {
@@ -350,6 +353,15 @@ func deriveDeathCause(state AgentStateAggregate, intent ActionIntent) DeathCause
 		return DeathCauseExhaustion
 	default:
 		return DeathCauseUnknown
+	}
+}
+
+func sleepQualityMultiplier(quality string) float64 {
+	switch strings.ToUpper(strings.TrimSpace(quality)) {
+	case "GOOD":
+		return 1.5
+	default:
+		return 1.0
 	}
 }
 

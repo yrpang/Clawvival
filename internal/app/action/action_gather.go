@@ -64,7 +64,7 @@ func applySeedPityIfNeeded(ctx context.Context, intent survival.ActionIntent, re
 	}
 
 	fails := consecutiveGatherSeedFails(ctx, repo, agentID)
-	if fails < seedPityMaxFails-1 {
+	if fails < survival.SeedPityMaxFails-1 {
 		return
 	}
 
@@ -149,7 +149,7 @@ func validateTargetVisibility(center survival.Position, intent survival.ActionIn
 	}
 	if strings.EqualFold(snapshot.TimeOfDay, "night") {
 		dist := abs(tx-center.X) + abs(ty-center.Y)
-		if dist > actionNightVisionRadius {
+		if dist > survival.ActionNightVisionRadius {
 			return ErrTargetNotVisible
 		}
 	}

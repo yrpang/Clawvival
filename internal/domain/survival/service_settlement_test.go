@@ -207,6 +207,34 @@ func TestSettlementService_SleepRecoversEnergyAndHp(t *testing.T) {
 	}
 }
 
+func TestSettlementService_SleepGoodBedAppliesQualityMultiplier(t *testing.T) {
+	svc := SettlementService{}
+	state := AgentStateAggregate{
+		AgentID:  "a-1",
+		Vitals:   Vitals{HP: 40, Hunger: 70, Energy: 10},
+		Position: Position{X: 0, Y: 0},
+		Version:  1,
+	}
+
+	out, err := svc.Settle(state, ActionIntent{
+		Type:       ActionSleep,
+		BedID:      "bed-good",
+		BedQuality: "GOOD",
+	}, HeartbeatDelta{Minutes: 30}, time.Now(), WorldSnapshot{})
+	if err != nil {
+		t.Fatalf("settle error: %v", err)
+	}
+	if got, want := out.UpdatedState.Vitals.Energy, 46; got != want {
+		t.Fatalf("expected good bed energy=%d, got=%d", want, got)
+	}
+	if got, want := out.UpdatedState.Vitals.HP, 52; got != want {
+		t.Fatalf("expected good bed hp=%d, got=%d", want, got)
+	}
+	if got, want := out.UpdatedState.Vitals.Hunger, 66; got != want {
+		t.Fatalf("expected good bed hunger=%d, got=%d", want, got)
+	}
+}
+
 func TestSettlementService_FarmPlantConsumesSeed(t *testing.T) {
 	svc := SettlementService{}
 	state := AgentStateAggregate{

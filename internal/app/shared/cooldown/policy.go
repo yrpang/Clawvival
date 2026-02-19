@@ -8,16 +8,8 @@ import (
 	"clawvival/internal/domain/survival"
 )
 
-var ActionDurations = map[survival.ActionType]time.Duration{
-	survival.ActionBuild:     5 * time.Minute,
-	survival.ActionCraft:     5 * time.Minute,
-	survival.ActionFarmPlant: 3 * time.Minute,
-	survival.ActionMove:      1 * time.Minute,
-	survival.ActionSleep:     5 * time.Minute,
-}
-
 func RemainingForAction(events []survival.DomainEvent, intentType survival.ActionType, now time.Time) (int, bool) {
-	cooldown, ok := ActionDurations[intentType]
+	cooldown, ok := survival.ActionCooldownDurations[intentType]
 	if !ok {
 		return 0, false
 	}
@@ -38,7 +30,7 @@ func RemainingForAction(events []survival.DomainEvent, intentType survival.Actio
 
 func RemainingByAction(events []survival.DomainEvent, now time.Time) map[string]int {
 	out := map[string]int{}
-	for actionType := range ActionDurations {
+	for actionType := range survival.ActionCooldownDurations {
 		if remaining, ok := RemainingForAction(events, actionType, now); ok {
 			out[string(actionType)] = remaining
 		}

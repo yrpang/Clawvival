@@ -108,6 +108,9 @@ func (u UseCase) BuildContext(ctx context.Context, ac *ActionContext) error {
 		return err
 	}
 	ac.View.PreparedObj = preparedObj
+	if ac.Tmp.ResolvedIntent.Type == survival.ActionSleep && preparedObj != nil {
+		ac.Tmp.ResolvedIntent.BedQuality = preparedObj.record.Quality
+	}
 
 	resolvedMoveIntent, moveErr := resolveMoveIntent(ac.View.StateWorking, ac.Tmp.ResolvedIntent, snapshot)
 	if moveErr != nil {

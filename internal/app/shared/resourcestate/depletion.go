@@ -8,17 +8,6 @@ import (
 	"clawvival/internal/domain/survival"
 )
 
-const (
-	defaultRespawnMinutes = 60
-)
-
-var respawnByResource = map[string]time.Duration{
-	"wood":  60 * time.Minute,
-	"stone": 60 * time.Minute,
-	"berry": 30 * time.Minute,
-	"seed":  30 * time.Minute,
-}
-
 func DepletedTargets(events []survival.DomainEvent, now time.Time) map[string]int {
 	latestGather := map[string]time.Time{}
 	respawn := map[string]time.Duration{}
@@ -78,8 +67,8 @@ func gatherTargetFromEvent(evt survival.DomainEvent) (targetID, resource string,
 }
 
 func RespawnDuration(resource string) time.Duration {
-	if d, ok := respawnByResource[strings.ToLower(strings.TrimSpace(resource))]; ok {
+	if d, ok := survival.ResourceRespawnDurations[strings.ToLower(strings.TrimSpace(resource))]; ok {
 		return d
 	}
-	return defaultRespawnMinutes * time.Minute
+	return survival.DefaultRespawnMinutes * time.Minute
 }

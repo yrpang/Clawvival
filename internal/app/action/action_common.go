@@ -38,12 +38,12 @@ func ensureCooldownReady(events []survival.DomainEvent, intentType survival.Acti
 
 func resolveHeartbeatDeltaMinutes(ctx context.Context, repo ports.EventRepository, agentID string, now time.Time) (int, error) {
 	if repo == nil {
-		return defaultHeartbeatDeltaMinutes, nil
+		return survival.DefaultHeartbeatDeltaMinutes, nil
 	}
 	events, err := repo.ListByAgentID(ctx, agentID, 50)
 	if err != nil {
 		if errors.Is(err, ports.ErrNotFound) {
-			return defaultHeartbeatDeltaMinutes, nil
+			return survival.DefaultHeartbeatDeltaMinutes, nil
 		}
 		return 0, err
 	}
@@ -57,14 +57,14 @@ func resolveHeartbeatDeltaMinutes(ctx context.Context, repo ports.EventRepositor
 		}
 	}
 	if lastAt.IsZero() {
-		return defaultHeartbeatDeltaMinutes, nil
+		return survival.DefaultHeartbeatDeltaMinutes, nil
 	}
 	delta := int(now.Sub(lastAt).Minutes())
-	if delta < minHeartbeatDeltaMinutes {
-		return minHeartbeatDeltaMinutes, nil
+	if delta < survival.MinHeartbeatDeltaMinutes {
+		return survival.MinHeartbeatDeltaMinutes, nil
 	}
-	if delta > maxHeartbeatDeltaMinutes {
-		return maxHeartbeatDeltaMinutes, nil
+	if delta > survival.MaxHeartbeatDeltaMinutes {
+		return survival.MaxHeartbeatDeltaMinutes, nil
 	}
 	return delta, nil
 }
@@ -87,39 +87,30 @@ type settleOptions struct {
 func settleViaDomainOrInstant(ctx context.Context, uc UseCase, ac *ActionContext, opts settleOptions) (ExecuteMode, error) {
 	intent := ac.Tmp.ResolvedIntent
 	deltaMinutes := 0
-	var result survival.SettlementResult
-
-	if intent.Type == survival.ActionSleep {
-		if ac.View.PreparedObj == nil {
-			return ExecuteModeContinue, ErrActionPreconditionFailed
-		}
-		result = settleInstantSleepAction(ac.View.StateWorking, intent, ac.View.PreparedObj.record, ac.In.NowAt, ac.View.Snapshot)
-	} else {
-		var err error
-		deltaMinutes, err = resolveHeartbeatDeltaMinutes(ctx, uc.EventRepo, ac.In.AgentID, ac.In.NowAt)
-		if err != nil {
-			return ExecuteModeContinue, err
-		}
-		settleNearby := ac.View.Snapshot.NearbyResource
-		if opts.filterGatherNearby {
-			settleNearby = filterGatherNearbyResource(intent.TargetID, ac.View.Snapshot.NearbyResource)
-		}
-		result, err = uc.Settle.Settle(
-			ac.View.StateWorking,
-			intent,
-			survival.HeartbeatDelta{Minutes: deltaMinutes},
-			ac.In.NowAt,
-			survival.WorldSnapshot{
-				TimeOfDay:         ac.View.Snapshot.TimeOfDay,
-				ThreatLevel:       ac.View.Snapshot.ThreatLevel,
-				VisibilityPenalty: ac.View.Snapshot.VisibilityPenalty,
-				NearbyResource:    settleNearby,
-				WorldTimeSeconds:  ac.View.Snapshot.WorldTimeSeconds,
-			},
-		)
-		if err != nil {
-			return ExecuteModeContinue, err
-		}
+	var err error
+	deltaMinutes, err = resolveHeartbeatDeltaMinutes(ctx, uc.EventRepo, ac.In.AgentID, ac.In.NowAt)
+	if err != nil {
+		return ExecuteModeContinue, err
+	}
+	settleNearby := ac.View.Snapshot.NearbyResource
+	if opts.filterGatherNearby {
+		settleNearby = filterGatherNearbyResource(intent.TargetID, ac.View.Snapshot.NearbyResource)
+	}
+	result, err := uc.Settle.Settle(
+		ac.View.StateWorking,
+		intent,
+		survival.HeartbeatDelta{Minutes: deltaMinutes},
+		ac.In.NowAt,
+		survival.WorldSnapshot{
+			TimeOfDay:         ac.View.Snapshot.TimeOfDay,
+			ThreatLevel:       ac.View.Snapshot.ThreatLevel,
+			VisibilityPenalty: ac.View.Snapshot.VisibilityPenalty,
+			NearbyResource:    settleNearby,
+			WorldTimeSeconds:  ac.View.Snapshot.WorldTimeSeconds,
+		},
+	)
+	if err != nil {
+		return ExecuteModeContinue, err
 	}
 
 	result.UpdatedState = stateview.Enrich(result.UpdatedState, ac.View.Snapshot.TimeOfDay, isCurrentTileLit(ac.View.Snapshot.TimeOfDay))

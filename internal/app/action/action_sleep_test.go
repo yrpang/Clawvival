@@ -12,7 +12,7 @@ import (
 	"clawvival/internal/domain/world"
 )
 
-func TestUseCase_SleepUsesInstantFixedRecovery(t *testing.T) {
+func TestUseCase_SleepUsesHeartbeatSettlement(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
 		"agent-1": {
@@ -56,14 +56,14 @@ func TestUseCase_SleepUsesInstantFixedRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sleep execute error: %v", err)
 	}
-	if got, want := out.UpdatedState.Vitals.Energy, 34; got != want {
-		t.Fatalf("expected fixed sleep energy=%d, got=%d", want, got)
+	if got, want := out.UpdatedState.Vitals.Energy, 90; got != want {
+		t.Fatalf("expected heartbeat sleep energy=%d, got=%d", want, got)
 	}
-	if got, want := out.UpdatedState.Vitals.HP, 58; got != want {
-		t.Fatalf("expected fixed sleep hp=%d, got=%d", want, got)
+	if got, want := out.UpdatedState.Vitals.HP, 77; got != want {
+		t.Fatalf("expected heartbeat sleep hp=%d, got=%d", want, got)
 	}
-	if got, want := out.UpdatedState.Vitals.Hunger, 70; got != want {
-		t.Fatalf("expected instant sleep no hunger change=%d, got=%d", want, got)
+	if got, want := out.UpdatedState.Vitals.Hunger, 57; got != want {
+		t.Fatalf("expected heartbeat sleep hunger=%d, got=%d", want, got)
 	}
 }
 
@@ -108,6 +108,9 @@ func TestUseCase_SleepRecoveryScalesByBedQuality(t *testing.T) {
 	}
 	if got, want := out.UpdatedState.Vitals.HP, 52; got != want {
 		t.Fatalf("expected good bed hp=%d, got=%d", want, got)
+	}
+	if got, want := out.UpdatedState.Vitals.Hunger, 66; got != want {
+		t.Fatalf("expected good bed hunger=%d, got=%d", want, got)
 	}
 }
 

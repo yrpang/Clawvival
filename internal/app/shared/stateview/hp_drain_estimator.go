@@ -17,15 +17,19 @@ type HPDrainEstimate struct {
 
 func EstimateHPDrain(vitals survival.Vitals, dtMinutes int) HPDrainEstimate {
 	if dtMinutes <= 0 {
-		dtMinutes = 30
+		dtMinutes = survival.StandardTickMinutes
 	}
-	cap := scaledInt(12, dtMinutes)
+	cap := scaledInt(survival.HPDrainCapPer30, dtMinutes)
 	if cap < 0 {
 		cap = 0
 	}
 
-	hungerPotential := int(math.Round(0.08 * float64(absMinZero(vitals.Hunger)) * float64(dtMinutes) / 30.0))
-	energyPotential := int(math.Round(0.05 * float64(absMinZero(vitals.Energy)) * float64(dtMinutes) / 30.0))
+	hungerPotential := int(math.Round(
+		survival.HPDrainFromHungerCoeff * float64(absMinZero(vitals.Hunger)) * float64(dtMinutes) / float64(survival.StandardTickMinutes),
+	))
+	energyPotential := int(math.Round(
+		survival.HPDrainFromEnergyCoeff * float64(absMinZero(vitals.Energy)) * float64(dtMinutes) / float64(survival.StandardTickMinutes),
+	))
 	hungerApplied, energyApplied := applyDualCap(hungerPotential, energyPotential, cap)
 	loss := hungerApplied + energyApplied
 
@@ -48,7 +52,7 @@ func EstimateHPDrain(vitals survival.Vitals, dtMinutes int) HPDrainEstimate {
 }
 
 func scaledInt(per30 int, dt int) int {
-	return int(math.Round(float64(per30) * float64(dt) / 30.0))
+	return int(math.Round(float64(per30) * float64(dt) / float64(survival.StandardTickMinutes)))
 }
 
 func absMinZero(v int) int {

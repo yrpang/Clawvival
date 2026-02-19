@@ -88,7 +88,7 @@ func (u RegisterUseCase) Execute(ctx context.Context, _ RegisterRequest) (Regist
 				Position:          survival.Position{X: 0, Y: 0},
 				Home:              survival.Position{X: 0, Y: 0},
 				Inventory:         map[string]int{},
-				InventoryCapacity: 30,
+				InventoryCapacity: survival.DefaultInventoryCapacity,
 				InventoryUsed:     0,
 				Dead:              false,
 				DeathCause:        survival.DeathCauseUnknown,

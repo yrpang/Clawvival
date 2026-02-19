@@ -61,10 +61,18 @@ type Seed struct {
 }
 
 type ActionCost struct {
-	BaseMinutes  int      `json:"base_minutes"`
-	DeltaHunger  int      `json:"delta_hunger"`
-	DeltaEnergy  int      `json:"delta_energy"`
-	Requirements []string `json:"requirements"`
+	BaseMinutes  int                          `json:"base_minutes"`
+	DeltaHunger  int                          `json:"delta_hunger"`
+	DeltaEnergy  int                          `json:"delta_energy"`
+	DeltaHP      int                          `json:"delta_hp,omitempty"`
+	Requirements []string                     `json:"requirements"`
+	Variants     map[string]ActionCostVariant `json:"variants,omitempty"`
+}
+
+type ActionCostVariant struct {
+	DeltaHunger int `json:"delta_hunger"`
+	DeltaEnergy int `json:"delta_energy"`
+	DeltaHP     int `json:"delta_hp,omitempty"`
 }
 
 type HPDrainFeedback struct {

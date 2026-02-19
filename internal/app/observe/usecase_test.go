@@ -59,25 +59,31 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if resp.WorldTimeSeconds != 0 || resp.TimeOfDay != "" || resp.NextPhaseInSeconds != 0 {
 		t.Fatalf("unexpected default time projection: world_time=%d time_of_day=%q next_phase=%d", resp.WorldTimeSeconds, resp.TimeOfDay, resp.NextPhaseInSeconds)
 	}
-	if resp.World.Rules.StandardTickMinutes != 30 {
-		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
+	if resp.World.Rules.StandardTickMinutes != survival.StandardTickMinutes {
+		t.Fatalf("expected standard tick %d, got=%d", survival.StandardTickMinutes, resp.World.Rules.StandardTickMinutes)
 	}
-	if resp.World.Rules.DrainsPer30m.HungerDrain != 4 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
+	if resp.World.Rules.DrainsPer30m.HungerDrain != survival.BaseHungerDrainPer30 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
 		t.Fatalf("unexpected drains_per_30m: %+v", resp.World.Rules.DrainsPer30m)
 	}
 	if resp.ActionCosts["move"].BaseMinutes <= 0 {
 		t.Fatalf("expected move action cost configured, got=%+v", resp.ActionCosts["move"])
 	}
-	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -3 || got.DeltaEnergy != -18 {
+	if got := resp.ActionCosts["gather"]; got.BaseMinutes != survival.StandardTickMinutes || got.DeltaHunger != -7 || got.DeltaEnergy != -18 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
+	}
+	if got := resp.ActionCosts["sleep"]; got.BaseMinutes != survival.StandardTickMinutes || got.DeltaHunger != -4 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
+		t.Fatalf("sleep action cost mismatch: %+v", got)
+	}
+	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != -4 || got.DeltaEnergy != 36 || got.DeltaHP != 12 {
+		t.Fatalf("sleep good-bed variant mismatch: %+v", got)
 	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {
 		t.Fatalf("expected terminate action cost configured")
 	} else if got.BaseMinutes != 1 || got.DeltaHunger != 0 || got.DeltaEnergy != 0 {
 		t.Fatalf("terminate action cost mismatch: %+v", got)
 	}
-	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != 1 || got[1] != 3 {
-		t.Fatalf("expected wheat_yield_range [1,3], got=%v", got)
+	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != survival.WheatYieldMin || got[1] != survival.WheatYieldMax {
+		t.Fatalf("expected wheat_yield_range [%d,%d], got=%v", survival.WheatYieldMin, survival.WheatYieldMax, got)
 	}
 	b, err := json.Marshal(resp.ActionCosts["gather"])
 	if err != nil {

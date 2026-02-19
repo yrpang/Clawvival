@@ -164,7 +164,7 @@ func prepareObjectAction(ctx context.Context, nowAt time.Time, state survival.Ag
 		if intent.Type == survival.ActionContainerWithdraw {
 			capacity := state.InventoryCapacity
 			if capacity <= 0 {
-				capacity = defaultInventoryCapacity
+				capacity = survival.DefaultInventoryCapacity
 			}
 			if inventoryUsed(state.Inventory)+total > capacity {
 				return nil, ErrInventoryFull
@@ -249,7 +249,7 @@ func persistObjectAction(ctx context.Context, nowAt time.Time, intent survival.A
 	case survival.ActionFarmPlant:
 		prepared.farm.State = "GROWING"
 		prepared.farm.PlantedAtUnix = nowAt.Unix()
-		prepared.farm.ReadyAtUnix = nowAt.Add(defaultFarmGrowMinutes * time.Minute).Unix()
+		prepared.farm.ReadyAtUnix = nowAt.Add(survival.DefaultFarmGrowMinutes * time.Minute).Unix()
 		encoded, err := json.Marshal(prepared.farm)
 		if err != nil {
 			return err

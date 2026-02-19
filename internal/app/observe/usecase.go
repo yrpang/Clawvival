@@ -21,7 +21,7 @@ var ErrInvalidRequest = errors.New("invalid observe request")
 const (
 	fixedViewRadius   = 5
 	fixedViewSize     = fixedViewRadius*2 + 1
-	nightVisionRadius = 3
+	nightVisionRadius = survival.VisionRadiusNight
 )
 
 type UseCase struct {
@@ -82,7 +82,7 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		WorldTimeSeconds:   snapshot.WorldTimeSeconds,
 		TimeOfDay:          snapshot.TimeOfDay,
 		NextPhaseInSeconds: snapshot.NextPhaseInSeconds,
-		HPDrainFeedback:    toHPDrainFeedback(stateview.EstimateHPDrain(state.Vitals, 30)),
+		HPDrainFeedback:    toHPDrainFeedback(stateview.EstimateHPDrain(state.Vitals, survival.StandardTickMinutes)),
 		View: View{
 			Width:  fixedViewSize,
 			Height: fixedViewSize,
@@ -92,27 +92,40 @@ func (u UseCase) Execute(ctx context.Context, req Request) (Response, error) {
 		World: WorldMeta{
 			Rules: defaultRules(),
 		},
-		ActionCosts: map[string]ActionCost{
-			"move":               {BaseMinutes: 1, DeltaHunger: -1, DeltaEnergy: -6, Requirements: []string{"PASSABLE_TILE"}},
-			"gather":             {BaseMinutes: 5, DeltaHunger: -3, DeltaEnergy: -18, Requirements: []string{"VISIBLE_TARGET"}},
-			"craft":              {BaseMinutes: 2, DeltaHunger: 0, DeltaEnergy: -12, Requirements: []string{"RECIPE_INPUTS"}},
-			"build":              {BaseMinutes: 3, DeltaHunger: 0, DeltaEnergy: -14, Requirements: []string{"BUILD_MATERIALS", "VALID_POS"}},
-			"eat":                {BaseMinutes: 1, DeltaHunger: 12, DeltaEnergy: 0, Requirements: []string{"HAS_ITEM"}},
-			"rest":               {BaseMinutes: 30, DeltaHunger: 0, DeltaEnergy: 10, Requirements: []string{}},
-			"sleep":              {BaseMinutes: 0, DeltaHunger: 0, DeltaEnergy: 24, Requirements: []string{"BED_ID"}},
-			"farm_plant":         {BaseMinutes: 2, DeltaHunger: -1, DeltaEnergy: -10, Requirements: []string{"FARM_ID", "HAS_SEED"}},
-			"farm_harvest":       {BaseMinutes: 2, DeltaHunger: 0, DeltaEnergy: -8, Requirements: []string{"FARM_ID", "FARM_READY"}},
-			"container_deposit":  {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: -4, Requirements: []string{"CONTAINER_ID", "HAS_ITEMS"}},
-			"container_withdraw": {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: -4, Requirements: []string{"CONTAINER_ID", "CAPACITY_AVAILABLE"}},
-			"retreat":            {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: -8, Requirements: []string{}},
-			"terminate":          {BaseMinutes: 1, DeltaHunger: 0, DeltaEnergy: 0, Requirements: []string{"INTERRUPTIBLE_ONGOING_ACTION"}},
-		},
+		ActionCosts:      defaultActionCosts(),
 		Tiles:            tiles,
 		Objects:          objects,
 		Resources:        resources,
 		Threats:          projectThreats(tiles),
 		LocalThreatLevel: snapshot.ThreatLevel,
 	}, nil
+}
+
+func defaultActionCosts() map[string]ActionCost {
+	profiles := survival.DefaultActionCostProfiles()
+	out := make(map[string]ActionCost, len(profiles))
+	for action, profile := range profiles {
+		variants := map[string]ActionCostVariant{}
+		if len(profile.Variants) > 0 {
+			variants = make(map[string]ActionCostVariant, len(profile.Variants))
+			for key, variant := range profile.Variants {
+				variants[key] = ActionCostVariant{
+					DeltaHunger: variant.DeltaHunger,
+					DeltaEnergy: variant.DeltaEnergy,
+					DeltaHP:     variant.DeltaHP,
+				}
+			}
+		}
+		out[string(action)] = ActionCost{
+			BaseMinutes:  profile.BaseMinutes,
+			DeltaHunger:  profile.DeltaHunger,
+			DeltaEnergy:  profile.DeltaEnergy,
+			DeltaHP:      profile.DeltaHP,
+			Requirements: append([]string(nil), profile.Requirements...),
+			Variants:     variants,
+		}
+	}
+	return out
 }
 
 func toHPDrainFeedback(in stateview.HPDrainEstimate) HPDrainFeedback {
@@ -128,32 +141,32 @@ func toHPDrainFeedback(in stateview.HPDrainEstimate) HPDrainFeedback {
 
 func defaultRules() Rules {
 	return Rules{
-		StandardTickMinutes: 30,
+		StandardTickMinutes: survival.StandardTickMinutes,
 		DrainsPer30m: DrainsPer30m{
-			HungerDrain:            4,
+			HungerDrain:            survival.BaseHungerDrainPer30,
 			EnergyDrain:            0,
 			HPDrainModel:           "dynamic_capped",
-			HPDrainFromHungerCoeff: 0.08,
-			HPDrainFromEnergyCoeff: 0.05,
-			HPDrainCap:             12,
+			HPDrainFromHungerCoeff: survival.HPDrainFromHungerCoeff,
+			HPDrainFromEnergyCoeff: survival.HPDrainFromEnergyCoeff,
+			HPDrainCap:             survival.HPDrainCapPer30,
 		},
 		Thresholds: Thresholds{
-			CriticalHP: 15,
-			LowEnergy:  20,
+			CriticalHP: survival.CriticalHPThreshold,
+			LowEnergy:  survival.LowEnergyThreshold,
 		},
 		Visibility: Visibility{
-			VisionRadiusDay:   6,
-			VisionRadiusNight: 3,
-			TorchLightRadius:  3,
+			VisionRadiusDay:   survival.VisionRadiusDay,
+			VisionRadiusNight: survival.VisionRadiusNight,
+			TorchLightRadius:  survival.TorchLightRadius,
 		},
 		Farming: Farming{
-			FarmGrowMinutes:  60,
-			WheatYieldRange:  []int{1, 3},
-			SeedReturnChance: 0.2,
+			FarmGrowMinutes:  survival.DefaultFarmGrowMinutes,
+			WheatYieldRange:  []int{survival.WheatYieldMin, survival.WheatYieldMax},
+			SeedReturnChance: survival.SeedReturnChance,
 		},
 		Seed: Seed{
-			SeedDropChance:   0.2,
-			SeedPityMaxFails: 8,
+			SeedDropChance:   survival.SeedDropChance,
+			SeedPityMaxFails: survival.SeedPityMaxFails,
 		},
 	}
 }

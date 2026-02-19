@@ -68,6 +68,7 @@ type ActionIntent struct {
 	ItemType    string       `json:"item_type,omitempty"`
 	RestMinutes int          `json:"rest_minutes,omitempty"`
 	BedID       string       `json:"bed_id,omitempty"`
+	BedQuality  string       `json:"-"`
 	FarmID      string       `json:"farm_id,omitempty"`
 	ContainerID string       `json:"container_id,omitempty"`
 	Items       []ItemAmount `json:"items,omitempty"`

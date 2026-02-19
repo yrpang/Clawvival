@@ -55,8 +55,8 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 	if deltaMinutes > ongoing.Minutes {
 		deltaMinutes = ongoing.Minutes
 	}
-	if deltaMinutes < minHeartbeatDeltaMinutes && !nowAt.Before(ongoing.EndAt) {
-		deltaMinutes = minHeartbeatDeltaMinutes
+	if deltaMinutes < survival.MinHeartbeatDeltaMinutes && !nowAt.Before(ongoing.EndAt) {
+		deltaMinutes = survival.MinHeartbeatDeltaMinutes
 	}
 
 	snapshot, err := u.World.SnapshotForAgent(ctx, agentID, world.Point{X: state.Position.X, Y: state.Position.Y})

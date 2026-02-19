@@ -11,7 +11,7 @@ type restActionHandler struct{ BaseHandler }
 
 func validateRestActionParams(intent survival.ActionIntent) bool {
 	restMinutes := intent.RestMinutes
-	return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
+	return restMinutes >= survival.MinRestMinutes && restMinutes <= survival.MaxRestMinutes
 }
 
 func (h restActionHandler) Precheck(context.Context, UseCase, *ActionContext) error {

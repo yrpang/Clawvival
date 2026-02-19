@@ -183,7 +183,7 @@ func TickFarm(plot *FarmPlot, dtMinutes int) {
 		return
 	}
 	plot.GrowthMinutes += dtMinutes
-	if plot.GrowthMinutes >= 60 {
+	if plot.GrowthMinutes >= DefaultFarmGrowMinutes {
 		plot.Ready = true
 	}
 }

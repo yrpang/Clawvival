@@ -48,14 +48,20 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if got, want := resp.State.SessionID, "session-agent-1"; got != want {
 		t.Fatalf("expected session_id=%q, got %q", want, got)
 	}
-	if resp.World.Rules.StandardTickMinutes != 30 {
-		t.Fatalf("expected standard tick 30, got=%d", resp.World.Rules.StandardTickMinutes)
+	if resp.World.Rules.StandardTickMinutes != survival.StandardTickMinutes {
+		t.Fatalf("expected standard tick %d, got=%d", survival.StandardTickMinutes, resp.World.Rules.StandardTickMinutes)
 	}
-	if resp.World.Rules.DrainsPer30m.HungerDrain != 4 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
+	if resp.World.Rules.DrainsPer30m.HungerDrain != survival.BaseHungerDrainPer30 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
 		t.Fatalf("unexpected drains_per_30m: %+v", resp.World.Rules.DrainsPer30m)
 	}
-	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -3 || got.DeltaEnergy != -18 {
+	if got := resp.ActionCosts["gather"]; got.BaseMinutes != survival.StandardTickMinutes || got.DeltaHunger != -7 || got.DeltaEnergy != -18 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
+	}
+	if got := resp.ActionCosts["sleep"]; got.BaseMinutes != survival.StandardTickMinutes || got.DeltaHunger != -4 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
+		t.Fatalf("sleep action cost mismatch: %+v", got)
+	}
+	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != -4 || got.DeltaEnergy != 36 || got.DeltaHP != 12 {
+		t.Fatalf("sleep good-bed variant mismatch: %+v", got)
 	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {
 		t.Fatalf("expected terminate action cost configured")
@@ -65,8 +71,8 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if resp.State.InventoryUsed != 3 {
 		t.Fatalf("expected inventory_used=3, got=%d", resp.State.InventoryUsed)
 	}
-	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != 1 || got[1] != 3 {
-		t.Fatalf("expected wheat_yield_range [1,3], got=%v", got)
+	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != survival.WheatYieldMin || got[1] != survival.WheatYieldMax {
+		t.Fatalf("expected wheat_yield_range [%d,%d], got=%v", survival.WheatYieldMin, survival.WheatYieldMax, got)
 	}
 	if len(resp.State.StatusEffects) == 0 {
 		t.Fatalf("expected status effects for low hp/energy")
