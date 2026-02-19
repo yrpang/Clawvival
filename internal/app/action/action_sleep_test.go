@@ -268,11 +268,11 @@ func TestUseCase_SleepFinalizeAppliesBedQualityMultiplier(t *testing.T) {
 		if got := out.UpdatedState.Vitals.Energy; got != wantEnergy {
 			t.Fatalf("%s bed energy=%d, want=%d", quality, got, wantEnergy)
 		}
-		if got, want := out.UpdatedState.Vitals.Hunger, 61; got != want {
-			t.Fatalf("%s bed hunger=%d, want=%d", quality, got, want)
-		}
+			if got, want := out.UpdatedState.Vitals.Hunger, 85; got != want {
+				t.Fatalf("%s bed hunger=%d, want=%d", quality, got, want)
+			}
 	}
 
-	runCase(t, "ROUGH", 48, 28)
-	runCase(t, "GOOD", 52, 40)
+	runCase(t, "ROUGH", 48, 34)
+	runCase(t, "GOOD", 52, 49)
 }

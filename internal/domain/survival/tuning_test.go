@@ -33,8 +33,8 @@ func TestGameplayTuning_Defaults(t *testing.T) {
 	if DefaultInventoryCapacity != 30 {
 		t.Fatalf("DefaultInventoryCapacity = %d, want 30", DefaultInventoryCapacity)
 	}
-	if SleepBaseEnergyRecovery != 24 || SleepBaseHPRecovery != 8 {
-		t.Fatalf("sleep base recovery = (%d,%d), want (24,8)", SleepBaseEnergyRecovery, SleepBaseHPRecovery)
+	if SleepBaseEnergyRecovery != 30 || SleepBaseHPRecovery != 8 {
+		t.Fatalf("sleep base recovery = (%d,%d), want (30,8)", SleepBaseEnergyRecovery, SleepBaseHPRecovery)
 	}
 	if CriticalHPThreshold != 15 || LowEnergyThreshold != 20 {
 		t.Fatalf("status thresholds = (%d,%d), want (15,20)", CriticalHPThreshold, LowEnergyThreshold)

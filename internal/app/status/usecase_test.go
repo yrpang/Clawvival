@@ -57,10 +57,10 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -7 || got.DeltaEnergy != -18 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
 	}
-	if got := resp.ActionCosts["sleep"]; got.DeltaHunger != -4 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
+	if got := resp.ActionCosts["sleep"]; got.DeltaHunger != 20 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
 		t.Fatalf("sleep action cost mismatch: %+v", got)
 	}
-	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != -4 || got.DeltaEnergy != 36 || got.DeltaHP != 12 {
+	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != 20 || got.DeltaEnergy != 45 || got.DeltaHP != 12 {
 		t.Fatalf("sleep good-bed variant mismatch: %+v", got)
 	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {

@@ -32,9 +32,11 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionGatherDeltaHunger, deltaMinutes), "ACTION_GATHER_COST", &hungerReasons)
 		ApplyGather(&next, snapshot)
 	case ActionRest:
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionRestDeltaHunger, deltaMinutes), "ACTION_REST_RECOVERY", &hungerReasons)
 		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionRestDeltaEnergy, deltaMinutes), "ACTION_REST_RECOVERY", &energyReasons)
 	case ActionSleep:
 		multiplier := sleepQualityMultiplier(intent.BedQuality)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionSleepDeltaHunger, deltaMinutes), "ACTION_SLEEP_RECOVERY", &hungerReasons)
 		applyReasonedDelta(&next.Vitals.Energy, int(math.Round(scaledFloat(float64(SleepBaseEnergyRecovery)*multiplier, deltaMinutes))), "ACTION_SLEEP_RECOVERY", &energyReasons)
 		applyReasonedHPDelta(&next.Vitals.HP, int(math.Round(scaledFloat(float64(SleepBaseHPRecovery)*multiplier, deltaMinutes))), "ACTION_SLEEP_RECOVERY", &hpReasons)
 	case ActionMove:

@@ -67,6 +67,10 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 			intent.BedID = ongoing.BedID
 			intent.BedQuality = ongoing.Quality
 		}
+		worldTimeBefore := snapshot.WorldTimeSeconds - int64(deltaMinutes*60)
+		if worldTimeBefore < 0 {
+			worldTimeBefore = 0
+		}
 		result, err = u.Settle.Settle(
 			state,
 			intent,
@@ -77,7 +81,7 @@ func finalizeOngoingAction(ctx context.Context, u UseCase, agentID string, state
 				ThreatLevel:       snapshot.ThreatLevel,
 				VisibilityPenalty: snapshot.VisibilityPenalty,
 				NearbyResource:    snapshot.NearbyResource,
-				WorldTimeSeconds:  snapshot.WorldTimeSeconds,
+				WorldTimeSeconds:  worldTimeBefore,
 			},
 		)
 		if err != nil {
