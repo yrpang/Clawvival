@@ -10,6 +10,15 @@ import (
 type craftActionHandler struct{ BaseHandler }
 type eatActionHandler struct{ BaseHandler }
 
+func validateCraftActionParams(intent survival.ActionIntent) bool {
+	return intent.RecipeID > 0
+}
+
+func validateEatActionParams(intent survival.ActionIntent) bool {
+	_, ok := foodIDFromItemType(intent.ItemType)
+	return ok && intent.Count > 0
+}
+
 func (h craftActionHandler) Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
 	if err := runStandardActionPrecheck(ctx, uc, ac); err != nil {
 		return err

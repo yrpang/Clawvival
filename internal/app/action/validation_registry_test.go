@@ -9,6 +9,7 @@ import (
 func TestSupportedActionTypes_MatchesRegistry(t *testing.T) {
 	registry := actionRegistry()
 	supported := supportedActionTypes()
+	validators := actionParamValidators()
 
 	for _, actionType := range supported {
 		if _, ok := registry[actionType]; !ok {
@@ -16,6 +17,9 @@ func TestSupportedActionTypes_MatchesRegistry(t *testing.T) {
 		}
 		if !isSupportedActionType(actionType) {
 			t.Fatalf("supported action %q must be accepted", actionType)
+		}
+		if _, ok := validators[actionType]; !ok {
+			t.Fatalf("supported action %q missing param validator", actionType)
 		}
 	}
 

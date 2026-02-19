@@ -94,12 +94,6 @@ func (u UseCase) BuildContext(ctx context.Context, ac *ActionContext) error {
 		return ErrActionInProgress
 	}
 
-	if ac.View.Spec.Handler != nil {
-		if err := ac.View.Spec.Handler.BuildContext(ctx, u, ac); err != nil {
-			return err
-		}
-	}
-
 	snapshot, err := u.World.SnapshotForAgent(ctx, ac.In.AgentID, world.Point{
 		X: ac.View.StateWorking.Position.X,
 		Y: ac.View.StateWorking.Position.Y,
@@ -259,63 +253,12 @@ func normalizeValidatedIntent(in survival.ActionIntent) survival.ActionIntent {
 	return normalizeIntent(out)
 }
 
-func supportedActionTypes() []survival.ActionType {
-	return []survival.ActionType{
-		survival.ActionGather,
-		survival.ActionRest,
-		survival.ActionSleep,
-		survival.ActionMove,
-		survival.ActionBuild,
-		survival.ActionFarmPlant,
-		survival.ActionFarmHarvest,
-		survival.ActionContainerDeposit,
-		survival.ActionContainerWithdraw,
-		survival.ActionRetreat,
-		survival.ActionCraft,
-		survival.ActionEat,
-		survival.ActionTerminate,
-	}
-}
-
-func isSupportedActionType(t survival.ActionType) bool {
-	for _, actionType := range supportedActionTypes() {
-		if t == actionType {
-			return true
-		}
-	}
-	return false
-}
-
 func hasValidActionParams(intent survival.ActionIntent) bool {
-	switch intent.Type {
-	case survival.ActionRest:
-		restMinutes := intent.RestMinutes
-		return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
-	case survival.ActionSleep:
-		return strings.TrimSpace(intent.BedID) != ""
-	case survival.ActionMove:
-		return intent.Pos != nil || intent.DX != 0 || intent.DY != 0
-	case survival.ActionGather:
-		return strings.TrimSpace(intent.TargetID) != ""
-	case survival.ActionBuild:
-		_, ok := buildKindFromObjectType(intent.ObjectType)
-		return ok && intent.Pos != nil
-	case survival.ActionFarmPlant:
-		return strings.TrimSpace(intent.FarmID) != ""
-	case survival.ActionFarmHarvest:
-		return strings.TrimSpace(intent.FarmID) != ""
-	case survival.ActionCraft:
-		return intent.RecipeID > 0
-	case survival.ActionEat:
-		_, ok := foodIDFromItemType(intent.ItemType)
-		return ok && intent.Count > 0
-	case survival.ActionContainerDeposit, survival.ActionContainerWithdraw:
-		return strings.TrimSpace(intent.ContainerID) != "" && hasValidItems(intent.Items)
-	case survival.ActionTerminate:
-		return true
-	default:
+	validator, ok := actionParamValidators()[intent.Type]
+	if !ok {
 		return true
 	}
+	return validator(intent)
 }
 
 func normalizeIntent(in survival.ActionIntent) survival.ActionIntent {

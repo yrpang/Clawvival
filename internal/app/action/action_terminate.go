@@ -1,8 +1,16 @@
 package action
 
-import "context"
+import (
+	"context"
+
+	"clawvival/internal/domain/survival"
+)
 
 type terminateActionHandler struct{ BaseHandler }
+
+func validateTerminateActionParams(survival.ActionIntent) bool {
+	return true
+}
 
 func (h terminateActionHandler) Precheck(context.Context, UseCase, *ActionContext) error {
 	return nil

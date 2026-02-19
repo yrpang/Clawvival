@@ -10,6 +10,10 @@ import (
 
 type retreatActionHandler struct{ BaseHandler }
 
+func validateRetreatActionParams(survival.ActionIntent) bool {
+	return true
+}
+
 func (h retreatActionHandler) Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
 	return runStandardActionPrecheck(ctx, uc, ac)
 }

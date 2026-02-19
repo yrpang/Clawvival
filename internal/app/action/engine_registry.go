@@ -32,15 +32,13 @@ type ActionSpec struct {
 }
 
 type ActionHandler interface {
-	BuildContext(ctx context.Context, uc UseCase, ac *ActionContext) error
 	Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error
 	ExecuteActionAndPlan(ctx context.Context, uc UseCase, ac *ActionContext) (ExecuteMode, error)
 }
 
 type BaseHandler struct{}
 
-func (BaseHandler) BuildContext(context.Context, UseCase, *ActionContext) error { return nil }
-func (BaseHandler) Precheck(context.Context, UseCase, *ActionContext) error     { return nil }
+func (BaseHandler) Precheck(context.Context, UseCase, *ActionContext) error { return nil }
 func (BaseHandler) ExecuteActionAndPlan(context.Context, UseCase, *ActionContext) (ExecuteMode, error) {
 	return ExecuteModeContinue, nil
 }
@@ -108,5 +106,50 @@ func actionRegistry() map[survival.ActionType]ActionSpec {
 		survival.ActionCraft:             {Type: survival.ActionCraft, Mode: ActionModeSettle, Handler: craftActionHandler{}},
 		survival.ActionEat:               {Type: survival.ActionEat, Mode: ActionModeSettle, Handler: eatActionHandler{}},
 		survival.ActionTerminate:         {Type: survival.ActionTerminate, Mode: ActionModeFinalizeOnly, Handler: terminateActionHandler{}},
+	}
+}
+
+func supportedActionTypes() []survival.ActionType {
+	return []survival.ActionType{
+		survival.ActionGather,
+		survival.ActionRest,
+		survival.ActionSleep,
+		survival.ActionMove,
+		survival.ActionBuild,
+		survival.ActionFarmPlant,
+		survival.ActionFarmHarvest,
+		survival.ActionContainerDeposit,
+		survival.ActionContainerWithdraw,
+		survival.ActionRetreat,
+		survival.ActionCraft,
+		survival.ActionEat,
+		survival.ActionTerminate,
+	}
+}
+
+func isSupportedActionType(t survival.ActionType) bool {
+	for _, actionType := range supportedActionTypes() {
+		if t == actionType {
+			return true
+		}
+	}
+	return false
+}
+
+func actionParamValidators() map[survival.ActionType]func(survival.ActionIntent) bool {
+	return map[survival.ActionType]func(survival.ActionIntent) bool{
+		survival.ActionGather:            validateGatherActionParams,
+		survival.ActionRest:              validateRestActionParams,
+		survival.ActionSleep:             validateSleepActionParams,
+		survival.ActionMove:              validateMoveActionParams,
+		survival.ActionBuild:             validateBuildActionParams,
+		survival.ActionFarmPlant:         validateFarmPlantActionParams,
+		survival.ActionFarmHarvest:       validateFarmHarvestActionParams,
+		survival.ActionContainerDeposit:  validateContainerActionParams,
+		survival.ActionContainerWithdraw: validateContainerActionParams,
+		survival.ActionRetreat:           validateRetreatActionParams,
+		survival.ActionCraft:             validateCraftActionParams,
+		survival.ActionEat:               validateEatActionParams,
+		survival.ActionTerminate:         validateTerminateActionParams,
 	}
 }

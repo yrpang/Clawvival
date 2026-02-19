@@ -10,6 +10,10 @@ import (
 
 type moveActionHandler struct{ BaseHandler }
 
+func validateMoveActionParams(intent survival.ActionIntent) bool {
+	return intent.Pos != nil || intent.DX != 0 || intent.DY != 0
+}
+
 func (h moveActionHandler) Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
 	return runStandardActionPrecheck(ctx, uc, ac)
 }

@@ -9,6 +9,11 @@ import (
 
 type restActionHandler struct{ BaseHandler }
 
+func validateRestActionParams(intent survival.ActionIntent) bool {
+	restMinutes := intent.RestMinutes
+	return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
+}
+
 func (h restActionHandler) Precheck(context.Context, UseCase, *ActionContext) error {
 	return nil
 }

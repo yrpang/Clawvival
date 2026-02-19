@@ -15,6 +15,10 @@ import (
 
 type gatherActionHandler struct{ BaseHandler }
 
+func validateGatherActionParams(intent survival.ActionIntent) bool {
+	return strings.TrimSpace(intent.TargetID) != ""
+}
+
 func (h gatherActionHandler) Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
 	if err := runStandardActionPrecheck(ctx, uc, ac); err != nil {
 		return err

@@ -17,6 +17,23 @@ type containerDepositActionHandler struct{ BaseHandler }
 type containerWithdrawActionHandler struct{ BaseHandler }
 type buildActionHandler struct{ BaseHandler }
 
+func validateBuildActionParams(intent survival.ActionIntent) bool {
+	_, ok := buildKindFromObjectType(intent.ObjectType)
+	return ok && intent.Pos != nil
+}
+
+func validateFarmPlantActionParams(intent survival.ActionIntent) bool {
+	return strings.TrimSpace(intent.FarmID) != ""
+}
+
+func validateFarmHarvestActionParams(intent survival.ActionIntent) bool {
+	return strings.TrimSpace(intent.FarmID) != ""
+}
+
+func validateContainerActionParams(intent survival.ActionIntent) bool {
+	return strings.TrimSpace(intent.ContainerID) != "" && hasValidItems(intent.Items)
+}
+
 func (h buildActionHandler) Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
 	if err := runStandardActionPrecheck(ctx, uc, ac); err != nil {
 		return err
