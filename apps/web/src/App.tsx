@@ -107,6 +107,21 @@ function formatRefreshTime(ms: number): string {
   return new Date(ms).toLocaleTimeString();
 }
 
+function utcOffsetLabel(): string {
+  const minutesWest = new Date().getTimezoneOffset();
+  const total = -minutesWest;
+  const sign = total >= 0 ? "+" : "-";
+  const abs = Math.abs(total);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `UTC${sign}${hh}:${mm}`;
+}
+
+function worldTimeDeltaLabel(before: number, after: number): string {
+  const delta = after - before;
+  return `${delta >= 0 ? "+" : ""}${delta}s`;
+}
+
 function App() {
   const urlAtInit = new URL(window.location.href);
   const [agentInput, setAgentInput] = useState(() => {
@@ -233,9 +248,12 @@ function App() {
     return map;
   }, [observe?.resources]);
   const objectMap = useMemo(() => {
-    const map = new Map<string, { type: string }>();
+    const map = new Map<string, Array<{ id: string; type: string }>>();
     for (const obj of observe?.objects ?? []) {
-      map.set(tileKey(obj.pos), { type: obj.type });
+      const key = tileKey(obj.pos);
+      const prev = map.get(key) ?? [];
+      prev.push({ id: obj.id, type: obj.type });
+      map.set(key, prev);
     }
     return map;
   }, [observe?.objects]);
@@ -257,12 +275,17 @@ function App() {
       : null;
   const selectedTile = effectiveSelectedTileId ? tileMap.get(effectiveSelectedTileId) : undefined;
   const selectedResource = selectedTile ? resourceMap.get(tileKey(selectedTile.pos)) : undefined;
-  const selectedObject = selectedTile ? objectMap.get(tileKey(selectedTile.pos)) : undefined;
+  const selectedObjects = selectedTile ? (objectMap.get(tileKey(selectedTile.pos)) ?? []) : [];
+  const tileDetailCorner =
+    selectedTile && observe
+      ? `${selectedTile.pos.y <= observe.view.center.y ? "bottom" : "top"}-${selectedTile.pos.x <= observe.view.center.x ? "right" : "left"}`
+      : "bottom-right";
   const lastRefreshMs = Math.max(
     statusQuery.dataUpdatedAt || 0,
     observeQuery.dataUpdatedAt || 0,
     replayQuery.dataUpdatedAt || 0,
   );
+  const tzLabel = utcOffsetLabel();
   const isRefreshing = statusQuery.isFetching || observeQuery.isFetching || replayQuery.isFetching;
 
   function refreshNow() {
@@ -323,6 +346,7 @@ function App() {
           <div>phase: {observe?.time_of_day ?? statusQuery.data?.time_of_day ?? "-"}</div>
           <div>next: {observe?.next_phase_in_seconds ?? statusQuery.data?.next_phase_in_seconds ?? "-"}s</div>
           <div>last refresh: {formatRefreshTime(lastRefreshMs)}</div>
+          <div>timezone: {tzLabel}</div>
         </div>
       </header>
 
@@ -394,68 +418,77 @@ function App() {
           {!observe && <p className="muted">等待地图数据...</p>}
           {observe && (
             <>
-              <div className="map-board">
-                <div className="map-row axis">
-                  <div className="coord corner" />
-                  {xRange.map((x) => (
-                    <div key={`x-${x}`} className="coord x">{x}</div>
+              <div className="map-stage">
+                <div className="map-board">
+                  <div className="map-row axis">
+                    <div className="coord corner" />
+                    {xRange.map((x) => (
+                      <div key={`x-${x}`} className="coord x">{x}</div>
+                    ))}
+                  </div>
+                  {yRange.map((y) => (
+                    <div key={`row-${y}`} className="map-row">
+                      <div className="coord y">{y}</div>
+                      {xRange.map((x) => {
+                        const key = `${x}:${y}`;
+                        const tile = tileMap.get(key);
+                        if (!tile) {
+                          return <div key={key} className="tile tile-empty" />;
+                        }
+                        const isAgent = tile.pos.x === observe.agent_state.position.x && tile.pos.y === observe.agent_state.position.y;
+                        const isBefore = highlight.before?.x === tile.pos.x && highlight.before?.y === tile.pos.y;
+                        const isAfter = highlight.after?.x === tile.pos.x && highlight.after?.y === tile.pos.y;
+                        const isSelected = effectiveSelectedTileId === key;
+                        const isVisible = tile.is_visible;
+                        const dist = manhattan(tile.pos, observe.agent_state.position);
+                        const isOperable = dist <= operableRadius;
+                        const resource = resourceMap.get(key);
+                        const objects = objectMap.get(key) ?? [];
+                        const object = objects[0];
+                        const objectTag = object ? `O:${object.type}${objects.length > 1 ? "..." : ""}` : null;
+                        const tileHighlight = isAfter ? "highlight-after" : isBefore ? "highlight-before" : "";
+                        return (
+                          <button
+                            key={key}
+                            className={`${tileClass(tile)} ${tileHighlight} ${isSelected ? "selected" : ""} ${isAgent ? "agent-tile" : ""} ${isVisible ? "in-visible" : "out-visible"} ${isOperable ? "in-operable" : ""}`.trim()}
+                            title={`${tile.terrain_type} (${tile.pos.x},${tile.pos.y})`}
+                            onClick={() => setSelectedTileId((prev) => (prev === key ? null : key))}
+                          >
+                            <div className="tile-main">
+                              {isAgent ? "A" : isBefore && hasMovement ? movementArrow : isAfter && hasMovement ? "●" : isAfter ? "+" : isBefore ? "-" : ""}
+                            </div>
+                            <div className="tile-tags">
+                              {resource && <span className="tag-resource">R:{resource.type}{resource.is_depleted ? "*" : ""}</span>}
+                              {objectTag && <span className="tag-object">{objectTag}</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   ))}
                 </div>
-                {yRange.map((y) => (
-                  <div key={`row-${y}`} className="map-row">
-                    <div className="coord y">{y}</div>
-                    {xRange.map((x) => {
-                      const key = `${x}:${y}`;
-                      const tile = tileMap.get(key);
-                      if (!tile) {
-                        return <div key={key} className="tile tile-empty" />;
-                      }
-                      const isAgent = tile.pos.x === observe.agent_state.position.x && tile.pos.y === observe.agent_state.position.y;
-                      const isBefore = highlight.before?.x === tile.pos.x && highlight.before?.y === tile.pos.y;
-                      const isAfter = highlight.after?.x === tile.pos.x && highlight.after?.y === tile.pos.y;
-                      const isSelected = effectiveSelectedTileId === key;
-                      const isVisible = tile.is_visible;
-                      const dist = manhattan(tile.pos, observe.agent_state.position);
-                      const isOperable = dist <= operableRadius;
-                      const resource = resourceMap.get(key);
-                      const object = objectMap.get(key);
-                      const tileHighlight = isAfter ? "highlight-after" : isBefore ? "highlight-before" : "";
-                      return (
-                        <button
-                          key={key}
-                          className={`${tileClass(tile)} ${tileHighlight} ${isSelected ? "selected" : ""} ${isAgent ? "agent-tile" : ""} ${isVisible ? "in-visible" : "out-visible"} ${isOperable ? "in-operable" : ""}`.trim()}
-                          title={`${tile.terrain_type} (${tile.pos.x},${tile.pos.y})`}
-                          onClick={() => setSelectedTileId((prev) => (prev === key ? null : key))}
-                        >
-                          <div className="tile-main">
-                            {isAgent ? "A" : isBefore && hasMovement ? movementArrow : isAfter && hasMovement ? "●" : isAfter ? "+" : isBefore ? "-" : ""}
-                          </div>
-                          <div className="tile-tags">
-                            {resource && <span className="tag-resource">R:{resource.type}{resource.is_depleted ? "*" : ""}</span>}
-                            {object && <span className="tag-object">O:{object.type}</span>}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-              {selectedTile && (
-                <section className="tile-detail">
+                <section className={`tile-detail tile-detail-overlay corner-${tileDetailCorner} ${selectedTile ? "is-open" : ""}`}>
                   <h3>Tile Detail</h3>
-                  <dl className="kv-list">
-                    <div><dt>Coord</dt><dd>({selectedTile.pos.x}, {selectedTile.pos.y})</dd></div>
-                    <div><dt>Distance</dt><dd>{distanceFromOrigin(selectedTile.pos)}</dd></div>
-                    <div><dt>Zone</dt><dd>{zoneByDistance(selectedTile.pos)}</dd></div>
-                    <div><dt>Terrain</dt><dd>{selectedTile.terrain_type}</dd></div>
-                    <div><dt>Walkable</dt><dd>{String(selectedTile.is_walkable)}</dd></div>
-                    <div><dt>Visible</dt><dd>{String(selectedTile.is_visible)}</dd></div>
-                    <div><dt>Lit</dt><dd>{String(selectedTile.is_lit)}</dd></div>
-                    <div><dt>Resource</dt><dd>{selectedResource ? `${selectedResource.type} (${selectedResource.is_depleted ? "depleted" : "ready"})` : "-"}</dd></div>
-                    <div><dt>Object</dt><dd>{selectedObject ? selectedObject.type : "-"}</dd></div>
-                  </dl>
+                  {selectedTile ? (
+                    <dl className="kv-list tile-kv-list">
+                      <div><dt>Coord</dt><dd>({selectedTile.pos.x}, {selectedTile.pos.y})</dd></div>
+                      <div><dt>Distance</dt><dd>{distanceFromOrigin(selectedTile.pos)}</dd></div>
+                      <div><dt>Zone</dt><dd>{zoneByDistance(selectedTile.pos)}</dd></div>
+                      <div><dt>Terrain</dt><dd>{selectedTile.terrain_type}</dd></div>
+                      <div><dt>Walkable</dt><dd>{String(selectedTile.is_walkable)}</dd></div>
+                      <div><dt>Visible</dt><dd>{String(selectedTile.is_visible)}</dd></div>
+                      <div><dt>Lit</dt><dd>{String(selectedTile.is_lit)}</dd></div>
+                      <div><dt>Resource</dt><dd>{selectedResource ? `${selectedResource.type} (${selectedResource.is_depleted ? "depleted" : "ready"})` : "-"}</dd></div>
+                      <div>
+                        <dt>Object</dt>
+                        <dd>{selectedObjects.length > 0 ? selectedObjects.map((obj) => obj.type).join(", ") : "-"}</dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <p className="muted">点击地图格子查看详情。</p>
+                  )}
                 </section>
-              )}
+              </div>
             </>
           )}
         </section>
@@ -504,80 +537,83 @@ function App() {
           {replayQuery.isError && <p className="error">{String(replayQuery.error)}</p>}
           {replayQuery.isFetchingNextPage && <p className="muted">加载更多历史中...</p>}
           {pageItems.length === 0 && <p className="muted">暂无 action_settled 记录。</p>}
-          <ul className="history-list">
-            {pageItems.map((item) => {
-              const delta = getVitalsDelta(item);
-              return (
-                <li key={item.id}>
-                  <button
-                    className={`history-row ${expandedId === item.id ? "active" : ""}`}
-                    onClick={() => setExpandedId((prev) => (prev === item.id ? null : item.id))}
-                  >
-                    <div>
-                      <strong>{item.action_type}</strong>
-                      <small>{prettyTime(item.occurred_at)}</small>
-                    </div>
-                    <div className="history-meta">
-                      <small className={`result-code result-${item.result_code.toLowerCase()}`}>{item.result_code}</small>
-                      <small>
-                        hp {signNum(delta.hp)} / hu {signNum(delta.hunger)} / en {signNum(delta.energy)}
-                      </small>
-                      <span>{item.world_time_before_seconds}s</span>
-                      <span>{" -> "}</span>
-                      <span>{item.world_time_after_seconds}s</span>
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <div className={`history-stage ${expandedItem ? "has-open-detail" : ""}`}>
+            <ul className="history-list">
+              {pageItems.map((item) => {
+                const delta = getVitalsDelta(item);
+                return (
+                  <li key={item.id}>
+                    <button
+                      className={`history-row ${expandedId === item.id ? "active" : ""}`}
+                      onClick={() => setExpandedId((prev) => (prev === item.id ? null : item.id))}
+                    >
+                      <div>
+                        <strong>{item.action_type}</strong>
+                        <small title={`${item.world_time_before_seconds}s -> ${item.world_time_after_seconds}s`}>
+                          {prettyTime(item.occurred_at)} ({worldTimeDeltaLabel(item.world_time_before_seconds, item.world_time_after_seconds)})
+                        </small>
+                      </div>
+                      <div className="history-meta">
+                        <small className={`result-code result-${item.result_code.toLowerCase()}`}>{item.result_code}</small>
+                        <small>
+                          hp {signNum(delta.hp)} / hu {signNum(delta.hunger)} / en {signNum(delta.energy)}
+                        </small>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
 
-          <div className="pager">
-            <button disabled={currentPage <= 1} onClick={() => { setPage((p) => p - 1); setExpandedId(null); }}>Prev</button>
-            <span>{currentPage} / {replayQuery.hasNextPage ? `${pageCount}+` : pageCount}</span>
-            <button
-              disabled={currentPage >= pageCount && !replayQuery.hasNextPage}
-              onClick={() => { setPage((p) => p + 1); setExpandedId(null); }}
-            >
-              Next
-            </button>
-          </div>
+            <div className="pager">
+              <button disabled={currentPage <= 1} onClick={() => { setPage((p) => p - 1); setExpandedId(null); }}>Prev</button>
+              <span>{currentPage} / {replayQuery.hasNextPage ? `${pageCount}+` : pageCount}</span>
+              <button
+                disabled={currentPage >= pageCount && !replayQuery.hasNextPage}
+                onClick={() => { setPage((p) => p + 1); setExpandedId(null); }}
+              >
+                Next
+              </button>
+            </div>
 
-          {expandedItem && (
-            <section className="history-detail">
-              <h3>Action Detail</h3>
-              <dl className="kv-list">
-                <div><dt>Type</dt><dd>{expandedItem.action_type}</dd></div>
-                <div><dt>Result</dt><dd>{expandedItem.result_code}</dd></div>
-                <div><dt>At</dt><dd>{prettyTime(expandedItem.occurred_at)}</dd></div>
-                <div><dt>World</dt><dd>{expandedItem.world_time_before_seconds}s{" -> "}{expandedItem.world_time_after_seconds}s</dd></div>
-              </dl>
-              <div className="detail-visuals">
-                <div className="metric-card">
-                  <span>HP</span>
-                  <strong>{signNum(getVitalsDelta(expandedItem).hp)}</strong>
-                </div>
-                <div className="metric-card">
-                  <span>Hunger</span>
-                  <strong>{signNum(getVitalsDelta(expandedItem).hunger)}</strong>
-                </div>
-                <div className="metric-card">
-                  <span>Energy</span>
-                  <strong>{signNum(getVitalsDelta(expandedItem).energy)}</strong>
-                </div>
-              </div>
-              <p className="detail-inline"><strong>Inventory:</strong> {inventoryDeltaSummary(expandedItem)}</p>
-              <details className="raw-details">
-                <summary>Raw Details</summary>
-                <h4>Result</h4>
-                <pre>{JSON.stringify(expandedItem.result, null, 2)}</pre>
-                <h4>Before</h4>
-                <pre>{JSON.stringify(expandedItem.state_before, null, 2)}</pre>
-                <h4>After</h4>
-                <pre>{JSON.stringify(expandedItem.state_after, null, 2)}</pre>
-              </details>
+            <section className={`history-detail history-detail-overlay ${expandedItem ? "is-open" : ""}`}>
+              {expandedItem && (
+                <>
+                  <h3>Action Detail</h3>
+                  <dl className="kv-list">
+                    <div><dt>Type</dt><dd>{expandedItem.action_type}</dd></div>
+                    <div><dt>Result</dt><dd>{expandedItem.result_code}</dd></div>
+                    <div><dt>At</dt><dd>{prettyTime(expandedItem.occurred_at)}</dd></div>
+                    <div><dt>World</dt><dd>{expandedItem.world_time_before_seconds}s{" -> "}{expandedItem.world_time_after_seconds}s</dd></div>
+                  </dl>
+                  <div className="detail-visuals">
+                    <div className="metric-card">
+                      <span>HP</span>
+                      <strong>{signNum(getVitalsDelta(expandedItem).hp)}</strong>
+                    </div>
+                    <div className="metric-card">
+                      <span>Hunger</span>
+                      <strong>{signNum(getVitalsDelta(expandedItem).hunger)}</strong>
+                    </div>
+                    <div className="metric-card">
+                      <span>Energy</span>
+                      <strong>{signNum(getVitalsDelta(expandedItem).energy)}</strong>
+                    </div>
+                  </div>
+                  <p className="detail-inline"><strong>Inventory:</strong> {inventoryDeltaSummary(expandedItem)}</p>
+                  <details className="raw-details">
+                    <summary>Raw Details</summary>
+                    <h4>Result</h4>
+                    <pre>{JSON.stringify(expandedItem.result, null, 2)}</pre>
+                    <h4>Before</h4>
+                    <pre>{JSON.stringify(expandedItem.state_before, null, 2)}</pre>
+                    <h4>After</h4>
+                    <pre>{JSON.stringify(expandedItem.state_after, null, 2)}</pre>
+                  </details>
+                </>
+              )}
             </section>
-          )}
+          </div>
         </aside>
       </section>
     </main>
