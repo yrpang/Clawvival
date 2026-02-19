@@ -102,7 +102,31 @@ func defaultRules() Rules {
 			SeedDropChance:   survival.SeedDropChance,
 			SeedPityMaxFails: survival.SeedPityMaxFails,
 		},
+		ProductionRecipes: toProductionRecipes(survival.ProductionRecipeRules()),
 	}
+}
+
+func toProductionRecipes(in []survival.ProductionRecipeRule) []ProductionRecipe {
+	out := make([]ProductionRecipe, 0, len(in))
+	for _, recipe := range in {
+		out = append(out, ProductionRecipe{
+			RecipeID: recipe.RecipeID,
+			In:       cloneIntMap(recipe.In),
+			Out:      cloneIntMap(recipe.Out),
+		})
+	}
+	return out
+}
+
+func cloneIntMap(in map[string]int) map[string]int {
+	if len(in) == 0 {
+		return map[string]int{}
+	}
+	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 func defaultActionCosts() map[string]ActionCost {
