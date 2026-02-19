@@ -2,13 +2,79 @@ package action
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"time"
 
 	"clawvival/internal/app/cooldown"
 	"clawvival/internal/app/ports"
 	"clawvival/internal/app/stateview"
 	"clawvival/internal/domain/survival"
 )
+
+func runStandardActionPrecheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
+	if uc.SessionRepo != nil {
+		if err := uc.SessionRepo.EnsureActive(ctx, ac.In.SessionID, ac.In.AgentID, ac.View.StateWorking.Version); err != nil {
+			return err
+		}
+	}
+	intent := ac.Tmp.ResolvedIntent
+	if err := ensureCooldownReady(ac.View.EventsBefore, intent.Type, ac.In.NowAt); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensureCooldownReady(events []survival.DomainEvent, intentType survival.ActionType, now time.Time) error {
+	remaining, ok := cooldown.RemainingForAction(events, intentType, now)
+	if !ok {
+		return nil
+	}
+	return &ActionCooldownActiveError{
+		IntentType:       intentType,
+		RemainingSeconds: remaining,
+	}
+}
+
+func resolveHeartbeatDeltaMinutes(ctx context.Context, repo ports.EventRepository, agentID string, now time.Time) (int, error) {
+	if repo == nil {
+		return defaultHeartbeatDeltaMinutes, nil
+	}
+	events, err := repo.ListByAgentID(ctx, agentID, 50)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			return defaultHeartbeatDeltaMinutes, nil
+		}
+		return 0, err
+	}
+	lastAt := time.Time{}
+	for _, evt := range events {
+		if evt.Type != "action_settled" {
+			continue
+		}
+		if evt.OccurredAt.After(lastAt) {
+			lastAt = evt.OccurredAt
+		}
+	}
+	if lastAt.IsZero() {
+		return defaultHeartbeatDeltaMinutes, nil
+	}
+	delta := int(now.Sub(lastAt).Minutes())
+	if delta < minHeartbeatDeltaMinutes {
+		return minHeartbeatDeltaMinutes, nil
+	}
+	if delta > maxHeartbeatDeltaMinutes {
+		return maxHeartbeatDeltaMinutes, nil
+	}
+	return delta, nil
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
 
 type settleOptions struct {
 	filterGatherNearby bool

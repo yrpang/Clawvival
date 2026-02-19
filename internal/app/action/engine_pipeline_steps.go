@@ -258,3 +258,81 @@ func normalizeValidatedIntent(in survival.ActionIntent) survival.ActionIntent {
 	out.Type = survival.ActionType(strings.TrimSpace(string(out.Type)))
 	return normalizeIntent(out)
 }
+
+func supportedActionTypes() []survival.ActionType {
+	return []survival.ActionType{
+		survival.ActionGather,
+		survival.ActionRest,
+		survival.ActionSleep,
+		survival.ActionMove,
+		survival.ActionBuild,
+		survival.ActionFarmPlant,
+		survival.ActionFarmHarvest,
+		survival.ActionContainerDeposit,
+		survival.ActionContainerWithdraw,
+		survival.ActionRetreat,
+		survival.ActionCraft,
+		survival.ActionEat,
+		survival.ActionTerminate,
+	}
+}
+
+func isSupportedActionType(t survival.ActionType) bool {
+	for _, actionType := range supportedActionTypes() {
+		if t == actionType {
+			return true
+		}
+	}
+	return false
+}
+
+func hasValidActionParams(intent survival.ActionIntent) bool {
+	switch intent.Type {
+	case survival.ActionRest:
+		restMinutes := intent.RestMinutes
+		return restMinutes >= minRestMinutes && restMinutes <= maxRestMinutes
+	case survival.ActionSleep:
+		return strings.TrimSpace(intent.BedID) != ""
+	case survival.ActionMove:
+		return intent.Pos != nil || intent.DX != 0 || intent.DY != 0
+	case survival.ActionGather:
+		return strings.TrimSpace(intent.TargetID) != ""
+	case survival.ActionBuild:
+		_, ok := buildKindFromObjectType(intent.ObjectType)
+		return ok && intent.Pos != nil
+	case survival.ActionFarmPlant:
+		return strings.TrimSpace(intent.FarmID) != ""
+	case survival.ActionFarmHarvest:
+		return strings.TrimSpace(intent.FarmID) != ""
+	case survival.ActionCraft:
+		return intent.RecipeID > 0
+	case survival.ActionEat:
+		_, ok := foodIDFromItemType(intent.ItemType)
+		return ok && intent.Count > 0
+	case survival.ActionContainerDeposit, survival.ActionContainerWithdraw:
+		return strings.TrimSpace(intent.ContainerID) != "" && hasValidItems(intent.Items)
+	case survival.ActionTerminate:
+		return true
+	default:
+		return true
+	}
+}
+
+func normalizeIntent(in survival.ActionIntent) survival.ActionIntent {
+	out := in
+	out.Direction = strings.ToUpper(strings.TrimSpace(out.Direction))
+	switch out.Direction {
+	case "N":
+		out.DX, out.DY = 0, 1
+	case "S":
+		out.DX, out.DY = 0, -1
+	case "E":
+		out.DX, out.DY = 1, 0
+	case "W":
+		out.DX, out.DY = -1, 0
+	}
+	if out.Count <= 0 {
+		out.Count = 1
+	}
+	return out
+}

@@ -11,11 +11,11 @@ import (
 	"clawvival/internal/domain/survival"
 )
 
-type buildActionHandler struct{ BaseHandler }
 type farmPlantActionHandler struct{ BaseHandler }
 type farmHarvestActionHandler struct{ BaseHandler }
 type containerDepositActionHandler struct{ BaseHandler }
 type containerWithdrawActionHandler struct{ BaseHandler }
+type buildActionHandler struct{ BaseHandler }
 
 func (h buildActionHandler) Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
 	if err := runStandardActionPrecheck(ctx, uc, ac); err != nil {
