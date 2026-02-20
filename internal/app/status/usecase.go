@@ -111,9 +111,10 @@ func toProductionRecipes(in []survival.ProductionRecipeRule) []ProductionRecipe 
 	out := make([]ProductionRecipe, 0, len(in))
 	for _, recipe := range in {
 		out = append(out, ProductionRecipe{
-			RecipeID: recipe.RecipeID,
-			In:       cloneIntMap(recipe.In),
-			Out:      cloneIntMap(recipe.Out),
+			RecipeID:     recipe.RecipeID,
+			In:           cloneIntMap(recipe.In),
+			Out:          cloneIntMap(recipe.Out),
+			Requirements: append([]string(nil), recipe.Requirements...),
 		})
 	}
 	return out

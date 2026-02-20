@@ -383,6 +383,12 @@ func buildKindFromObjectType(objectType string) (survival.BuildKind, bool) {
 		return survival.BuildFarm, true
 	case "torch":
 		return survival.BuildTorch, true
+	case "wall":
+		return survival.BuildWall, true
+	case "door":
+		return survival.BuildDoor, true
+	case "furnace":
+		return survival.BuildFurnace, true
 	default:
 		return 0, false
 	}

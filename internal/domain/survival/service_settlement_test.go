@@ -50,7 +50,7 @@ func TestSettlementService_CriticalHP(t *testing.T) {
 	svc := SettlementService{}
 	state := AgentStateAggregate{
 		AgentID: "a-1",
-		Vitals:  Vitals{HP: 25, Hunger: -100, Energy: 0},
+		Vitals:  Vitals{HP: 18, Hunger: -100, Energy: 0},
 		Version: 1,
 	}
 
@@ -61,8 +61,8 @@ func TestSettlementService_CriticalHP(t *testing.T) {
 	if out.ResultCode != ResultOK {
 		t.Fatalf("expected result ok, got %s", out.ResultCode)
 	}
-	if out.UpdatedState.Vitals.HP > 20 || out.UpdatedState.Vitals.HP <= 0 {
-		t.Fatalf("expected hp in critical range (1-20), got %d", out.UpdatedState.Vitals.HP)
+	if out.UpdatedState.Vitals.HP > CriticalHPThreshold || out.UpdatedState.Vitals.HP <= 0 {
+		t.Fatalf("expected hp in critical range (1-%d), got %d", CriticalHPThreshold, out.UpdatedState.Vitals.HP)
 	}
 
 	foundCritical := false
@@ -81,7 +81,7 @@ func TestSettlementService_CriticalHPAutoRetreatsTowardHome(t *testing.T) {
 	svc := SettlementService{}
 	state := AgentStateAggregate{
 		AgentID:  "a-1",
-		Vitals:   Vitals{HP: 22, Hunger: -120, Energy: 10},
+		Vitals:   Vitals{HP: 19, Hunger: -120, Energy: 10},
 		Position: Position{X: 5, Y: 5},
 		Home:     Position{X: 0, Y: 0},
 		Version:  1,
@@ -94,7 +94,7 @@ func TestSettlementService_CriticalHPAutoRetreatsTowardHome(t *testing.T) {
 	if out.ResultCode != ResultOK {
 		t.Fatalf("expected result ok, got %s", out.ResultCode)
 	}
-	if out.UpdatedState.Vitals.HP <= 0 || out.UpdatedState.Vitals.HP > 20 {
+	if out.UpdatedState.Vitals.HP <= 0 || out.UpdatedState.Vitals.HP > CriticalHPThreshold {
 		t.Fatalf("expected critical hp range, got %d", out.UpdatedState.Vitals.HP)
 	}
 	if out.UpdatedState.Position.X != 4 || out.UpdatedState.Position.Y != 4 {
@@ -119,7 +119,7 @@ func TestSettlementService_NoCriticalEventsAboveCriticalThreshold(t *testing.T) 
 	if out.ResultCode != ResultOK {
 		t.Fatalf("expected result ok, got %s", out.ResultCode)
 	}
-	if got, want := out.UpdatedState.Vitals.HP, 19; got != want {
+	if got, want := out.UpdatedState.Vitals.HP, 24; got != want {
 		t.Fatalf("expected hp=%d, got %d", want, got)
 	}
 	for _, evt := range out.Events {
@@ -231,10 +231,10 @@ func TestSettlementService_TwoSleepTicksReachTargetRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second sleep settle error: %v", err)
 	}
-	if got, want := second.UpdatedState.Vitals.Hunger, 60; got != want {
+	if got, want := second.UpdatedState.Vitals.Hunger, 50; got != want {
 		t.Fatalf("expected hunger=%d after two sleep ticks, got=%d", want, got)
 	}
-	if got, want := second.UpdatedState.Vitals.Energy, 80; got != want {
+	if got, want := second.UpdatedState.Vitals.Energy, 90; got != want {
 		t.Fatalf("expected energy=%d after two sleep ticks, got=%d", want, got)
 	}
 }
@@ -254,7 +254,7 @@ func TestSettlementService_RestRecoversHungerSlightly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("settle error: %v", err)
 	}
-	if got, want := out.UpdatedState.Vitals.Hunger, 90; got != want {
+	if got, want := out.UpdatedState.Vitals.Hunger, 83; got != want {
 		t.Fatalf("expected rest hunger=%d, got=%d", want, got)
 	}
 }
@@ -279,7 +279,7 @@ func TestSettlementService_SleepGoodBedAppliesQualityMultiplier(t *testing.T) {
 	if got, want := out.UpdatedState.Vitals.Energy, 55; got != want {
 		t.Fatalf("expected good bed energy=%d, got=%d", want, got)
 	}
-	if got, want := out.UpdatedState.Vitals.HP, 52; got != want {
+	if got, want := out.UpdatedState.Vitals.HP, 50; got != want {
 		t.Fatalf("expected good bed hp=%d, got=%d", want, got)
 	}
 	if got, want := out.UpdatedState.Vitals.Hunger, 90; got != want {
@@ -378,7 +378,7 @@ func TestSettlementService_ActionSettledIncludesVitalsChangeReasons(t *testing.T
 	svc := SettlementService{}
 	state := AgentStateAggregate{
 		AgentID: "a-1",
-		Vitals:  Vitals{HP: 50, Hunger: 0, Energy: 0},
+		Vitals:  Vitals{HP: 50, Hunger: -100, Energy: 0},
 		Version: 1,
 	}
 	out, err := svc.Settle(state, ActionIntent{
@@ -405,8 +405,11 @@ func TestSettlementService_ActionSettledIncludesVitalsChangeReasons(t *testing.T
 	if !ok {
 		t.Fatalf("expected vitals_delta map[string]int, got=%T", result["vitals_delta"])
 	}
-	if vitalsDelta["hp"] >= 0 || vitalsDelta["hunger"] >= 0 || vitalsDelta["energy"] >= 0 {
-		t.Fatalf("expected all vitals to decrease, got=%v", vitalsDelta)
+	if vitalsDelta["hunger"] >= 0 || vitalsDelta["energy"] >= 0 {
+		t.Fatalf("expected hunger/energy to decrease, got=%v", vitalsDelta)
+	}
+	if vitalsDelta["hp"] > 0 {
+		t.Fatalf("expected hp to be non-increasing, got=%v", vitalsDelta)
 	}
 	reasonsByVital, ok := result["vitals_change_reasons"].(map[string]any)
 	if !ok {

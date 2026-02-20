@@ -28,7 +28,7 @@ import (
 func main() {
 	stateRepo, credRepo, actionRepo, eventRepo, worldObjectRepo, resourceNodeRepo, sessionRepo, txManager := mustBuildRepos()
 	worldProvider := buildWorldProviderFromEnv()
-	skillsProvider := staticskills.Provider{Root: "./skills"}
+	skillsProvider := staticskills.Provider{Root: resolveSkillsRoot()}
 	kpiRecorder := metricsinmem.NewRecorder()
 
 	h := httpadapter.Handler{
@@ -64,6 +64,16 @@ func main() {
 
 	log.Println("clawvival server listening on :8080")
 	s.Spin()
+}
+
+func resolveSkillsRoot() string {
+	if root := strings.TrimSpace(os.Getenv("SKILLS_ROOT")); root != "" {
+		return root
+	}
+	if _, err := os.Stat("./skills/index.json"); err == nil {
+		return "./skills"
+	}
+	return "./apps/web/public/skills"
 }
 
 func mustBuildRepos() (ports.AgentStateRepository, ports.AgentCredentialRepository, ports.ActionExecutionRepository, ports.EventRepository, ports.WorldObjectRepository, ports.AgentResourceNodeRepository, ports.AgentSessionRepository, ports.TxManager) {

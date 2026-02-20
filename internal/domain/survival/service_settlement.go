@@ -35,10 +35,10 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionRestDeltaHunger, deltaMinutes), "ACTION_REST_RECOVERY", &hungerReasons)
 		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionRestDeltaEnergy, deltaMinutes), "ACTION_REST_RECOVERY", &energyReasons)
 	case ActionSleep:
-		multiplier := sleepQualityMultiplier(intent.BedQuality)
-		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionSleepDeltaHunger, deltaMinutes), "ACTION_SLEEP_RECOVERY", &hungerReasons)
-		applyReasonedDelta(&next.Vitals.Energy, int(math.Round(scaledFloat(float64(SleepBaseEnergyRecovery)*multiplier, deltaMinutes))), "ACTION_SLEEP_RECOVERY", &energyReasons)
-		applyReasonedHPDelta(&next.Vitals.HP, int(math.Round(scaledFloat(float64(SleepBaseHPRecovery)*multiplier, deltaMinutes))), "ACTION_SLEEP_RECOVERY", &hpReasons)
+		sleepHunger, sleepEnergy, sleepHP := sleepRecoveryByQuality(intent.BedQuality)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(sleepHunger, deltaMinutes), "ACTION_SLEEP_RECOVERY", &hungerReasons)
+		applyReasonedDelta(&next.Vitals.Energy, scaledInt(sleepEnergy, deltaMinutes), "ACTION_SLEEP_RECOVERY", &energyReasons)
+		applyReasonedHPDelta(&next.Vitals.HP, scaledInt(sleepHP, deltaMinutes), "ACTION_SLEEP_RECOVERY", &hpReasons)
 	case ActionMove:
 		moveEnergyCost := scaledInt(-ActionMoveDeltaEnergy, deltaMinutes)
 		if moveEnergyCost < 1 {
@@ -50,6 +50,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		next.Position.Y += intent.DY
 	case ActionBuild:
 		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionBuildDeltaEnergy, deltaMinutes), "ACTION_BUILD_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionBuildDeltaHunger, deltaMinutes), "ACTION_BUILD_COST", &hungerReasons)
 		if _, ok := buildKindFromIntent(intent.ObjectType); !ok {
 			break
 		}
@@ -76,6 +77,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		_, _ = PlantSeed(&next)
 	case ActionFarmHarvest:
 		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionFarmHarvestDeltaEnergy, deltaMinutes), "ACTION_FARM_HARVEST_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionFarmHarvestDeltaHunger, deltaMinutes), "ACTION_FARM_HARVEST_COST", &hungerReasons)
 		next.AddItem("wheat", 2)
 		if shouldReturnHarvestSeed(now) {
 			next.AddItem("seed", 1)
@@ -91,6 +93,7 @@ func (SettlementService) Settle(state AgentStateAggregate, intent ActionIntent, 
 		}
 	case ActionCraft:
 		applyReasonedDelta(&next.Vitals.Energy, scaledInt(ActionCraftDeltaEnergy, deltaMinutes), "ACTION_CRAFT_COST", &energyReasons)
+		applyReasonedDelta(&next.Vitals.Hunger, scaledInt(ActionCraftDeltaHunger, deltaMinutes), "ACTION_CRAFT_COST", &hungerReasons)
 		_ = Craft(&next, RecipeID(intent.RecipeID))
 	case ActionEat:
 		beforeHunger := next.Vitals.Hunger
@@ -224,6 +227,12 @@ func buildKindFromIntent(objectType string) (BuildKind, bool) {
 		return BuildFarm, true
 	case "torch":
 		return BuildTorch, true
+	case "wall":
+		return BuildWall, true
+	case "door":
+		return BuildDoor, true
+	case "furnace":
+		return BuildFurnace, true
 	default:
 		return 0, false
 	}
@@ -237,6 +246,8 @@ func foodIDFromIntent(itemType string) FoodID {
 		return FoodBread
 	case "wheat":
 		return FoodWheat
+	case "jam":
+		return FoodJam
 	default:
 		return FoodBerry
 	}
@@ -356,12 +367,12 @@ func deriveDeathCause(state AgentStateAggregate, intent ActionIntent) DeathCause
 	}
 }
 
-func sleepQualityMultiplier(quality string) float64 {
+func sleepRecoveryByQuality(quality string) (hunger, energy, hp int) {
 	switch strings.ToUpper(strings.TrimSpace(quality)) {
 	case "GOOD":
-		return 1.5
+		return SleepGoodHungerRecovery, SleepGoodEnergyRecovery, SleepGoodHPRecovery
 	default:
-		return 1.0
+		return ActionSleepDeltaHunger, SleepBaseEnergyRecovery, SleepBaseHPRecovery
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"clawvival/internal/app/ports"
 	"clawvival/internal/domain/survival"
 )
 
@@ -22,6 +23,10 @@ func validateEatActionParams(intent survival.ActionIntent) bool {
 func (h craftActionHandler) Precheck(ctx context.Context, uc UseCase, ac *ActionContext) error {
 	if err := runStandardActionPrecheck(ctx, uc, ac); err != nil {
 		return err
+	}
+	if needsFurnace(survival.RecipeID(ac.Tmp.ResolvedIntent.RecipeID)) &&
+		!hasUsableFurnace(ctx, uc.ObjectRepo, ac.In.AgentID) {
+		return ErrActionPreconditionFailed
 	}
 	if !survival.CanCraft(ac.View.StateWorking, survival.RecipeID(ac.Tmp.ResolvedIntent.RecipeID)) {
 		return ErrActionPreconditionFailed
@@ -70,7 +75,35 @@ func foodIDFromItemType(itemType string) (survival.FoodID, bool) {
 		return survival.FoodBread, true
 	case "wheat":
 		return survival.FoodWheat, true
+	case "jam":
+		return survival.FoodJam, true
 	default:
 		return 0, false
 	}
+}
+
+func needsFurnace(recipeID survival.RecipeID) bool {
+	for _, requirement := range survival.CraftRequirements(recipeID) {
+		if strings.EqualFold(strings.TrimSpace(requirement), "FURNACE") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasUsableFurnace(ctx context.Context, repo ports.WorldObjectRepository, agentID string) bool {
+	if repo == nil || strings.TrimSpace(agentID) == "" {
+		return false
+	}
+	objects, err := repo.ListByAgentID(ctx, agentID)
+	if err != nil {
+		return false
+	}
+	for _, object := range objects {
+		if strings.EqualFold(strings.TrimSpace(object.ObjectType), "furnace") ||
+			object.Kind == int(survival.BuildFurnace) {
+			return true
+		}
+	}
+	return false
 }

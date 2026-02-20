@@ -16,6 +16,18 @@ Use these rules as deterministic policy defaults.
   - ongoing action early/finish settlement uses elapsed-time proportion.
   - `observe` may trigger pre-settlement (due ongoing first; otherwise only full elapsed idle ticks since `agent_state.updated_at`).
 
+## World and Map Generation
+
+- Resource generation is deterministic by zone and tile seed.
+- Zone bands are determined by Manhattan distance `d=|x|+|y|`:
+  - `safe` (`d <= 6`): no wood/stone nodes.
+  - `forest` (`7 <= d <= 20`): tree nodes can spawn `wood`.
+  - `quarry` (`21 <= d <= 35`): rock nodes can spawn `stone`.
+  - `wild` (`d > 35`): mixed harsh terrain; can spawn `wood` and `berry`.
+- Runtime target selection rule:
+  - gather targets should come from current top-level `resources[]`.
+  - `snapshot.nearby_resource` is summary only, not a direct target list.
+
 ## Survival Rules
 
 - Hard fail: `hp <= 0`.
@@ -33,10 +45,18 @@ MVP target in one session:
 
 ## Build and Farm Defaults
 
-- `bed_rough`: wood x8
-- `bed_good`: wood x6 + berry x2
-- `box`: wood x4
-- `farm_plot`: wood x2 + stone x2
+- build is enabled via `action.intent.type=build` with required `object_type` + `pos`.
+- runtime build costs are exposed by API (`world.rules.build_costs`) and should be read dynamically.
+- current baseline defaults:
+  - `bed`: wood x8
+  - `bed_rough`: wood x8
+  - `bed_good`: plank x4 + wood x2
+  - `box`: wood x4
+  - `farm_plot`: wood x2 + stone x2
+  - `torch`: wood x1
+  - `wall`: stone x3
+  - `door`: wood x2
+  - `furnace`: stone x6
 
 Farm cycle:
 - `farm_plant` consumes seed and enters growing state

@@ -84,7 +84,7 @@ func TestEatAndCanEat(t *testing.T) {
 	if got, want := state.Inventory["berry"], 0; got != want {
 		t.Fatalf("berry consume mismatch: got=%d want=%d", got, want)
 	}
-	if got, want := state.Vitals.Hunger, 82; got != want {
+	if got, want := state.Vitals.Hunger, 90; got != want {
 		t.Fatalf("hunger recover mismatch: got=%d want=%d", got, want)
 	}
 
@@ -95,7 +95,7 @@ func TestEatAndCanEat(t *testing.T) {
 		t.Fatalf("bread consume mismatch: got=%d want=%d", got, want)
 	}
 	if got, want := state.Vitals.Hunger, 100; got != want {
-		t.Fatalf("hunger should cap at 100: got=%d want=%d", got, want)
+		t.Fatalf("hunger recover mismatch after bread: got=%d want=%d", got, want)
 	}
 }
 
@@ -117,6 +117,27 @@ func TestEatAndCanEat_Wheat(t *testing.T) {
 	}
 	if got := state.Vitals.Hunger; got <= 30 {
 		t.Fatalf("expected hunger increase after wheat, got=%d", got)
+	}
+}
+
+func TestEatAndCanEat_Jam(t *testing.T) {
+	state := AgentStateAggregate{
+		Vitals: Vitals{Hunger: 30},
+		Inventory: map[string]int{
+			"jam": 1,
+		},
+	}
+	if !CanEat(state, FoodJam) {
+		t.Fatalf("expected CanEat jam true")
+	}
+	if ok := Eat(&state, FoodJam); !ok {
+		t.Fatalf("expected Eat jam success")
+	}
+	if got, want := state.Inventory["jam"], 0; got != want {
+		t.Fatalf("jam consume mismatch: got=%d want=%d", got, want)
+	}
+	if got, want := state.Vitals.Hunger, 100; got != want {
+		t.Fatalf("expected jam hunger=%d, got=%d", want, got)
 	}
 }
 
@@ -149,14 +170,20 @@ func TestBuildCosts_MVPv1MinimumSet(t *testing.T) {
 
 func TestProductionRecipeRules_ExposeStableCatalog(t *testing.T) {
 	rules := ProductionRecipeRules()
-	if len(rules) < 2 {
-		t.Fatalf("expected at least 2 production recipes, got=%d", len(rules))
+	if len(rules) < 4 {
+		t.Fatalf("expected at least 4 production recipes, got=%d", len(rules))
 	}
 	if got := rules[0]; got.RecipeID != int(RecipePlank) || got.In["wood"] != 2 || got.Out["plank"] != 1 {
 		t.Fatalf("unexpected first production recipe: %+v", got)
 	}
 	if got := rules[1]; got.RecipeID != int(RecipeBread) || got.In["wheat"] != 2 || got.Out["bread"] != 1 {
 		t.Fatalf("unexpected second production recipe: %+v", got)
+	}
+	if got := rules[2]; got.RecipeID != int(RecipeBrick) || got.In["stone"] != 2 || got.Out["brick"] != 1 || len(got.Requirements) != 1 || got.Requirements[0] != "FURNACE" {
+		t.Fatalf("unexpected third production recipe: %+v", got)
+	}
+	if got := rules[3]; got.RecipeID != int(RecipeJam) || got.In["berry"] != 2 || got.In["bread"] != 1 || got.Out["jam"] != 1 || len(got.Requirements) != 1 || got.Requirements[0] != "FURNACE" {
+		t.Fatalf("unexpected fourth production recipe: %+v", got)
 	}
 }
 
@@ -196,6 +223,9 @@ func TestBuildCostRules_CoversAllRuntimeBuildDefs(t *testing.T) {
 		if !sameRecipeMap(cost, def.Cost) {
 			t.Fatalf("object_type=%s build cost mismatch: got=%v want=%v", objectType, cost, def.Cost)
 		}
+	}
+	if got := rules["bed_good"]; got["plank"] != 4 || got["wood"] != 2 {
+		t.Fatalf("expected bed_good cost uses plank+wood, got=%v", got)
 	}
 }
 

@@ -5,11 +5,11 @@ import "time"
 const (
 	StandardTickMinutes = 30
 
-	BaseHungerDrainPer30 = 4
-	HPDrainCapPer30      = 12
+	BaseHungerDrainPer30 = 0
+	HPDrainCapPer30      = 8
 
-	HPDrainFromHungerCoeff = 0.08
-	HPDrainFromEnergyCoeff = 0.05
+	HPDrainFromHungerCoeff = 0.04
+	HPDrainFromEnergyCoeff = 0.03
 
 	MinRestMinutes = 1
 	MaxRestMinutes = 120
@@ -21,8 +21,11 @@ const (
 
 	DefaultInventoryCapacity = 30
 
-	SleepBaseEnergyRecovery = 30
-	SleepBaseHPRecovery     = 8
+	SleepBaseEnergyRecovery = 35
+	SleepBaseHPRecovery     = 6
+	SleepGoodHungerRecovery = 20
+	SleepGoodEnergyRecovery = 45
+	SleepGoodHPRecovery     = 10
 
 	CriticalHPThreshold = 15
 	LowEnergyThreshold  = 20
@@ -38,40 +41,45 @@ const (
 	TorchLightRadius  = 3
 
 	ActionMoveDeltaHunger = -1
-	ActionMoveDeltaEnergy = -6
+	ActionMoveDeltaEnergy = -2
 
-	ActionGatherDeltaHunger = -3
-	ActionGatherDeltaEnergy = -18
+	ActionGatherDeltaHunger = -2
+	ActionGatherDeltaEnergy = -6
 
-	ActionCraftDeltaHunger = 0
-	ActionCraftDeltaEnergy = -12
+	ActionCraftDeltaHunger = -1
+	ActionCraftDeltaEnergy = -4
 
-	ActionBuildDeltaHunger = 0
-	ActionBuildDeltaEnergy = -14
+	ActionBuildDeltaHunger = -1
+	ActionBuildDeltaEnergy = -6
 
-	ActionEatDeltaHunger = 12
+	ActionEatDeltaHunger = 10
 	ActionEatDeltaEnergy = 0
 
-	ActionRestDeltaHunger = 14
-	ActionRestDeltaEnergy = 18
+	FoodBerryHungerRecovery = 20
+	FoodBreadHungerRecovery = 30
+	FoodWheatHungerRecovery = 15
+	FoodJamHungerRecovery   = 80
 
-	ActionSleepDeltaHunger = 24
+	ActionRestDeltaHunger = 3
+	ActionRestDeltaEnergy = 20
+
+	ActionSleepDeltaHunger = 15
 	ActionSleepDeltaEnergy = SleepBaseEnergyRecovery
 
 	ActionFarmPlantDeltaHunger = -1
-	ActionFarmPlantDeltaEnergy = -10
+	ActionFarmPlantDeltaEnergy = -4
 
-	ActionFarmHarvestDeltaHunger = 0
-	ActionFarmHarvestDeltaEnergy = -8
+	ActionFarmHarvestDeltaHunger = -1
+	ActionFarmHarvestDeltaEnergy = -4
 
 	ActionContainerDepositDeltaHunger = 0
-	ActionContainerDepositDeltaEnergy = -4
+	ActionContainerDepositDeltaEnergy = 0
 
 	ActionContainerWithdrawDeltaHunger = 0
-	ActionContainerWithdrawDeltaEnergy = -4
+	ActionContainerWithdrawDeltaEnergy = 0
 
 	ActionRetreatDeltaHunger = 0
-	ActionRetreatDeltaEnergy = -8
+	ActionRetreatDeltaEnergy = -2
 
 	ActionTerminateDeltaHunger = 0
 	ActionTerminateDeltaEnergy = 0

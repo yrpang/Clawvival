@@ -7,6 +7,8 @@ type RecipeID int
 const (
 	RecipePlank RecipeID = 1
 	RecipeBread RecipeID = 2
+	RecipeBrick RecipeID = 3
+	RecipeJam   RecipeID = 4
 )
 
 type BuildKind int
@@ -32,12 +34,16 @@ const (
 	FoodBerry FoodID = 1
 	FoodBread FoodID = 2
 	FoodWheat FoodID = 3
+	FoodJam   FoodID = 4
 )
 
-var recipeDefs = map[RecipeID]struct {
-	In  map[string]int
-	Out map[string]int
-}{
+type recipeDef struct {
+	In           map[string]int
+	Out          map[string]int
+	Requirements []string
+}
+
+var recipeDefs = map[RecipeID]recipeDef{
 	RecipePlank: {
 		In:  map[string]int{"wood": 2},
 		Out: map[string]int{"plank": 1},
@@ -45,6 +51,16 @@ var recipeDefs = map[RecipeID]struct {
 	RecipeBread: {
 		In:  map[string]int{"wheat": 2},
 		Out: map[string]int{"bread": 1},
+	},
+	RecipeBrick: {
+		In:           map[string]int{"stone": 2},
+		Out:          map[string]int{"brick": 1},
+		Requirements: []string{"FURNACE"},
+	},
+	RecipeJam: {
+		In:           map[string]int{"berry": 2, "bread": 1},
+		Out:          map[string]int{"jam": 1},
+		Requirements: []string{"FURNACE"},
 	},
 }
 
@@ -64,7 +80,7 @@ var buildDefsByObjectType = map[string]struct {
 }{
 	"bed":       {Kind: BuildBed, Cost: map[string]int{"wood": 8}},
 	"bed_rough": {Kind: BuildBed, Cost: map[string]int{"wood": 8}},
-	"bed_good":  {Kind: BuildBed, Cost: map[string]int{"wood": 6, "berry": 2}},
+	"bed_good":  {Kind: BuildBed, Cost: map[string]int{"plank": 4, "wood": 2}},
 	"box":       {Kind: BuildBox, Cost: map[string]int{"wood": 4}},
 	"farm_plot": {Kind: BuildFarm, Cost: map[string]int{"wood": 2, "stone": 2}},
 	"torch":     {Kind: BuildTorch, Cost: map[string]int{"wood": 1}},
@@ -77,9 +93,10 @@ var foodDefs = map[FoodID]struct {
 	ItemName      string
 	HungerRecover int
 }{
-	FoodBerry: {ItemName: "berry", HungerRecover: 12},
-	FoodBread: {ItemName: "bread", HungerRecover: 28},
-	FoodWheat: {ItemName: "wheat", HungerRecover: 16},
+	FoodBerry: {ItemName: "berry", HungerRecover: FoodBerryHungerRecovery},
+	FoodBread: {ItemName: "bread", HungerRecover: FoodBreadHungerRecovery},
+	FoodWheat: {ItemName: "wheat", HungerRecover: FoodWheatHungerRecovery},
+	FoodJam:   {ItemName: "jam", HungerRecover: FoodJamHungerRecovery},
 }
 
 type BuiltObject struct {
@@ -89,9 +106,10 @@ type BuiltObject struct {
 }
 
 type ProductionRecipeRule struct {
-	RecipeID int
-	In       map[string]int
-	Out      map[string]int
+	RecipeID     int
+	In           map[string]int
+	Out          map[string]int
+	Requirements []string
 }
 
 func ApplyGather(state *AgentStateAggregate, snapshot WorldSnapshot) {
@@ -158,7 +176,7 @@ func CanCraft(state AgentStateAggregate, recipeID RecipeID) bool {
 }
 
 func ProductionRecipeRules() []ProductionRecipeRule {
-	ordered := []RecipeID{RecipePlank, RecipeBread}
+	ordered := []RecipeID{RecipePlank, RecipeBread, RecipeBrick, RecipeJam}
 	out := make([]ProductionRecipeRule, 0, len(ordered))
 	for _, rid := range ordered {
 		def, ok := recipeDefs[rid]
@@ -166,12 +184,21 @@ func ProductionRecipeRules() []ProductionRecipeRule {
 			continue
 		}
 		out = append(out, ProductionRecipeRule{
-			RecipeID: int(rid),
-			In:       cloneIntMap(def.In),
-			Out:      cloneIntMap(def.Out),
+			RecipeID:     int(rid),
+			In:           cloneIntMap(def.In),
+			Out:          cloneIntMap(def.Out),
+			Requirements: append([]string(nil), def.Requirements...),
 		})
 	}
 	return out
+}
+
+func CraftRequirements(recipeID RecipeID) []string {
+	def, ok := recipeDefs[recipeID]
+	if !ok || len(def.Requirements) == 0 {
+		return nil
+	}
+	return append([]string(nil), def.Requirements...)
 }
 
 func BuildCostRules() map[string]map[string]int {

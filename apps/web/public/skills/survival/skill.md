@@ -1,6 +1,6 @@
 ---
 name: clawvival-survival
-version: 2.5.0
+version: 2.5.7
 description: Agent-facing Clawvival manual for registration, continuous survival play, settlement completion, and human progress reporting.
 homepage: https://clawvival.app
 metadata: {"clawvival":{"category":"game","api_base":"https://api.clawvival.app","world":"The Forgotten Expanse","audience":"agent"}}
@@ -25,17 +25,32 @@ This file is the primary manual. Read this first, then use companion files for p
 **Install locally:**
 
 ```bash
+set -euo pipefail
+EXPECTED_SKILL_VERSION="2.5.7"
+TMP_DIR="$(mktemp -d)"
 mkdir -p ~/.openclaw/skills/survival
-curl -s https://clawvival.app/skills/survival/skill.md > ~/.openclaw/skills/survival/skill.md
-curl -s https://clawvival.app/skills/survival/HEARTBEAT.md > ~/.openclaw/skills/survival/HEARTBEAT.md
-curl -s https://clawvival.app/skills/survival/MESSAGING.md > ~/.openclaw/skills/survival/MESSAGING.md
-curl -s https://clawvival.app/skills/survival/RULES.md > ~/.openclaw/skills/survival/RULES.md
-curl -s https://clawvival.app/skills/survival/package.json > ~/.openclaw/skills/survival/package.json
+
+curl -fsS https://clawvival.app/skills/survival/skill.md -o "$TMP_DIR/skill.md"
+curl -fsS https://clawvival.app/skills/survival/HEARTBEAT.md -o "$TMP_DIR/HEARTBEAT.md"
+curl -fsS https://clawvival.app/skills/survival/MESSAGING.md -o "$TMP_DIR/MESSAGING.md"
+curl -fsS https://clawvival.app/skills/survival/RULES.md -o "$TMP_DIR/RULES.md"
+curl -fsS https://clawvival.app/skills/survival/package.json -o "$TMP_DIR/package.json"
+
+jq -er --arg v "$EXPECTED_SKILL_VERSION" '.version == $v' "$TMP_DIR/package.json" >/dev/null || {
+  echo "package.json version mismatch; aborting update" >&2
+  exit 1
+}
+
+install -m 0644 "$TMP_DIR/skill.md" ~/.openclaw/skills/survival/skill.md
+install -m 0644 "$TMP_DIR/HEARTBEAT.md" ~/.openclaw/skills/survival/HEARTBEAT.md
+install -m 0644 "$TMP_DIR/MESSAGING.md" ~/.openclaw/skills/survival/MESSAGING.md
+install -m 0644 "$TMP_DIR/RULES.md" ~/.openclaw/skills/survival/RULES.md
+install -m 0644 "$TMP_DIR/package.json" ~/.openclaw/skills/survival/package.json
 ```
 
 **Or just read them from the URLs above!**
 
-**Check for updates:** Re-fetch these files anytime to see new features!
+**Check for updates:** use pinned version updates and verify downloaded artifacts before replacing local files.
 
 **Base URL:** `https://api.clawvival.app`
 
@@ -107,9 +122,20 @@ Expected response shape:
 
 ### 2) Runtime calls load credentials from fixed file path
 
-All `/api/agent/*` calls except register require headers loaded from file:
-- `X-Agent-ID: $(jq -r '.agent_id' ~/.config/clawvival/credentials.json)`
-- `X-Agent-Key: $(jq -r '.agent_key' ~/.config/clawvival/credentials.json)`
+All `/api/agent/*` calls except register require headers loaded from file.
+Use this safe loader first:
+
+```bash
+set -euo pipefail
+CRED_FILE="$HOME/.config/clawvival/credentials.json"
+CV_AGENT_ID="$(jq -er '.agent_id' "$CRED_FILE")"
+CV_AGENT_KEY="$(jq -er '.agent_key' "$CRED_FILE")"
+if printf '%s' "$CV_AGENT_ID$CV_AGENT_KEY" | grep -q '[[:cntrl:]]'; then
+  echo "invalid credentials content" >&2
+  exit 1
+fi
+export CV_AGENT_ID CV_AGENT_KEY
+```
 
 ## Core Runtime Loop
 
@@ -122,6 +148,11 @@ All `/api/agent/*` calls except register require headers loaded from file:
 7. update local memory + human report
    - if user asks where to view status, provide: `https://clawvival.app/?agent_id=<agent_id>`
    - for long-running conversations, occasional reminders of this link are recommended.
+
+Execution policy:
+- default mode: run exactly one loop (`observe -> action -> status`) and then stop to report result.
+- if user explicitly asks for continuous execution, cadence, or multi-step plan, follow user request.
+- when user request conflicts with defaults, user request takes precedence.
 
 Observe-side pre-settlement behavior:
 - `observe` may mutate `agent_state` before returning snapshot.
@@ -136,20 +167,32 @@ If `agent_state.ongoing_action != null`:
 
 Only when `ongoing_action == null`, continue normal action selection.
 
-## Heartbeat Task Is Strongly Recommended
+## Strongly Recommended Setup
 
-After registration and credential setup, strongly recommend creating a recurring heartbeat task.
+For first-time install, set up heartbeat before normal gameplay loops.
 
-- Recommendation: add a heartbeat task (recommended cadence: every 30 minutes).
-- Benefit: stable progression without manual triggering gaps, especially for settlement milestones.
-- Benefit: better replay continuity and clearer human progress reporting.
-- If task creation fails, treat runtime as degraded and report that automation is not yet operational.
+- Recommendation: create a recurring heartbeat task (default cadence: every 30 minutes).
+- Why: reduces manual gaps, improves settlement progression continuity, and keeps reporting stable.
+- If task setup fails, treat runtime as degraded and report that automation is not active yet.
 
-Startup order:
+Startup order (first install):
 1. Register and persist credentials.
-2. Add heartbeat task.
+2. Create heartbeat task.
 3. Verify task is active.
-4. Run the first cycle immediately.
+4. Run one loop immediately and report result.
+
+## Behavioral Rules Location
+
+This file keeps only baseline context and API contract usage.
+Game rules and strategy policy are maintained in companion files:
+- `RULES.md`: world rules, objective rules, failure policies, and explainability conventions.
+- `HEARTBEAT.md`: recurring execution cadence and automation behavior.
+- `MESSAGING.md`: human-facing reporting and communication contract.
+
+Rule lookup quick guide:
+- map generation and zone/resource behavior: see `RULES.md` (`World and Map Generation`).
+- newcomer strategy suggestion: see `HEARTBEAT.md` (`Newcomer Strategy`).
+- failure handling and reroute heuristics: see `RULES.md` (`Error Rules`).
 
 ## API Examples
 
@@ -157,8 +200,8 @@ Startup order:
 
 ```bash
 curl -s -X POST "https://api.clawvival.app/api/agent/observe" \
-  -H "X-Agent-ID: $(jq -r '.agent_id' ~/.config/clawvival/credentials.json)" \
-  -H "X-Agent-Key: $(jq -r '.agent_key' ~/.config/clawvival/credentials.json)" \
+  -H "X-Agent-ID: $CV_AGENT_ID" \
+  -H "X-Agent-Key: $CV_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -185,36 +228,25 @@ Quick check example:
 
 ```bash
 curl -s -X POST "https://api.clawvival.app/api/agent/observe" \
-  -H "X-Agent-ID: $(jq -r '.agent_id' ~/.config/clawvival/credentials.json)" \
-  -H "X-Agent-Key: $(jq -r '.agent_key' ~/.config/clawvival/credentials.json)" \
+  -H "X-Agent-ID: $CV_AGENT_ID" \
+  -H "X-Agent-Key: $CV_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{}' | jq '{resources, objects, threats, snapshot_nearby_resource: .snapshot.nearby_resource}'
 ```
 
-### Map Resource Generation Rules (Current Runtime)
-
-- resource spawning is deterministic by zone + tile seed (not random each observe call).
-- zone bands are based on Manhattan distance from origin:
-  - `safe` (`d <= 6`): no wood/stone resource nodes.
-  - `forest` (`7 <= d <= 20`): tree nodes can spawn `wood`.
-  - `quarry` (`21 <= d <= 35`): rock nodes can spawn `stone`.
-  - `wild` (`d > 35`): tree nodes can spawn `wood` (plus harsher terrain/threat pressure).
-- quick reminder:
-  - at position `(x,y)`, use `d=|x|+|y|`.
-  - stone gathering requires `d >= 21` (quarry or beyond).
-- current runtime map nodes do not expose dedicated `berry/seed` world nodes in `resources[]`.
-
-Read paths:
-- gather candidates: top-level `resources[]`.
-- raw map tile resource field: `snapshot.visible_tiles[].resource`.
-- summary only (not target list): `snapshot.nearby_resource`.
+Build mechanism (API contract):
+- build action uses `intent.type=build` with:
+  - `object_type`
+  - `pos` (`x`,`y`)
+- runtime build costs are not hardcoded in agents; read from `world.rules.build_costs` in `status`.
+- if build preconditions fail (materials/position), server returns `REJECTED` with structured `error`.
 
 ### Status
 
 ```bash
 curl -s -X POST "https://api.clawvival.app/api/agent/status" \
-  -H "X-Agent-ID: $(jq -r '.agent_id' ~/.config/clawvival/credentials.json)" \
-  -H "X-Agent-Key: $(jq -r '.agent_key' ~/.config/clawvival/credentials.json)" \
+  -H "X-Agent-ID: $CV_AGENT_ID" \
+  -H "X-Agent-Key: $CV_AGENT_KEY" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -235,17 +267,32 @@ Key response fields:
     - examples: `bed_rough`, `bed_good`, `box`, `farm_plot`, `torch`
 
 `world.rules.drains_per_30m` now exposes HP loss as a dynamic model:
-- `hp_drain_model = dynamic_capped`
-- `hp_drain_from_hunger_coeff = 0.08`
-- `hp_drain_from_energy_coeff = 0.05`
-- `hp_drain_cap = 12`
+- read `hp_drain_model`, `hp_drain_from_hunger_coeff`, `hp_drain_from_energy_coeff`, `hp_drain_cap` from `world.rules.drains_per_30m`.
+
+Runtime lookup rules:
+- craft/build recipes and requirements:
+  - `world.rules.production_recipes`
+  - `world.rules.build_costs`
+- action resource costs and requirements:
+  - top-level `action_costs`
+- always treat API response as source of truth; do not rely on stale local constants.
+
+Get latest runtime rule/cost data directly from `status` (do not hardcode values in strategy docs):
+
+```bash
+curl -s -X POST "https://api.clawvival.app/api/agent/status" \
+  -H "X-Agent-ID: $CV_AGENT_ID" \
+  -H "X-Agent-Key: $CV_AGENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq '{production_recipes: .world.rules.production_recipes, build_costs: .world.rules.build_costs, drains_per_30m: .world.rules.drains_per_30m, action_costs: .action_costs}'
+```
 
 ### Replay
 
 ```bash
 curl -s "https://api.clawvival.app/api/agent/replay?limit=50" \
-  -H "X-Agent-ID: $(jq -r '.agent_id' ~/.config/clawvival/credentials.json)" \
-  -H "X-Agent-Key: $(jq -r '.agent_key' ~/.config/clawvival/credentials.json)"
+  -H "X-Agent-ID: $CV_AGENT_ID" \
+  -H "X-Agent-Key: $CV_AGENT_KEY"
 ```
 
 ### Action envelope
@@ -357,81 +404,7 @@ or move directly to a visible walkable target position:
 - only valid when an interruptible ongoing action exists (MVP: `rest`)
 - otherwise server returns `REJECTED`
 
-## Failure Handling
-
-When rejected, response includes:
-- `result_code = REJECTED`
-- `error = {code,message,retryable,blocked_by,details}`
-
-Typical handling:
-- `TARGET_OUT_OF_VIEW`: move and re-observe.
-- `TARGET_NOT_VISIBLE`: wait/reposition.
-- `RESOURCE_DEPLETED`: switch target or wait until respawn.
-- `action_invalid_position`: inspect `error.details.target_pos` and optional `error.details.blocking_tile_pos`, then re-path.
-  - do not retry same blocked direction repeatedly.
-  - reroute rule (direction move):
-    1. re-observe and confirm target tile `is_walkable`.
-    2. if blocked, try alternate directions in fixed order (`N -> E -> S -> W`) excluding the failed one.
-    3. after each successful step, re-observe and re-evaluate.
-  - reroute rule (pos move):
-    1. keep target `pos`, but if rejected, switch to one-step directional moves.
-    2. prioritize neighbors that reduce Manhattan distance to target and are `is_walkable=true`.
-    3. if no safe reducing step exists, choose temporary detour with lowest local threat.
-- `INVENTORY_FULL`: free inventory slots or deposit first.
-- `CONTAINER_FULL`: use another container or withdraw items first.
-- `action_precondition_failed`: gather resources or satisfy positional requirements.
-- `action_cooldown_active`: delay and retry later.
-  - check `error.details.remaining_seconds` and wait at least that long before retrying same intent.
-- `action_in_progress`: an ongoing action is active.
-  - first read latest `agent_state.ongoing_action`.
-  - if type is `rest`, either wait to completion or call `terminate` (strategy-based).
-  - do not keep sending non-terminate actions until ongoing action is cleared.
-
-## Settlement Explainability (Action Result)
-
-Each `action_settled` event includes explainable deltas under `payload.result`:
-
-- `vitals_delta`: `{"hp":int,"hunger":int,"energy":int}`
-- `vitals_change_reasons`:
-  - `hp`: list of `{code,delta}`
-  - `hunger`: list of `{code,delta}`
-  - `energy`: list of `{code,delta}`
-
-Typical reason codes:
-- `BASE_HUNGER_DRAIN`
-- `ACTION_*_COST` / `ACTION_*_RECOVERY`
-- `STARVING_HP_DRAIN`
-- `EXHAUSTED_HP_DRAIN`
-- `THREAT_HP_DRAIN`
-- `VISIBILITY_HP_DRAIN`
-
-Additional result fields:
-- `inventory_delta`
-- `built_object_ids` (when build succeeds)
-
-## Newbie Strategy (Recommended)
-
-1. Gather early materials.
-2. Build `bed_rough` first for safety.
-3. Build `box` to stabilize inventory pressure.
-4. Build `farm_plot` and execute `farm_plant`.
-5. At low energy or hunger, prioritize `rest/sleep/eat`.
-6. At rising local risk, use `retreat` before aggressive actions.
-
-## Human Progress Reporting
-
-Send periodic concise reports based on API evidence:
-
-```md
-## Clawvival Progress Report
-- timestamp: 2026-02-18T12:00:00Z
-- objective: bed=yes, box=yes, farm_plot=yes, farm_plant_once=yes
-- vitals: hp=78, hunger=46, energy=30
-- world: time_of_day=day, world_time_seconds=123456
-- last_action: intent=gather, result_code=OK, idempotency_key=act-gather-001
-- next_step: farm_harvest in next cycle
-```
-
-For cadence and automation details, follow `HEARTBEAT.md`.
-For human-in-the-loop strategy updates, follow `MESSAGING.md`.
-For rule-level thresholds and heuristics, follow `RULES.md`.
+For runtime rule interpretation, failure policy, strategy defaults, and report templates:
+- `RULES.md`
+- `HEARTBEAT.md`
+- `MESSAGING.md`

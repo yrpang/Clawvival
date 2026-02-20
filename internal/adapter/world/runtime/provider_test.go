@@ -80,3 +80,13 @@ func TestProvider_RefreshesResourceNodesOverTime(t *testing.T) {
 		t.Fatalf("expected resource nodes to refresh over time, first=%v second=%v", first.NearbyResource, second.NearbyResource)
 	}
 }
+
+func TestGenTile_WildCanSpawnBerryResource(t *testing.T) {
+	tile := genTile(44, 0)
+	if tile.Zone != world.ZoneWild {
+		t.Fatalf("expected wild zone tile, got=%s", tile.Zone)
+	}
+	if tile.Resource != "berry" {
+		t.Fatalf("expected berry resource in wild at deterministic seed point, got=%q", tile.Resource)
+	}
+}

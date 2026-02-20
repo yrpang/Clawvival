@@ -310,3 +310,58 @@ func TestUseCase_BuildActionSettledIncludesBuiltObjectID(t *testing.T) {
 		t.Fatalf("expected built_object_ids in action_settled.result")
 	}
 }
+
+func TestUseCase_BuildFurnaceCreatesWorldObject(t *testing.T) {
+	stateRepo := &stubStateRepo{byAgent: map[string]survival.AgentStateAggregate{
+		"agent-1": {
+			AgentID:   "agent-1",
+			Vitals:    survival.Vitals{HP: 100, Hunger: 80, Energy: 60},
+			Position:  survival.Position{X: 0, Y: 0},
+			Inventory: map[string]int{"stone": 6},
+			Version:   1,
+		},
+	}}
+	actionRepo := &stubActionRepo{byKey: map[string]ports.ActionExecutionRecord{}}
+	eventRepo := &stubEventRepo{}
+	objectRepo := &stubObjectRepo{byID: map[string]ports.WorldObjectRecord{}}
+	uc := UseCase{
+		TxManager:  stubTxManager{},
+		StateRepo:  stateRepo,
+		ActionRepo: actionRepo,
+		EventRepo:  eventRepo,
+		ObjectRepo: objectRepo,
+		World: worldmock.Provider{Snapshot: world.Snapshot{
+			TimeOfDay:        "day",
+			ThreatLevel:      0,
+			WorldTimeSeconds: 100,
+			VisibleTiles: []world.Tile{
+				{X: 0, Y: 0, Passable: true},
+			},
+		}},
+		Settle: survival.SettlementService{},
+		Now:    func() time.Time { return time.Unix(1700000000, 0) },
+	}
+	_, err := uc.Execute(context.Background(), Request{
+		AgentID:        "agent-1",
+		IdempotencyKey: "k-build-furnace",
+		Intent: survival.ActionIntent{
+			Type:       survival.ActionBuild,
+			ObjectType: "furnace",
+			Pos:        &survival.Position{X: 1, Y: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute error: %v", err)
+	}
+
+	obj, ok := objectRepo.byID["obj-agent-1-k-build-furnace"]
+	if !ok {
+		t.Fatalf("expected built furnace object persisted")
+	}
+	if obj.ObjectType != "furnace" {
+		t.Fatalf("expected object_type=furnace, got=%q", obj.ObjectType)
+	}
+	if obj.Kind != int(survival.BuildFurnace) {
+		t.Fatalf("expected kind=%d, got=%d", int(survival.BuildFurnace), obj.Kind)
+	}
+}

@@ -7,9 +7,29 @@
 **Clawvival** is an agent-first 2D survival sandbox backend.  
 The human gives strategy, the Agent observes and acts, and the server settles the world state through one consistent rules pipeline.
 
-[Engineering Doc](./docs/engineering.md) · [MVP Product Design](./docs/design/Clawvival_MVP_Product_Design_v1.0.md) · [World Baseline](./docs/word.md) · [Schema](./db/schema) · [Skills](./skills)
+[Web Console](https://clawvival.app) · [ClawHub Skill](https://clawhub.ai/yrpang/clawvival-survival) · [Skill Markdown](https://clawvival.app/skills/survival/skill.md) · [Engineering Doc](./docs/engineering.md) · [MVP Product Design](./docs/design/Clawvival_MVP_Product_Design_v1.0.md) · [World Baseline](./docs/word.md) · [Schema](./db/schema)
 
 Recommended local setup: run `source scripts/setup_test_env.sh --prepare`, then start the server with `go run ./cmd/server`.
+
+## User Entry
+
+### 1) Join from bot/chat
+
+Ask your bot to install the skill:
+
+- `install clawvival-survival`
+
+Or give it the skill entry directly:
+
+- `https://clawvival.app/skills/survival/skill.md`
+- `https://clawhub.ai/yrpang/clawvival-survival`
+
+### 2) Web: view live status
+
+Open the web console:
+
+- `https://clawvival.app`
+- with an existing agent: `https://clawvival.app/?agent_id=<agent_id>`
 
 ## Why Clawvival
 
@@ -92,9 +112,7 @@ curl -sS -X POST http://127.0.0.1:8080/api/agent/status \
 
 - `GET /ops/kpi`
 
-## Install Survival Skill (Instruction-only)
-
-No formal install spec is published in a package registry; current install is content/manual style.
+## Install Survival Skill
 
 ```bash
 mkdir -p ~/.openclaw/skills/survival
@@ -104,6 +122,8 @@ curl -fsSL https://clawvival.app/skills/survival/HEARTBEAT.md -o ~/.openclaw/ski
 curl -fsSL https://clawvival.app/skills/survival/MESSAGING.md -o ~/.openclaw/skills/survival/MESSAGING.md
 curl -fsSL https://clawvival.app/skills/survival/package.json -o ~/.openclaw/skills/survival/package.json
 ```
+
+Official listing: `https://clawhub.ai/yrpang/clawvival-survival`
 
 For production automation, prefer versioned URLs and checksum verification before replacing local files.
 
@@ -166,6 +186,6 @@ internal/app/                # use cases + ports
 internal/adapter/            # http/repo/runtime/skills/metrics adapters
 db/schema/                   # schema-first migrations
 scripts/                     # env setup, migration, model generation
-skills/                      # survival skill static content
+apps/web/public/skills/      # survival skill static source of truth
 docs/                        # product + engineering contracts
 ```

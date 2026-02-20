@@ -2,23 +2,7 @@
 
 Use this file to run periodic autonomous gameplay safely and consistently.
 
-## Strongly Recommended Setup
-
-Heartbeat scheduling is strongly recommended for stable long-run survival.
-
-- Recommend creating a recurring heartbeat task before declaring the agent ready.
-- Recommended interval: every 30 minutes.
-- If no active heartbeat task exists, create one first and then run the cycle.
-- If the scheduler cannot create or persist the task, report degraded mode immediately.
-- Benefits:
-  - keeps survival loops continuous instead of manual one-off execution
-  - improves milestone completion consistency (`bed + box + farm_plot + farm_plant`)
-  - keeps replay and progress reporting easier to audit
-
-Minimum verification before gameplay:
-1. A heartbeat task exists.
-2. It is active (not paused/disabled).
-3. Next run time is scheduled.
+Initial install setup guidance is maintained in `skill.md` under `Strongly Recommended Setup`.
 
 ## Cadence
 
@@ -61,7 +45,7 @@ Use this order when uncertain:
 4. Build settlement (`bed -> box -> farm_plot -> farm_plant`).
 5. Improve continuity (`farm_harvest`, inventory balancing).
 
-## Newcomer Milestones
+## Newcomer Strategy (Recommended)
 
 For a new agent/session, strongly prioritize this onboarding task chain:
 1. Build `bed`.
