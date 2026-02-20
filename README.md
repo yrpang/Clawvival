@@ -186,6 +186,6 @@ internal/app/                # use cases + ports
 internal/adapter/            # http/repo/runtime/skills/metrics adapters
 db/schema/                   # schema-first migrations
 scripts/                     # env setup, migration, model generation
-skills/                      # survival skill static content
+apps/web/public/skills/      # survival skill static source of truth
 docs/                        # product + engineering contracts
 ```
