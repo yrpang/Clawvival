@@ -9,14 +9,14 @@ func TestGameplayTuning_Defaults(t *testing.T) {
 	if StandardTickMinutes != 30 {
 		t.Fatalf("StandardTickMinutes = %d, want 30", StandardTickMinutes)
 	}
-	if BaseHungerDrainPer30 != 4 {
-		t.Fatalf("BaseHungerDrainPer30 = %d, want 4", BaseHungerDrainPer30)
+	if BaseHungerDrainPer30 != 0 {
+		t.Fatalf("BaseHungerDrainPer30 = %d, want 0", BaseHungerDrainPer30)
 	}
-	if HPDrainCapPer30 != 12 {
-		t.Fatalf("HPDrainCapPer30 = %d, want 12", HPDrainCapPer30)
+	if HPDrainCapPer30 != 8 {
+		t.Fatalf("HPDrainCapPer30 = %d, want 8", HPDrainCapPer30)
 	}
-	if HPDrainFromHungerCoeff != 0.08 || HPDrainFromEnergyCoeff != 0.05 {
-		t.Fatalf("hp drain coeffs = (%v,%v), want (0.08,0.05)", HPDrainFromHungerCoeff, HPDrainFromEnergyCoeff)
+	if HPDrainFromHungerCoeff != 0.04 || HPDrainFromEnergyCoeff != 0.03 {
+		t.Fatalf("hp drain coeffs = (%v,%v), want (0.04,0.03)", HPDrainFromHungerCoeff, HPDrainFromEnergyCoeff)
 	}
 	if MinRestMinutes != 1 || MaxRestMinutes != 120 {
 		t.Fatalf("rest bounds = (%d,%d), want (1,120)", MinRestMinutes, MaxRestMinutes)
@@ -33,8 +33,8 @@ func TestGameplayTuning_Defaults(t *testing.T) {
 	if DefaultInventoryCapacity != 30 {
 		t.Fatalf("DefaultInventoryCapacity = %d, want 30", DefaultInventoryCapacity)
 	}
-	if SleepBaseEnergyRecovery != 30 || SleepBaseHPRecovery != 8 {
-		t.Fatalf("sleep base recovery = (%d,%d), want (30,8)", SleepBaseEnergyRecovery, SleepBaseHPRecovery)
+	if SleepBaseEnergyRecovery != 35 || SleepBaseHPRecovery != 6 {
+		t.Fatalf("sleep base recovery = (%d,%d), want (35,6)", SleepBaseEnergyRecovery, SleepBaseHPRecovery)
 	}
 	if CriticalHPThreshold != 15 || LowEnergyThreshold != 20 {
 		t.Fatalf("status thresholds = (%d,%d), want (15,20)", CriticalHPThreshold, LowEnergyThreshold)

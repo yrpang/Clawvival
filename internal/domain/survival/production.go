@@ -77,9 +77,9 @@ var foodDefs = map[FoodID]struct {
 	ItemName      string
 	HungerRecover int
 }{
-	FoodBerry: {ItemName: "berry", HungerRecover: 12},
-	FoodBread: {ItemName: "bread", HungerRecover: 28},
-	FoodWheat: {ItemName: "wheat", HungerRecover: 16},
+	FoodBerry: {ItemName: "berry", HungerRecover: ActionEatDeltaHunger},
+	FoodBread: {ItemName: "bread", HungerRecover: ActionEatDeltaHunger},
+	FoodWheat: {ItemName: "wheat", HungerRecover: ActionEatDeltaHunger},
 }
 
 type BuiltObject struct {

@@ -237,10 +237,10 @@ func TestUseCase_TerminateCanStopRestEarly(t *testing.T) {
 	if out.UpdatedState.OngoingAction != nil {
 		t.Fatalf("expected ongoing action cleared by terminate")
 	}
-	if got, want := out.UpdatedState.Vitals.Energy, 66; got != want {
+	if got, want := out.UpdatedState.Vitals.Energy, 67; got != want {
 		t.Fatalf("expected proportional rest settlement energy=%d, got=%d", want, got)
 	}
-	if got, want := out.UpdatedState.Vitals.Hunger, 84; got != want {
+	if got, want := out.UpdatedState.Vitals.Hunger, 81; got != want {
 		t.Fatalf("expected proportional rest settlement hunger=%d, got=%d", want, got)
 	}
 	_ = actionRepo.byKey["agent-1|rest-terminate"]

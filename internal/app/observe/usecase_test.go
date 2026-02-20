@@ -65,13 +65,13 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if resp.World.Rules.DrainsPer30m.HungerDrain != survival.BaseHungerDrainPer30 || resp.World.Rules.DrainsPer30m.EnergyDrain != 0 {
 		t.Fatalf("unexpected drains_per_30m: %+v", resp.World.Rules.DrainsPer30m)
 	}
-	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -7 || got.DeltaEnergy != -18 {
+	if got := resp.ActionCosts["gather"]; got.DeltaHunger != -2 || got.DeltaEnergy != -6 {
 		t.Fatalf("gather action cost mismatch: %+v", got)
 	}
-	if got := resp.ActionCosts["sleep"]; got.DeltaHunger != 20 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
+	if got := resp.ActionCosts["sleep"]; got.DeltaHunger != 15 || got.DeltaEnergy != survival.SleepBaseEnergyRecovery || got.DeltaHP != survival.SleepBaseHPRecovery {
 		t.Fatalf("sleep action cost mismatch: %+v", got)
 	}
-	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != 20 || got.DeltaEnergy != 45 || got.DeltaHP != 12 {
+	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != 20 || got.DeltaEnergy != 45 || got.DeltaHP != 10 {
 		t.Fatalf("sleep good-bed variant mismatch: %+v", got)
 	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {
@@ -375,11 +375,11 @@ func TestUseCase_SettlesDueOngoingActionBeforeObserveProjection(t *testing.T) {
 	if resp.State.OngoingAction != nil {
 		t.Fatalf("expected ongoing action cleared after observe settle, got=%+v", resp.State.OngoingAction)
 	}
-	if resp.State.Vitals.Hunger != 120 {
-		t.Fatalf("expected hunger=120 after 60m rest settle, got=%d", resp.State.Vitals.Hunger)
+	if resp.State.Vitals.Hunger != 106 {
+		t.Fatalf("expected hunger=106 after 60m rest settle, got=%d", resp.State.Vitals.Hunger)
 	}
-	if resp.State.Vitals.Energy != 56 {
-		t.Fatalf("expected energy=56 after 60m rest settle, got=%d", resp.State.Vitals.Energy)
+	if resp.State.Vitals.Energy != 60 {
+		t.Fatalf("expected energy=60 after 60m rest settle, got=%d", resp.State.Vitals.Energy)
 	}
 	if stateRepo.saveCalls != 1 {
 		t.Fatalf("expected one state save for ongoing settle, got=%d", stateRepo.saveCalls)

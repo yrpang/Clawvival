@@ -47,7 +47,7 @@ func DefaultActionCostProfiles() map[ActionType]ActionCostProfile {
 		ActionRest: {
 			DeltaHunger:  netHunger(ActionRestDeltaHunger),
 			DeltaEnergy:  ActionRestDeltaEnergy,
-			Requirements: []string{},
+			Requirements: nil,
 		},
 		ActionSleep: {
 			DeltaHunger:  netHunger(ActionSleepDeltaHunger),
@@ -61,9 +61,9 @@ func DefaultActionCostProfiles() map[ActionType]ActionCostProfile {
 					DeltaHP:     SleepBaseHPRecovery,
 				},
 				"bed_quality_good": {
-					DeltaHunger: netHunger(ActionSleepDeltaHunger),
-					DeltaEnergy: int(1.5 * float64(ActionSleepDeltaEnergy)),
-					DeltaHP:     int(1.5 * float64(SleepBaseHPRecovery)),
+					DeltaHunger: netHunger(SleepGoodHungerRecovery),
+					DeltaEnergy: SleepGoodEnergyRecovery,
+					DeltaHP:     SleepGoodHPRecovery,
 				},
 			},
 		},
@@ -90,7 +90,7 @@ func DefaultActionCostProfiles() map[ActionType]ActionCostProfile {
 		ActionRetreat: {
 			DeltaHunger:  netHunger(ActionRetreatDeltaHunger),
 			DeltaEnergy:  ActionRetreatDeltaEnergy,
-			Requirements: []string{},
+			Requirements: nil,
 		},
 		ActionTerminate: {
 			DeltaHunger:  ActionTerminateDeltaHunger,
