@@ -210,6 +210,18 @@ func TestProductionRecipeRules_CoversAllRuntimeRecipes(t *testing.T) {
 	}
 }
 
+func TestFoodRecoveryRules_CoversAllRuntimeFoods(t *testing.T) {
+	rules := FoodRecoveryRules()
+	if got, want := len(rules), len(foodDefs); got != want {
+		t.Fatalf("food recovery count mismatch: got=%d want=%d", got, want)
+	}
+	for _, def := range foodDefs {
+		if got := rules[def.ItemName]; got != def.HungerRecover {
+			t.Fatalf("food recovery mismatch for %s: got=%d want=%d", def.ItemName, got, def.HungerRecover)
+		}
+	}
+}
+
 func TestBuildCostRules_CoversAllRuntimeBuildDefs(t *testing.T) {
 	rules := BuildCostRules()
 	if got, want := len(rules), len(buildDefsByObjectType); got != want {

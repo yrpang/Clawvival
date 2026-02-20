@@ -63,6 +63,12 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != 20 || got.DeltaEnergy != 45 || got.DeltaHP != 10 {
 		t.Fatalf("sleep good-bed variant mismatch: %+v", got)
 	}
+	if got := resp.ActionCosts["eat"].Variants["berry"]; got.DeltaHunger != survival.FoodBerryHungerRecovery || got.DeltaEnergy != 0 {
+		t.Fatalf("eat berry variant mismatch: %+v", got)
+	}
+	if got := resp.ActionCosts["eat"].Variants["jam"]; got.DeltaHunger != survival.FoodJamHungerRecovery || got.DeltaEnergy != 0 {
+		t.Fatalf("eat jam variant mismatch: %+v", got)
+	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {
 		t.Fatalf("expected terminate action cost configured")
 	} else if got.DeltaHunger != 0 || got.DeltaEnergy != 0 {
@@ -106,6 +112,9 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 		if got["bed_good"]["plank"] != 4 || got["bed_good"]["wood"] != 2 {
 			t.Fatalf("unexpected bed_good build cost: %+v", got["bed_good"])
 		}
+	}
+	if got := resp.World.Rules.FoodRecoveries; got["berry"] != survival.FoodBerryHungerRecovery || got["wheat"] != survival.FoodWheatHungerRecovery || got["bread"] != survival.FoodBreadHungerRecovery || got["jam"] != survival.FoodJamHungerRecovery {
+		t.Fatalf("unexpected food recoveries: %+v", got)
 	}
 	if len(resp.State.StatusEffects) == 0 {
 		t.Fatalf("expected status effects for low hp/energy")

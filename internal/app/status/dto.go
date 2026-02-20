@@ -21,14 +21,15 @@ type WorldMeta struct {
 }
 
 type Rules struct {
-	StandardTickMinutes int          `json:"standard_tick_minutes"`
-	DrainsPer30m        DrainsPer30m `json:"drains_per_30m"`
-	Thresholds          Thresholds   `json:"thresholds"`
-	Visibility          Visibility   `json:"visibility"`
-	Farming             Farming      `json:"farming"`
-	Seed                Seed         `json:"seed"`
-	ProductionRecipes   []ProductionRecipe `json:"production_recipes"`
+	StandardTickMinutes int                       `json:"standard_tick_minutes"`
+	DrainsPer30m        DrainsPer30m              `json:"drains_per_30m"`
+	Thresholds          Thresholds                `json:"thresholds"`
+	Visibility          Visibility                `json:"visibility"`
+	Farming             Farming                   `json:"farming"`
+	Seed                Seed                      `json:"seed"`
+	ProductionRecipes   []ProductionRecipe        `json:"production_recipes"`
 	BuildCosts          map[string]map[string]int `json:"build_costs"`
+	FoodRecoveries      map[string]int            `json:"food_recoveries"`
 }
 
 type DrainsPer30m struct {

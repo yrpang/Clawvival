@@ -209,6 +209,14 @@ func BuildCostRules() map[string]map[string]int {
 	return out
 }
 
+func FoodRecoveryRules() map[string]int {
+	out := make(map[string]int, len(foodDefs))
+	for _, def := range foodDefs {
+		out[def.ItemName] = def.HungerRecover
+	}
+	return out
+}
+
 func CanBuild(state AgentStateAggregate, kind BuildKind) bool {
 	cost, ok := buildCosts[kind]
 	if !ok {

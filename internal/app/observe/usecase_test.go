@@ -74,6 +74,12 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 	if got := resp.ActionCosts["sleep"].Variants["bed_quality_good"]; got.DeltaHunger != 20 || got.DeltaEnergy != 45 || got.DeltaHP != 10 {
 		t.Fatalf("sleep good-bed variant mismatch: %+v", got)
 	}
+	if got := resp.ActionCosts["eat"].Variants["berry"]; got.DeltaHunger != survival.FoodBerryHungerRecovery || got.DeltaEnergy != 0 {
+		t.Fatalf("eat berry variant mismatch: %+v", got)
+	}
+	if got := resp.ActionCosts["eat"].Variants["jam"]; got.DeltaHunger != survival.FoodJamHungerRecovery || got.DeltaEnergy != 0 {
+		t.Fatalf("eat jam variant mismatch: %+v", got)
+	}
 	if got, ok := resp.ActionCosts["terminate"]; !ok {
 		t.Fatalf("expected terminate action cost configured")
 	} else if got.DeltaHunger != 0 || got.DeltaEnergy != 0 {
@@ -114,6 +120,9 @@ func TestUseCase_BuildsFixedViewMetadata(t *testing.T) {
 		if got["bed_good"]["plank"] != 4 || got["bed_good"]["wood"] != 2 {
 			t.Fatalf("unexpected bed_good build cost: %+v", got["bed_good"])
 		}
+	}
+	if got := resp.World.Rules.FoodRecoveries; got["berry"] != survival.FoodBerryHungerRecovery || got["wheat"] != survival.FoodWheatHungerRecovery || got["bread"] != survival.FoodBreadHungerRecovery || got["jam"] != survival.FoodJamHungerRecovery {
+		t.Fatalf("unexpected food recoveries: %+v", got)
 	}
 	b, err := json.Marshal(resp.ActionCosts["gather"])
 	if err != nil {
@@ -566,8 +575,8 @@ func TestUseCase_DoesNotSettleIdleEvenAfterFullTick(t *testing.T) {
 }
 
 type observeStateRepo struct {
-	state survival.AgentStateAggregate
-	err   error
+	state               survival.AgentStateAggregate
+	err                 error
 	saveCalls           int
 	lastSaved           survival.AgentStateAggregate
 	lastExpectedVersion int64

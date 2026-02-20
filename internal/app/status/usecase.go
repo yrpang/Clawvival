@@ -104,6 +104,7 @@ func defaultRules() Rules {
 		},
 		ProductionRecipes: toProductionRecipes(survival.ProductionRecipeRules()),
 		BuildCosts:        cloneNestedIntMap(survival.BuildCostRules()),
+		FoodRecoveries:    cloneIntMap(survival.FoodRecoveryRules()),
 	}
 }
 
@@ -154,6 +155,17 @@ func defaultActionCosts() map[string]ActionCost {
 					DeltaHunger: variant.DeltaHunger,
 					DeltaEnergy: variant.DeltaEnergy,
 					DeltaHP:     variant.DeltaHP,
+				}
+			}
+		}
+		if action == survival.ActionEat {
+			if variants == nil {
+				variants = map[string]ActionCostVariant{}
+			}
+			for itemType, hunger := range survival.FoodRecoveryRules() {
+				variants[itemType] = ActionCostVariant{
+					DeltaHunger: hunger,
+					DeltaEnergy: 0,
 				}
 			}
 		}
