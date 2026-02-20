@@ -51,6 +51,15 @@ func TestGameplayTuning_Defaults(t *testing.T) {
 	if VisionRadiusDay != 6 || VisionRadiusNight != 3 || TorchLightRadius != 3 {
 		t.Fatalf("visibility = (%d,%d,%d), want (6,3,3)", VisionRadiusDay, VisionRadiusNight, TorchLightRadius)
 	}
+	if FoodBerryHungerRecovery != 20 || FoodBreadHungerRecovery != 30 || FoodWheatHungerRecovery != 15 || FoodJamHungerRecovery != 80 {
+		t.Fatalf(
+			"food recovery = (berry:%d,bread:%d,wheat:%d,jam:%d), want (20,30,15,80)",
+			FoodBerryHungerRecovery,
+			FoodBreadHungerRecovery,
+			FoodWheatHungerRecovery,
+			FoodJamHungerRecovery,
+		)
+	}
 }
 
 func TestGameplayTuning_CooldownsAndRespawn(t *testing.T) {

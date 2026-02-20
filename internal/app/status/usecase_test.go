@@ -74,14 +74,24 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 	if got := resp.World.Rules.Farming.WheatYieldRange; len(got) != 2 || got[0] != survival.WheatYieldMin || got[1] != survival.WheatYieldMax {
 		t.Fatalf("expected wheat_yield_range [%d,%d], got=%v", survival.WheatYieldMin, survival.WheatYieldMax, got)
 	}
-	if got := resp.World.Rules.ProductionRecipes; len(got) < 2 {
+	if got := resp.World.Rules.ProductionRecipes; len(got) < 4 {
 		t.Fatalf("expected production_recipes, got=%v", got)
 	} else {
-		if got[0].RecipeID != int(survival.RecipePlank) || got[0].In["wood"] != 2 || got[0].Out["plank"] != 1 {
-			t.Fatalf("unexpected first production recipe: %+v", got[0])
+		byID := map[int]ProductionRecipe{}
+		for _, recipe := range got {
+			byID[recipe.RecipeID] = recipe
 		}
-		if got[1].RecipeID != int(survival.RecipeBread) || got[1].In["wheat"] != 2 || got[1].Out["bread"] != 1 {
-			t.Fatalf("unexpected second production recipe: %+v", got[1])
+		if recipe := byID[int(survival.RecipePlank)]; recipe.In["wood"] != 2 || recipe.Out["plank"] != 1 {
+			t.Fatalf("unexpected plank recipe: %+v", recipe)
+		}
+		if recipe := byID[int(survival.RecipeBread)]; recipe.In["wheat"] != 2 || recipe.Out["bread"] != 1 {
+			t.Fatalf("unexpected bread recipe: %+v", recipe)
+		}
+		if recipe := byID[int(survival.RecipeBrick)]; recipe.In["stone"] != 2 || recipe.Out["brick"] != 1 || len(recipe.Requirements) != 1 || recipe.Requirements[0] != "FURNACE" {
+			t.Fatalf("unexpected brick recipe: %+v", recipe)
+		}
+		if recipe := byID[int(survival.RecipeJam)]; recipe.In["berry"] != 2 || recipe.In["bread"] != 1 || recipe.Out["jam"] != 1 || len(recipe.Requirements) != 1 || recipe.Requirements[0] != "FURNACE" {
+			t.Fatalf("unexpected jam recipe: %+v", recipe)
 		}
 	}
 	if got := resp.World.Rules.BuildCosts; len(got) == 0 {
@@ -92,6 +102,9 @@ func TestUseCase_IncludesWorldTimeInfo(t *testing.T) {
 		}
 		if got["bed_rough"]["wood"] != 8 {
 			t.Fatalf("unexpected bed_rough build cost: %+v", got["bed_rough"])
+		}
+		if got["bed_good"]["plank"] != 4 || got["bed_good"]["wood"] != 2 {
+			t.Fatalf("unexpected bed_good build cost: %+v", got["bed_good"])
 		}
 	}
 	if len(resp.State.StatusEffects) == 0 {

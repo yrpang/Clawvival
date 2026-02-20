@@ -237,6 +237,10 @@ func genTile(x, y int) world.Tile {
 		if seed%7 == 0 {
 			kind = world.TileWater
 			passable = false
+		} else if seed%11 == 0 {
+			kind = world.TileGrass
+			resource = "berry"
+			passable = true
 		} else if seed%3 == 0 {
 			kind = world.TileTree
 			resource = "wood"

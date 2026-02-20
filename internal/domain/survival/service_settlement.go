@@ -227,6 +227,12 @@ func buildKindFromIntent(objectType string) (BuildKind, bool) {
 		return BuildFarm, true
 	case "torch":
 		return BuildTorch, true
+	case "wall":
+		return BuildWall, true
+	case "door":
+		return BuildDoor, true
+	case "furnace":
+		return BuildFurnace, true
 	default:
 		return 0, false
 	}
@@ -240,6 +246,8 @@ func foodIDFromIntent(itemType string) FoodID {
 		return FoodBread
 	case "wheat":
 		return FoodWheat
+	case "jam":
+		return FoodJam
 	default:
 		return FoodBerry
 	}

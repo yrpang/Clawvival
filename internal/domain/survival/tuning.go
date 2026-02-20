@@ -55,6 +55,11 @@ const (
 	ActionEatDeltaHunger = 10
 	ActionEatDeltaEnergy = 0
 
+	FoodBerryHungerRecovery = 20
+	FoodBreadHungerRecovery = 30
+	FoodWheatHungerRecovery = 15
+	FoodJamHungerRecovery   = 80
+
 	ActionRestDeltaHunger = 3
 	ActionRestDeltaEnergy = 20
 

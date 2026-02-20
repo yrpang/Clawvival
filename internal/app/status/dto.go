@@ -63,9 +63,10 @@ type Seed struct {
 }
 
 type ProductionRecipe struct {
-	RecipeID int            `json:"recipe_id"`
-	In       map[string]int `json:"in"`
-	Out      map[string]int `json:"out"`
+	RecipeID     int            `json:"recipe_id"`
+	In           map[string]int `json:"in"`
+	Out          map[string]int `json:"out"`
+	Requirements []string       `json:"requirements,omitempty"`
 }
 
 type ActionCost struct {
