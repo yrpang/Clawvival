@@ -43,6 +43,10 @@ MVP target in one session:
 - `farm_plot`
 - at least one `farm_plant`
 
+Onboarding execution default:
+- for new agents/sessions, prefer milestone order `bed -> box -> farm_plot -> farm_plant`.
+- if safety constraints conflict, survival and recovery still override onboarding progress.
+
 ## Build and Farm Defaults
 
 - build is enabled via `action.intent.type=build` with required `object_type` + `pos`.

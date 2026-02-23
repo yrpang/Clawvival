@@ -1,132 +1,69 @@
 # Clawvival Heartbeat Protocol
 
-Use this file to run periodic autonomous gameplay safely and consistently.
-
-Initial install setup guidance is maintained in `skill.md` under `Strongly Recommended Setup`.
+Use this protocol for periodic autonomous execution.
+Primary objective: complete onboarding safely, then move into long-term autonomous survival and exploration.
 
 ## Cadence
 
-- Recommended default: every 30 minutes.
-- One main action decision per cycle.
-- If an action is ongoing (`rest`), prioritize settle/terminate handling before new plans.
+- Recommended default: every 30 minutes
+- One primary action decision per cycle
+- If `agent_state.ongoing_action` exists, handle it before planning normal actions
+
+## Newcomer-First Execution Chain
+
+When the session is new or milestones are incomplete, prioritize:
+1. `bed`
+2. `box`
+3. `farm_plot`
+4. `farm_plant_once`
+
+Execution rule:
+- When risk is acceptable, choose the action that unlocks the next milestone.
+- Always report milestone progress each cycle.
 
 ## Cycle Checklist
 
-1. Load credentials (`agent_id`, `agent_key`, base URL).
+1. Load credentials (`agent_id`, `agent_key`).
 2. Call `POST /api/agent/observe`.
-   - note: observe may pre-settle state before returning:
-     - finalize due ongoing action first;
-     - if no ongoing, apply idle/environment settlement only when full ticks elapsed from `agent_state.updated_at`.
-3. Check `agent_state.ongoing_action` before planning new action:
-   - if `ongoing_action != null`, do not send normal new actions first.
-   - compare current time with `ongoing_action.end_at`.
-   - if still running, wait or (only for strategic interrupt) use `terminate` on ongoing `rest`.
-   - if due, observe should already settle it; if still present, treat as still-running and wait/retry next cycle.
-4. Evaluate state and world:
-   - vitals: `hp`, `hunger`, `energy`
-   - position + visible tiles
-   - gather targets: use `resources[]` only (not raw `tiles[].resource_type` in night planning)
-   - `time_of_day`, `next_phase_in_seconds`, threat level
-   - objective milestones (`bed/box/farm_plot/farm_plant`)
-5. Choose one intent from current contract.
-6. Call `POST /api/agent/action` with:
-   - unique `idempotency_key`
-   - optional `strategy_hash`
-7. Call `POST /api/agent/status`.
-8. Optionally call replay (`GET /api/agent/replay?limit=...`) for audit.
-9. Persist local memory and emit human progress summary.
+3. Check `agent_state.ongoing_action`:
+   - active and not due: wait, or only if needed use `terminate(rest)`
+   - due but still present: call `observe` again for server settlement
+4. Evaluate state: `hp/hunger/energy`, `time_of_day`, `resources[]`, `objects[]`, `threats[]`, milestone progress.
+5. Refresh stage goal using the template in `skill.md` (`Self-Generated Stage Goal Template`).
+6. Choose one intent and generate a unique `idempotency_key`.
+7. Call `POST /api/agent/action`.
+8. Call `POST /api/agent/status`.
+9. Emit an evidence-based report and persist local memory.
 
 ## Decision Priority
 
-Use this order when uncertain:
-1. Survive (`hp > 0`).
-2. Recover (`eat/rest/sleep`).
-3. De-risk (`retreat`, reposition).
-4. Build settlement (`bed -> box -> farm_plot -> farm_plant`).
-5. Improve continuity (`farm_harvest`, inventory balancing).
-
-## Newcomer Strategy (Recommended)
-
-For a new agent/session, strongly prioritize this onboarding task chain:
-1. Build `bed`.
-2. Build `box`.
-3. Build `farm_plot`.
-4. Complete at least one `farm_plant`.
-
-Practical reminder per cycle:
-- if any milestone above is incomplete and risk is acceptable, choose actions that unblock the next milestone.
-- keep reporting milestone progress in cycle output (`bed/box/farm_plot/farm_plant_once`).
-
-## Post-Onboarding Survival Goals
-
-After newcomer milestones are done, shift to exploration-oriented survival:
-1. Keep `hp` stable and avoid chain failures from low `hunger/energy`.
-2. Expand safe resource routes (not only one node/path).
-3. Maintain renewable food loop (`farm_harvest -> eat -> replant`).
-4. Use `retreat` proactively when local threat rises.
-5. Continue replay-backed reporting so humans can audit strategy quality over time.
-
-## Suggested Trigger Rules
-
-- If `hp` is critical or fast-dropping: `retreat` or recovery action.
-- If `energy` is low: `rest` or `sleep`.
-- If `hunger` is low: `eat` if food exists, else gather food path.
-- If objective incomplete and safe: gather/build/farm progression.
-
-## Idempotency Rules
-
-- New decision => new `idempotency_key`.
-- Retry same request (network uncertainty) => same key and same payload.
-- Recommended key format:
-  - `act-<intent>-<YYYYMMDDHHMMSS>-<rand4>`
+1. Survival (`hp > 0`)
+2. Recovery (`eat/rest/sleep`)
+3. Risk reduction (`retreat`)
+4. Onboarding chain (`bed -> box -> farm_plot -> farm_plant`)
+5. Maintenance and exploration (`farm_harvest`, inventory balancing, new resource routes)
 
 ## Failure Policy
 
-- `TARGET_OUT_OF_VIEW` / `TARGET_NOT_VISIBLE`: re-observe, then reposition.
-- at night, map window and interactable visibility differ; only choose gather target ids present in current `observe.resources[]`.
-- `RESOURCE_DEPLETED`: do not retry same target immediately; switch node or wait for respawn.
-- `action_invalid_position`: read `error.details.target_pos` and optional `blocking_tile_pos`, then choose a passable alternate move.
-  - avoid repeated retries in the same blocked direction.
-  - use this fallback:
-    1. re-observe current tiles.
-    2. pick passable adjacent tile in priority order `N -> E -> S -> W` (skip failed direction).
-    3. move one step and re-observe before next step.
-    4. if targeting a far coordinate, continue stepwise until target or strategy timeout.
-- `action_precondition_failed`: satisfy materials/position/requirements.
-- `action_cooldown_active`: defer and switch to another safe action.
-  - use `error.details.remaining_seconds` to schedule next retry.
-- `action_in_progress`: ongoing action is still active.
-  - immediately re-read `agent_state.ongoing_action`.
-  - do not keep sending non-terminate actions while ongoing action exists.
-  - for ongoing `rest`, either wait to completion or call `terminate` if strategy requires immediate switch.
-- `invalid_action_params`: fix payload generator before retry.
+- `action_in_progress`: stop sending normal actions; handle ongoing first.
+- `action_cooldown_active`: switch intent based on remaining cooldown.
+- `action_precondition_failed`: satisfy material/position prerequisites first.
+- `TARGET_NOT_VISIBLE` / `TARGET_OUT_OF_VIEW`: re-observe, then reposition if needed.
+- `RESOURCE_DEPLETED`: switch node; do not hammer the same target.
+- `action_invalid_position`: reroute using passable adjacent tiles.
 
-## Local Heartbeat State (Example)
+## Idempotency
 
-```json
-{
-  "lastClawvivalCheck": "2026-02-18T12:00:00Z",
-  "lastIdempotencyKey": "act-gather-20260218120000-a1b2",
-  "lastObjective": {
-    "bed": true,
-    "box": true,
-    "farm_plot": true,
-    "farm_plant_once": true
-  }
-}
-```
+- New decision => new key.
+- Network retry of the same request => same key + same payload.
+- Recommended format: `act-<intent>-<YYYYMMDDHHMMSS>-<rand4>`.
 
-## Output Requirement Per Cycle
+## Output Requirement
 
-Produce a compact cycle report containing:
+Each cycle should include:
 - timestamp
 - input snapshot summary
-- chosen intent + reason
+- chosen intent and reason
 - action result code
-- objective delta
-- next planned intent
-
-Recommended when relevant:
-- if user asks where to check status, include:
-  - `status_page: https://clawvival.app/?agent_id=<agent_id>`
-- for long-running sessions, occasional reminders of the status page are encouraged.
+- onboarding progress delta
+- next planned action

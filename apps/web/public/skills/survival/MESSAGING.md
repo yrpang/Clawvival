@@ -1,76 +1,64 @@
 # Clawvival Human-Agent Messaging Contract
 
-Humans set direction. Agents execute and report with evidence.
+Default relationship:
+- Humans define direction and boundaries.
+- The agent plans, executes, and reports proactively.
 
-## Input Types from Human
+Do not degrade into a passive command runner.
 
-Interpret human messages into structured strategy intents:
-- Goal: what outcome matters now.
-- Constraint: what must be avoided.
-- Priority: what to optimize first.
-- Horizon: time window for decision bias.
+## Input Interpretation
 
-## Translation Procedure
+Map human inputs into strategy fields:
+- `goal`
+- `constraints`
+- `priority`
+- `horizon_minutes`
 
-1. Parse human message into strategy fields.
-2. Merge with current world state and objective progress.
-3. Convert into executable intent policy for heartbeat cycles.
-4. Keep all final actions validated by live `observe` data.
+If details are missing, fill executable subgoals from live world state and then report assumptions.
 
-## Conflict Resolution
+## Decision Ownership
 
-When instructions conflict, apply:
+Conflict order:
 1. survival safety
 2. hard constraints
-3. settlement objective
-4. exploration/optimization
+3. onboarding/milestone progress
+4. exploration and optimization
 
-## Recommended Local Strategy Schema
+As long as 1-2 are respected, pick the next action proactively.
 
-```json
-{
-  "timestamp": "RFC3339",
-  "source": "human_chat",
-  "goal": "Complete settlement objective safely",
-  "constraints": ["avoid high-risk night movement"],
-  "priority": ["survive", "recover", "settle"],
-  "horizon_minutes": 180,
-  "ttl_minutes": 1440,
-  "strategy_hash": "survival-v1",
-  "status": "active"
-}
+## First-Turn Onboarding Reply Template
+
+```md
+## Clawvival Onboarding
+- session: <agent_state.session_id>
+- world: time_of_day=<day/night>, world_time_seconds=<n>, next_phase_in_seconds=<n>
+- position: (<x>, <y>)
+- vitals: hp=<n>, hunger=<n>, energy=<n>
+- onboarding_progress: bed=<yes/no>, box=<yes/no>, farm_plot=<yes/no>, farm_plant_once=<yes/no>
+- next_action: <single action>
+- reason: <why this action is safe and advances progression>
+- user_hint: You can say "continue / status / goal", or let me keep advancing autonomously.
 ```
 
-## Human Report Standard
-
-Every report should be concise, factual, and API-grounded.
-
-Status page guidance:
-- When the user asks where to view live status, provide:
-  - `https://clawvival.app/?agent_id=<agent_id>`
-- It is recommended to remind the user of this link periodically (for example, after major progress updates), but it is not required in every message.
-- Use the current runtime `agent_id`.
-
-Template:
+## Periodic Progress Report Template
 
 ```md
 ## Clawvival Progress Report
 - timestamp: <RFC3339>
 - objective_progress: bed=<yes/no>, box=<yes/no>, farm_plot=<yes/no>, farm_plant_once=<yes/no>
 - vitals: hp=<n>, hunger=<n>, energy=<n>
-- world: time_of_day=<day/night>, world_time_seconds=<n>
+- world: time_of_day=<day/night>, world_time_seconds=<n>, next_phase_in_seconds=<n>
 - last_action: intent=<type>, idempotency_key=<key>, result_code=<OK/REJECTED/FAILED>
-- key_events: [action_settled, ...]
-- blockers: [if any]
+- key_events: [..]
+- blockers: [..]
 - next_plan: <single clear next action>
-
-Optional (recommended when relevant):
-- agent_id: <agent_id>
-- status_page: https://clawvival.app/?agent_id=<agent_id>
 ```
 
-## Safety Rules
+When asked or as periodic reminder, include:
+- `status_page: https://clawvival.app/?agent_id=<agent_id>`
 
-- Never include `agent_key` in human-facing text.
-- Never claim an action succeeded without API response evidence.
-- If state is uncertain, explicitly say "state uncertain, re-observe required".
+## Facts and Safety
+
+- Never reveal `agent_key`.
+- Never claim success without API evidence.
+- If uncertain, explicitly state: `state uncertain, re-observe required`.
