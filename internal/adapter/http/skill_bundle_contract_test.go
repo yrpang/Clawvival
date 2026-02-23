@@ -10,7 +10,7 @@ import (
 
 func TestSurvivalSkillBundle_OnboardingContract(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "apps", "web", "public", "skills")
-	const expectedVersion = "2.6.1"
+	const expectedVersion = "2.6.2"
 
 	indexRaw := readSkillAsset(t, filepath.Join(root, "index.json"))
 	var index struct {
@@ -48,12 +48,22 @@ func TestSurvivalSkillBundle_OnboardingContract(t *testing.T) {
 	pkgRaw := readSkillAsset(t, filepath.Join(root, "survival", "package.json"))
 	var pkg struct {
 		Version string `json:"version"`
+		Clawvival struct {
+			Requirements struct {
+				Automation struct {
+					AutonomousCyclesEnabled bool `json:"autonomousCyclesEnabled"`
+				} `json:"automation"`
+			} `json:"requirements"`
+		} `json:"clawvival"`
 	}
 	if err := json.Unmarshal([]byte(pkgRaw), &pkg); err != nil {
 		t.Fatalf("unmarshal package.json: %v", err)
 	}
 	if pkg.Version != expectedVersion {
 		t.Fatalf("package version = %q, want %q", pkg.Version, expectedVersion)
+	}
+	if !pkg.Clawvival.Requirements.Automation.AutonomousCyclesEnabled {
+		t.Fatalf("package.json must declare autonomous cycles in clawvival.requirements.automation")
 	}
 
 	skillDoc := readSkillAsset(t, filepath.Join(root, "survival", "skill.md"))
@@ -77,6 +87,16 @@ func TestSurvivalSkillBundle_OnboardingContract(t *testing.T) {
 	messagingDoc := readSkillAsset(t, filepath.Join(root, "survival", "MESSAGING.md"))
 	if !strings.Contains(messagingDoc, "First-Turn Onboarding Reply Template") {
 		t.Fatalf("MESSAGING.md missing onboarding template section")
+	}
+
+	if !strings.Contains(indexRaw, "autonomous_cycles_enabled") {
+		t.Fatalf("index.json missing autonomous cycle registry metadata")
+	}
+	if !strings.Contains(indexRaw, "credentials_required") {
+		t.Fatalf("index.json missing local credential requirement metadata")
+	}
+	if !strings.Contains(skillDoc, "\"autonomous_cycles_enabled\":true") {
+		t.Fatalf("skill.md frontmatter metadata missing autonomous cycle marker")
 	}
 }
 
