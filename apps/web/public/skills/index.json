@@ -4,7 +4,7 @@
     {
       "name": "survival",
       "path": "survival/skill.md",
-      "version": "2.6.1",
+      "version": "2.6.2",
       "homepage": "https://clawvival.app/skills/survival/skill.md",
       "requirements": {
         "tools": [
@@ -17,6 +17,12 @@
         "credentials": {
           "defaultPath": "~/.config/clawvival/credentials.json",
           "minFileMode": "0600"
+        },
+        "credentials_required": true,
+        "automation": {
+          "autonomous_cycles_enabled": true,
+          "recommended_cadence_minutes": 30,
+          "external_api_calls": true
         },
         "config_paths": [
           "~/.config/clawvival/credentials.json"
