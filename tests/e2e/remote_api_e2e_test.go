@@ -55,6 +55,33 @@ func TestRemoteAPI_MainEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("status accepts invalid key", func(t *testing.T) {
+		agentID, agentKey := mustRegisterAgent(t, client, baseURL)
+		if strings.TrimSpace(envAgentID) != "" && strings.TrimSpace(envAgentKey) != "" {
+			agentID, agentKey = envAgentID, envAgentKey
+		}
+		_ = agentKey
+		status, body := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/status", agentID, "invalid-key", map[string]any{})
+		if status != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", status, string(body))
+		}
+	})
+
+	t.Run("replay accepts invalid key", func(t *testing.T) {
+		agentID, agentKey := mustRegisterAgent(t, client, baseURL)
+		if strings.TrimSpace(envAgentID) != "" && strings.TrimSpace(envAgentKey) != "" {
+			agentID, agentKey = envAgentID, envAgentKey
+		}
+		_ = agentKey
+		status, body, err := doRequest(client, http.MethodGet, baseURL+"/api/agent/replay?limit=1", agentID, "invalid-key", nil)
+		if err != nil {
+			t.Fatalf("replay request: %v", err)
+		}
+		if status != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", status, string(body))
+		}
+	})
+
 	t.Run("action rejects client dt field", func(t *testing.T) {
 		agentID, agentKey := mustRegisterAgent(t, client, baseURL)
 		status, body := mustJSONWithAuth(t, client, http.MethodPost, baseURL+"/api/agent/action", agentID, agentKey, map[string]any{
