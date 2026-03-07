@@ -82,7 +82,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24.0
+          go-version: "1.24"
+          check-latest: true
 
       - name: Wait for Postgres
         run: until pg_isready -h 127.0.0.1 -p 54329 -U clawvival -d clawvival; do sleep 1; done
