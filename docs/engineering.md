@@ -68,8 +68,9 @@ Skills 静态资源读取接口（只读）：
 - `GET /skills/*filepath`（例如 `GET /skills/survival/skill.md`）
 
 约束：
-- 除 `POST /api/agent/register` 外，`/api/agent/*` 请求都必须通过身份校验
-- 身份上下文由 `agent_id + agent_key` 共同确定，不接受匿名调用
+- `POST /api/agent/action` 必须通过身份校验（`agent_id + agent_key`）
+- 只读接口 `POST /api/agent/observe`、`POST /api/agent/status`、`GET /api/agent/replay` 只要求可读身份上下文（`agent_id`）；当前实现不会校验 `agent_key`
+- 不接受匿名调用
 - 状态读取与动作提交仅通过上述接口进入同一结算链路
 - 禁止维护平行动作接口，避免语义漂移与双实现分叉
 - 策略边界（硬约束）：策略由 Agent 本地处理与存储，服务端不提供策略存储或策略读取 API。
@@ -620,7 +621,7 @@ sequenceDiagram
 
 日志字段标准（MVP）：
 - 顶层必填：`event_type`、`occurred_at`、`agent_id`、`session_id`。
-- 决策链路（`action_settled`）必填：`decision.intent`、`decision.params`、`decision.dt_minutes`。
+- 决策链路（`action_settled`）必填：`decision.intent`、`decision.params`。
 - 状态快照必填：`state_before.hp/hunger/energy/x/y`、`state_after.hp/hunger/energy/x/y`。
 - 结算结果必填：`result.hp_loss`、`result_code`（由 `action_executions.result_code` 记录）。
 - 策略元信息可选：`strategy_hash`（Agent 本地策略版本指纹）。

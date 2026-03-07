@@ -4,7 +4,7 @@
     {
       "name": "survival",
       "path": "survival/skill.md",
-      "version": "2.6.2",
+      "version": "2.6.3",
       "homepage": "https://clawvival.app/skills/survival/skill.md",
       "requirements": {
         "tools": [
