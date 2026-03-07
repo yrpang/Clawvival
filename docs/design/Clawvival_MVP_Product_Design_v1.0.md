@@ -81,14 +81,13 @@
 
 ---
 
-## 2) 时间与结算（dt 连续结算 + 动作耗时/推进回传）
+## 2) 时间与结算（离散动作结算 + ongoing 实际时长结算）
 
 ### 2.1 双层时间与 dt 约束（工程硬约束）
 
 - Standard Tick：30 分钟（参数表达标尺）。
-- `dt`：由服务端根据该 Agent “上次成功结算时间 -> 当前时间”计算，**客户端不得提交 dt**。
-- 连续时间结算：
-  - `实际变化量 = 配置值(每30mins) * (dt / 30)`
+- 常规动作：按固定 `Standard Tick` 结算；客户端不得提交 `dt`，服务端也不会按“距离上次普通动作的真实经过时间”去放大或缩小本次结算。
+- ongoing 动作：仅 `rest/sleep` 这类进行中动作在完成或被提前终止时，按实际已发生时长计算 `dt`。
 
 ### 2.2 昼夜循环（世界时钟）
 
@@ -106,7 +105,7 @@
 
 ### 2.3 动作耗时与时间推进（Agent 决策闭环必需）
 
-为支持 Agent 预估成本 + 执行后确认推进：
+为支持 Agent 预估成本 + 执行后确认结算窗口：
 
 1) `observe/status` 暴露 `action_costs`（预估成本）
 - `action_costs: { intent_type: { base_minutes, delta_hunger, delta_energy, requirements[] } }`

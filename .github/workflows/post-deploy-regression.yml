@@ -1,0 +1,41 @@
+name: Post Deploy Regression
+
+on:
+  workflow_run:
+    workflows:
+      - Fly Deploy
+      - Web Pages
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  api-regression:
+    if: github.event.workflow_run.name == 'Fly Deploy' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run remote API regression
+        run: go test -tags=e2e ./tests/e2e -v
+
+  web-regression:
+    if: github.event.workflow_run.name == 'Web Pages' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check homepage
+        run: curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 https://clawvival.app/ | grep -q '<div id="root"></div>'
+
+      - name: Check skills index
+        run: curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 https://clawvival.app/skills/index.json | grep -q '"name":[[:space:]]*"survival"'
+
+      - name: Check survival skill bundle
+        run: curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 https://clawvival.app/skills/survival/skill.md > /tmp/clawvival-skill.md && test -s /tmp/clawvival-skill.md

@@ -50,9 +50,15 @@ type settleOptions struct {
 	createBuiltObjects bool
 }
 
+// Regular actions settle against the fixed standard tick. Only ongoing flows
+// such as rest/sleep use elapsed wall-clock minutes during finalization.
+func fixedStandardActionDeltaMinutes() int {
+	return survival.StandardTickMinutes
+}
+
 func settleViaDomainOrInstant(ctx context.Context, uc UseCase, ac *ActionContext, opts settleOptions) (ExecuteMode, error) {
 	intent := ac.Tmp.ResolvedIntent
-	deltaMinutes := survival.StandardTickMinutes
+	deltaMinutes := fixedStandardActionDeltaMinutes()
 	settleNearby := ac.View.Snapshot.NearbyResource
 	if opts.filterGatherNearby {
 		settleNearby = filterGatherNearbyResource(intent.TargetID, ac.View.Snapshot.NearbyResource)

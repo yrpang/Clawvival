@@ -32,7 +32,16 @@ func main() {
 		Mode:         gen.WithoutContext | gen.WithDefaultQuery,
 	})
 	g.UseDB(db)
-	g.GenerateAllTable()
+	tables, err := db.Migrator().GetTables()
+	if err != nil {
+		log.Fatalf("list tables: %v", err)
+	}
+	for _, table := range tables {
+		if table == "schema_migrations" {
+			continue
+		}
+		g.GenerateModel(table)
+	}
 	g.Execute()
 
 	fmt.Printf("generated gorm models at %s\n", out)

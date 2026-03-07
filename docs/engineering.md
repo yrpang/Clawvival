@@ -27,7 +27,7 @@
 - 双层时间机制：
 - Heartbeat：按 Agent 心跳触发观察与决策（默认可取 30 分钟，可配置）
 - Standard Tick：统一参数表达标尺（30 分钟）
-- 离散结算：常规动作按固定 tick 结算（`StandardTickMinutes=30`）。
+- 离散结算：常规动作按固定 tick 结算（`StandardTickMinutes=30`），不按距离上次普通动作的真实经过时间线性缩放。
 - ongoing 动作（如 `rest/sleep`）支持按已发生时长比例结算（完成或提前中止）。
 - `observe` 允许预结算：
   - 优先结算已到期 ongoing；
@@ -249,7 +249,7 @@ flowchart LR
 4. `ActionUseCase`
 - 对应：`POST /api/agent/action`
 - 输入要求：必须包含 `idempotency_key`
-- 职责：幂等校验 -> 载入状态 -> 计算系统 `dt` -> 结算 -> 事务提交（状态/动作/事件）-> 返回结果
+- 职责：幂等校验 -> 载入状态 -> 为常规动作应用固定 `Standard Tick`（ongoing 收尾时按实际已发生时长）-> 结算 -> 事务提交（状态/动作/事件）-> 返回结果
 
 5. `StatusUseCase`
 - 对应：`POST /api/agent/status`

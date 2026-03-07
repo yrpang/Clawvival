@@ -23,12 +23,20 @@ func absInt(v int) int {
 	return v
 }
 
-func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
+func requireGameplayDSN(t *testing.T) string {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("integration test skipped in short mode")
+	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		t.Skip("DATABASE_URL is required for integration test")
 	}
+	return dsn
+}
 
+func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
+	dsn := requireGameplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -182,11 +190,7 @@ func TestGameplayLoop_E2E_ObserveActionStatusReplay(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_AgentIsolationAndSharedWorldClock(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireGameplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -319,12 +323,8 @@ func TestGameplayLoop_E2E_AgentIsolationAndSharedWorldClock(t *testing.T) {
 	}
 }
 
-func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+func TestGameplayLoop_E2E_RegularActionsUseFixedStandardTick(t *testing.T) {
+	dsn := requireGameplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -397,7 +397,7 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	out30, err := actionUC.Execute(ctx, Request{
 		AgentID:        agent30,
 		IdempotencyKey: "dt-30-retreat",
-		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, // ignored: server derives dt from event timeline
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat},
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {
@@ -406,7 +406,7 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	out60, err := actionUC.Execute(ctx, Request{
 		AgentID:        agent60,
 		IdempotencyKey: "dt-60-retreat",
-		Intent:         survival.ActionIntent{Type: survival.ActionRetreat}, // ignored: server derives dt from event timeline
+		Intent:         survival.ActionIntent{Type: survival.ActionRetreat},
 		StrategyHash:   "sha-dt",
 	})
 	if err != nil {
@@ -418,20 +418,22 @@ func TestGameplayLoop_E2E_ContinuousDeltaScaling(t *testing.T) {
 	dropEnergy30 := s30.Vitals.Energy - out30.UpdatedState.Vitals.Energy
 	dropEnergy60 := s60.Vitals.Energy - out60.UpdatedState.Vitals.Energy
 
-	if dropHunger60 != dropHunger30*2 {
-		t.Fatalf("expected hunger drop scale by dt, 30=%d 60=%d", dropHunger30, dropHunger60)
+	if dropHunger60 != dropHunger30 {
+		t.Fatalf("expected fixed standard tick hunger drop, 30=%d 60=%d", dropHunger30, dropHunger60)
 	}
-	if dropEnergy60 != dropEnergy30*2 {
-		t.Fatalf("expected energy drop scale by dt, 30=%d 60=%d", dropEnergy30, dropEnergy60)
+	if dropEnergy60 != dropEnergy30 {
+		t.Fatalf("expected fixed standard tick energy drop, 30=%d 60=%d", dropEnergy30, dropEnergy60)
+	}
+	if out30.WorldTimeAfterSeconds-out30.WorldTimeBeforeSeconds != int64(survival.StandardTickMinutes*60) {
+		t.Fatalf("expected standard tick world-time window for 30 branch, before=%d after=%d", out30.WorldTimeBeforeSeconds, out30.WorldTimeAfterSeconds)
+	}
+	if out60.WorldTimeAfterSeconds-out60.WorldTimeBeforeSeconds != int64(survival.StandardTickMinutes*60) {
+		t.Fatalf("expected standard tick world-time window for 60 branch, before=%d after=%d", out60.WorldTimeBeforeSeconds, out60.WorldTimeAfterSeconds)
 	}
 }
 
 func TestGameplayLoop_E2E_DayNightNonCombatHPLossConsistent(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireGameplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -554,11 +556,7 @@ func TestGameplayLoop_E2E_DayNightNonCombatHPLossConsistent(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_StarvationTriggersGameOver(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireGameplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -639,11 +637,7 @@ func TestGameplayLoop_E2E_StarvationTriggersGameOver(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireGameplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -663,7 +657,7 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 
 	seed := survival.AgentStateAggregate{
 		AgentID:  agentID,
-		Vitals:   survival.Vitals{HP: 22, Hunger: -120, Energy: 10},
+		Vitals:   survival.Vitals{HP: 20, Hunger: -120, Energy: 10},
 		Position: survival.Position{X: 5, Y: 5},
 		Home:     survival.Position{X: 0, Y: 0},
 		Version:  1,
@@ -706,8 +700,8 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 	if out.ResultCode != survival.ResultOK {
 		t.Fatalf("expected result ok, got %s", out.ResultCode)
 	}
-	if out.UpdatedState.Vitals.HP <= 0 || out.UpdatedState.Vitals.HP > 20 {
-		t.Fatalf("expected HP in critical range (1-20), got %d", out.UpdatedState.Vitals.HP)
+	if out.UpdatedState.Vitals.HP <= 0 || out.UpdatedState.Vitals.HP > survival.CriticalHPThreshold {
+		t.Fatalf("expected HP in critical range (1-%d), got %d", survival.CriticalHPThreshold, out.UpdatedState.Vitals.HP)
 	}
 	beforeDist := absInt(seed.Position.X-seed.Home.X) + absInt(seed.Position.Y-seed.Home.Y)
 	afterDist := absInt(out.UpdatedState.Position.X-seed.Home.X) + absInt(out.UpdatedState.Position.Y-seed.Home.Y)
@@ -731,11 +725,7 @@ func TestGameplayLoop_E2E_CriticalHPForcesRetreat(t *testing.T) {
 }
 
 func TestGameplayLoop_E2E_WorldPhaseChangedEvent(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireGameplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)

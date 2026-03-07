@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Local modelgen workflow wrapper.
+# This script owns Docker Postgres lifecycle for local generation, then reuses
+# scripts/apply_schema.sh before invoking tools/modelgen.
+
 # ---- Config (override via env) ----
 CONTAINER_NAME="${CONTAINER_NAME:-clawvival-pg-gen}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:16-alpine}"
@@ -58,23 +62,11 @@ done
 
 echo "postgres is ready on localhost:$POSTGRES_PORT"
 
-# Apply schema migrations in lexical order
-SQL_FILES="$(find "$SCHEMA_DIR" -maxdepth 1 -type f -name '*.sql' | sort)"
-if [ -z "$SQL_FILES" ]; then
-  echo "no .sql files found in $SCHEMA_DIR" >&2
-  exit 1
-fi
-
-echo "$SQL_FILES" | while IFS= read -r f; do
-  [ -z "$f" ] && continue
-  echo "applying $(basename "$f")"
-  docker exec -i "$CONTAINER_NAME" psql \
-    -v ON_ERROR_STOP=1 \
-    -U "$POSTGRES_USER" \
-    -d "$POSTGRES_DB" < "$f" >/dev/null
-done
-
 export DATABASE_URL="host=127.0.0.1 port=$POSTGRES_PORT user=$POSTGRES_USER password=$POSTGRES_PASSWORD dbname=$POSTGRES_DB sslmode=disable"
+export SCHEMA_DIR
+
+echo "applying schema via scripts/apply_schema.sh"
+./scripts/apply_schema.sh
 
 echo "running gorm/gen"
 (
