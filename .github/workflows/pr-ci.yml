@@ -82,7 +82,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: 1.24.0
 
       - name: Wait for Postgres
         run: until pg_isready -h 127.0.0.1 -p 54329 -U clawvival -d clawvival; do sleep 1; done
@@ -91,7 +91,7 @@ jobs:
         run: ./scripts/apply_schema.sh
 
       - name: Run backend full regression
-        run: go test ./...
+        run: go test -p 1 ./...
 
   web-tests:
     name: Web Tests
