@@ -5,7 +5,7 @@ Generate GORM models from a PostgreSQL database (schema-first flow).
 Recommended (one command from repo root):
 
 ```bash
-./scripts/gen_models_with_docker_postgres.sh
+./scripts/run_modelgen_with_local_postgres.sh
 ```
 
 This script will:

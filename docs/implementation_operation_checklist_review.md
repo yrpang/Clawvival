@@ -15,7 +15,8 @@
   - 注册时会落初始状态：`HP=100, Hunger=80, Energy=60, Pos=(0,0), InventoryCapacity=30`。
 - 时间结算
   - `dt` 由服务端计算，客户端请求体出现 `dt` 会被拒绝（`dt_managed_by_server`）。
-  - 常规结算 `dt` 来源：距离最近一次 `action_settled` 的分钟数，范围被钳制到 `[1,120]`，首次默认 `30`。
+  - 常规动作固定按 `StandardTickMinutes=30` 结算，不根据距离上次普通动作的真实经过时间缩放。
+  - ongoing 动作收尾（当前主要是 `rest/sleep` 的完成或 `terminate`）才按实际已发生分钟数计算 `dt`。
 - 幂等
   - `POST /api/agent/action` 必须带 `idempotency_key`。
   - 同 `agent_id + idempotency_key` 重放会返回首次已落库结果，不会重复结算。
@@ -168,4 +169,3 @@
 - 状态派生（effects/capacity）：`internal/app/stateview/derive.go`
 - 世界快照与昼夜/区块：`internal/adapter/world/runtime/provider.go`
 - 注册与鉴权：`internal/app/auth/usecase.go`
-

@@ -13,12 +13,20 @@ import (
 	"clawvival/internal/domain/world"
 )
 
-func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
+func requireObserveDSN(t *testing.T) string {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("integration test skipped in short mode")
+	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		t.Skip("DATABASE_URL is required for integration test")
 	}
+	return dsn
+}
 
+func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
+	dsn := requireObserveDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -91,12 +99,8 @@ func TestUseCase_E2E_ReturnsWindowedMapAndPersistsChunks(t *testing.T) {
 	}
 }
 
-func TestUseCase_E2E_ResourceNodesRefreshAcrossTimeBuckets(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+func TestUseCase_E2E_ObserveSummarizesVisibleResources(t *testing.T) {
+	dsn := requireObserveDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -143,8 +147,11 @@ func TestUseCase_E2E_ResourceNodesRefreshAcrossTimeBuckets(t *testing.T) {
 		t.Fatalf("second observe execute: %v", err)
 	}
 
-	if first.Snapshot.NearbyResource["wood"] == second.Snapshot.NearbyResource["wood"] &&
-		first.Snapshot.NearbyResource["stone"] == second.Snapshot.NearbyResource["stone"] {
-		t.Fatalf("expected refreshed resources across buckets, first=%v second=%v", first.Snapshot.NearbyResource, second.Snapshot.NearbyResource)
+	if len(first.Resources) == 0 || len(second.Resources) == 0 {
+		t.Fatalf("expected visible resources in both observes, first=%v second=%v", first.Resources, second.Resources)
+	}
+	if first.Snapshot.NearbyResource["wood"] != second.Snapshot.NearbyResource["wood"] ||
+		first.Snapshot.NearbyResource["stone"] != second.Snapshot.NearbyResource["stone"] {
+		t.Fatalf("expected observe nearby summary to reflect visible resources consistently, first=%v second=%v", first.Snapshot.NearbyResource, second.Snapshot.NearbyResource)
 	}
 }

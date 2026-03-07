@@ -15,6 +15,9 @@ import (
 
 func requireDSN(t *testing.T) string {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("integration test skipped in short mode")
+	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		t.Skip("DATABASE_URL is required for integration test")

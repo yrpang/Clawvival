@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -11,10 +10,7 @@ import (
 )
 
 func TestProvider_GormChunkStoreCachesChunks(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
+	dsn := requireRuntimeDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)

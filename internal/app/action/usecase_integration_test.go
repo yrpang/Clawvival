@@ -17,12 +17,20 @@ import (
 	"clawvival/internal/domain/world"
 )
 
-func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
+func requireIntegrationDSN(t *testing.T) string {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("integration test skipped in short mode")
+	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		t.Skip("DATABASE_URL is required for integration test")
 	}
+	return dsn
+}
 
+func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -141,11 +149,7 @@ func TestUseCase_E2E_PersistsWorldObjectAndSessionLifecycle(t *testing.T) {
 }
 
 func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -228,11 +232,7 @@ func TestUseCase_E2E_GatherAppliesToolEfficiency(t *testing.T) {
 }
 
 func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -257,7 +257,7 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 
 	seed := survival.AgentStateAggregate{
 		AgentID:   agentID,
-		Vitals:    survival.Vitals{HP: 22, Hunger: -120, Energy: 10},
+		Vitals:    survival.Vitals{HP: 20, Hunger: -120, Energy: 10},
 		Position:  survival.Position{X: 5, Y: 5},
 		Home:      survival.Position{X: 0, Y: 0},
 		Inventory: map[string]int{},
@@ -313,11 +313,7 @@ func TestUseCase_E2E_CriticalHPTriggersAutoRetreat(t *testing.T) {
 }
 
 func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -389,11 +385,7 @@ func TestUseCase_E2E_InvalidActionParamsRejectedWithoutPersistence(t *testing.T)
 }
 
 func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -486,11 +478,7 @@ func TestUseCase_E2E_EmitsWorldPhaseChangedEventOnClockSwitch(t *testing.T) {
 }
 
 func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -559,11 +547,7 @@ func TestUseCase_E2E_RejectsBuildWhenResourcesInsufficient(t *testing.T) {
 }
 
 func TestUseCase_E2E_RejectsMoveDuringCooldown(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -644,11 +628,7 @@ func TestUseCase_E2E_RejectsMoveDuringCooldown(t *testing.T) {
 }
 
 func TestUseCase_E2E_ContainerDepositWithdraw_PersistsBoxState(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -749,11 +729,7 @@ func TestUseCase_E2E_ContainerDepositWithdraw_PersistsBoxState(t *testing.T) {
 }
 
 func TestUseCase_E2E_FarmPlantHarvest_UsesFarmObjectStateMachine(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -858,11 +834,7 @@ func TestUseCase_E2E_FarmPlantHarvest_UsesFarmObjectStateMachine(t *testing.T) {
 }
 
 func TestUseCase_E2E_GatherDepletesNodeThenRespawnsAtSamePosition(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -965,11 +937,7 @@ func TestUseCase_E2E_GatherDepletesNodeThenRespawnsAtSamePosition(t *testing.T) 
 }
 
 func TestUseCase_E2E_GatherDepletionIsPerAgentMapState(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireIntegrationDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)

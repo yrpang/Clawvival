@@ -1,0 +1,127 @@
+name: PR CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - edited
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-guard:
+    name: Migration Guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify schema migration acknowledgement
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || "";
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            const schemaFiles = files
+              .map(file => file.filename)
+              .filter(name => name.startsWith("db/schema/"));
+
+            if (schemaFiles.length === 0) {
+              core.info("No db/schema changes in this PR.");
+              return;
+            }
+
+            const acknowledged = /- \[[xX]\] Production migration applied/.test(body);
+            core.info(`Schema changes detected: ${schemaFiles.join(", ")}`);
+            if (!acknowledged) {
+              core.setFailed(
+                "This PR changes db/schema/* but the PR body does not confirm migration completion. " +
+                "Run scripts/migrate_postgres.sh first, then check '- [x] Production migration applied' in the PR body."
+              );
+            }
+
+  backend-tests:
+    name: Backend Tests
+    needs: migration-guard
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: clawvival
+          POSTGRES_PASSWORD: clawvival
+          POSTGRES_DB: clawvival
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U clawvival -d clawvival"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: host=127.0.0.1 port=54329 user=clawvival password=clawvival dbname=clawvival sslmode=disable
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          check-latest: true
+
+      - name: Wait for Postgres
+        run: until pg_isready -h 127.0.0.1 -p 54329 -U clawvival -d clawvival; do sleep 1; done
+
+      - name: Apply schema
+        run: ./scripts/apply_schema.sh
+
+      - name: Run backend full regression
+        run: go test -p 1 ./...
+
+  web-tests:
+    name: Web Tests
+    needs: migration-guard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test -- --run
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_BASE_PATH: /

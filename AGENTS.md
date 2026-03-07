@@ -36,7 +36,7 @@
 4. Run full regression (`go test ./...`).
 
 ## Branching and Merge Policy
-- Each task must be implemented on its own dedicated branch and then merged.
+- Each task must be implemented on its own dedicated branch and merged via MR/PR.
 - Do not stack unrelated tasks in the same branch.
 - Branch naming should use the task intent clearly (recommended prefix: `codex/`).
 - Before merge, ensure:
@@ -46,16 +46,18 @@
 
 ## Deployment Runbook
 - Clawvival production deploy is triggered by pushing to `main` (GitHub Action `Fly Deploy`).
-- Before deploy, if schema changed:
+- Before creating the MR, if schema changed:
 1. Apply DB migration manually first (schema-first).
 2. Use `scripts/migrate_postgres.sh` following the current project procedure (fly proxy + secrets/env + migrate).
 - Recommended release sequence:
 1. Run full tests: `go test ./...`.
 2. If migration exists, execute migration and verify success.
-3. Commit changes to `main`.
-4. Push: `git push origin main`.
-5. Check workflow status: `gh run list --branch main --limit 5` and `gh run watch <run_id> --exit-status`.
-- Do not push code that depends on unapplied schema changes.
+3. Commit changes on a dedicated branch.
+4. Push the branch and create an MR/PR targeting `main`.
+5. If the MR/PR changes `db/schema/*`, mark the PR checklist item `Production migration applied` after the manual migration is complete.
+6. Wait for PR CI to pass, then merge manually.
+7. After merge, verify deploy/release workflows: `gh run list --branch main --limit 5` and `gh run watch <run_id> --exit-status`.
+- Do not open or merge an MR/PR whose code depends on unapplied schema changes.
 
 ## Skills Versioning Policy
 - Every change to files under `skills/` must bump the skill version.

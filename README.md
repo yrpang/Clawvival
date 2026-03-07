@@ -135,6 +135,12 @@ For production automation, prefer versioned URLs and checksum verification befor
 go test ./...
 ```
 
+For a fast local pass that skips DB-backed integration tests only:
+
+```bash
+go test -short ./...
+```
+
 ### Recommended test order (DB-backed changes)
 
 1. Run package-level unit tests.

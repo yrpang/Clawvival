@@ -13,12 +13,20 @@ import (
 	"clawvival/internal/domain/world"
 )
 
-func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
+func requireReplayDSN(t *testing.T) string {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("integration test skipped in short mode")
+	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		t.Skip("DATABASE_URL is required for integration test")
 	}
+	return dsn
+}
 
+func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
+	dsn := requireReplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
@@ -128,11 +136,7 @@ func TestUseCase_E2E_FiltersByOccurredTimeWindow(t *testing.T) {
 }
 
 func TestUseCase_E2E_AppliesFiltersBeforeLimit(t *testing.T) {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		t.Skip("DATABASE_URL is required for integration test")
-	}
-
+	dsn := requireReplayDSN(t)
 	db, err := gormrepo.OpenPostgres(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
