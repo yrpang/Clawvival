@@ -133,8 +133,8 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.check_homepage.outcome }}" = "success" ] && \
-             [ "${{ steps.check_skills_index.outcome }}" != "failure" ] && \
-             [ "${{ steps.check_skill_bundle.outcome }}" != "failure" ]; then
+             { [ "${{ steps.check_skills_index.outcome }}" = "success" ] || [ "${{ steps.check_skills_index.outcome }}" = "skipped" ]; } && \
+             { [ "${{ steps.check_skill_bundle.outcome }}" = "success" ] || [ "${{ steps.check_skill_bundle.outcome }}" = "skipped" ]; }; then
             echo "## Post-deploy web regression" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "Status: passed" >> "$GITHUB_STEP_SUMMARY"
@@ -153,8 +153,8 @@ jobs:
             const sha = context.payload.workflow_run.head_sha;
             const success =
               "${{ steps.check_homepage.outcome }}" === "success" &&
-              "${{ steps.check_skills_index.outcome }}" !== "failure" &&
-              "${{ steps.check_skill_bundle.outcome }}" !== "failure";
+              ["success", "skipped"].includes("${{ steps.check_skills_index.outcome }}") &&
+              ["success", "skipped"].includes("${{ steps.check_skill_bundle.outcome }}");
             await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
