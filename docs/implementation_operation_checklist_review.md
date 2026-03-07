@@ -8,8 +8,9 @@
 
 - 鉴权
   - `POST /api/agent/register` 免鉴权。
-  - 其他 `/api/agent/*` 必须携带请求头：`X-Agent-ID` + `X-Agent-Key`。
-  - 缺失或错误分别返回：`missing_agent_credentials` / `missing_agent_id` / `missing_agent_key` / `invalid_agent_credentials`。
+  - `POST /api/agent/action` 必须携带并校验请求头：`X-Agent-ID` + `X-Agent-Key`。
+  - 只读接口 `POST /api/agent/observe`、`POST /api/agent/status`、`GET /api/agent/replay` 只要求 `X-Agent-ID` 可读；当前实现不会校验 `X-Agent-Key`。
+  - 动作接口缺失或错误分别返回：`missing_agent_credentials` / `missing_agent_id` / `missing_agent_key` / `invalid_agent_credentials`。
 - Agent 初始化
   - 先调用注册接口拿到 `agent_id` 与 `agent_key`。
   - 注册时会落初始状态：`HP=100, Hunger=80, Energy=60, Pos=(0,0), InventoryCapacity=30`。
@@ -36,7 +37,7 @@
 ## 2.2 `POST /api/agent/observe`
 
 - 前置条件
-  - 鉴权通过。
+  - 请求头中可读取 `X-Agent-ID`。
 - 操作影响
   - 只读，不写状态。
   - 返回 11x11 固定窗口（radius=5）、`tiles/objects/resources/threats`、`world.rules`、`action_costs`、`hp_drain_feedback`。
@@ -46,7 +47,7 @@
 ## 2.3 `POST /api/agent/status`
 
 - 前置条件
-  - 鉴权通过。
+  - 请求头中可读取 `X-Agent-ID`。
 - 操作影响
   - 只读，不写状态。
   - 返回 `agent_state` + 世界时间/规则/动作成本。
@@ -56,7 +57,7 @@
 ## 2.4 `GET /api/agent/replay`
 
 - 前置条件
-  - 鉴权通过。
+  - 请求头中可读取 `X-Agent-ID`。
 - 操作影响
   - 只读；按 `limit/occurred_from/occurred_to/session_id` 过滤事件。
   - 返回 `events` 与基于事件重建的 `latest_state`（仅使用事件 `state_after`）。
@@ -145,7 +146,7 @@
 ## 6. 审查用核对项（Checklist）
 
 - 接口层
-  - [ ] 除 `register` 外，是否全部强制 `X-Agent-ID/X-Agent-Key`。
+  - [ ] 是否区分读接口与动作接口的身份要求：读接口至少要求 `X-Agent-ID`，动作接口强制 `X-Agent-ID/X-Agent-Key`。
   - [ ] `action` 是否严格拒绝客户端 `dt`。
   - [ ] `action` 拒绝响应结构是否保持 `REJECTED + action_error` 兼容。
 - 业务层
