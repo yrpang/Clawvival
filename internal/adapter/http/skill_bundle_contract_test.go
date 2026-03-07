@@ -10,7 +10,7 @@ import (
 
 func TestSurvivalSkillBundle_OnboardingContract(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "apps", "web", "public", "skills")
-	const expectedVersion = "2.6.2"
+	const expectedVersion = "2.6.3"
 
 	indexRaw := readSkillAsset(t, filepath.Join(root, "index.json"))
 	var index struct {
