@@ -10,8 +10,8 @@ on:
 
 permissions:
   contents: read
+  checks: write
   issues: write
-  pull-requests: write
 
 jobs:
   api-regression:
@@ -45,39 +45,50 @@ jobs:
             echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Comment on merged PR when API regression fails
+      - name: Publish API regression check
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.workflow_run.head_sha;
+            const success = "${{ steps.run_api.outcome }}" === "success";
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "Post Deploy Regression / API",
+              head_sha: sha,
+              status: "completed",
+              conclusion: success ? "success" : "failure",
+              details_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              output: {
+                title: success ? "Post-deploy API regression passed" : "Post-deploy API regression failed",
+                summary: success
+                  ? "Remote API e2e regression passed after deploy."
+                  : "Remote API e2e regression failed after deploy. Open the workflow run for the failing e2e case."
+              }
+            });
+
+      - name: Create issue for API regression failure
         if: steps.run_api.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
             const sha = context.payload.workflow_run.head_sha;
-            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            const shortSha = sha.slice(0, 7);
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              commit_sha: sha,
+              title: `[Post Deploy Regression][API] failure on ${shortSha}`,
+              body: [
+                "Post-deploy API regression failed on `main`.",
+                "",
+                `Commit: \`${sha}\``,
+                `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                "",
+                "Check the `api-regression` job log for the failing e2e case."
+              ].join("\n"),
+              labels: ["bug"]
             });
-            if (!prs.data.length) {
-              core.info(`No PR associated with commit ${sha}.`);
-              return;
-            }
-
-            const body = [
-              "Post-deploy API regression failed after merge.",
-              "",
-              `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              `Commit: \`${sha.slice(0, 7)}\``,
-              "",
-              "Check the `api-regression` job log for the failing e2e case."
-            ].join("\n");
-
-            for (const pr of prs.data) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                body,
-              });
-            }
 
       - name: Fail workflow on API regression failure
         if: steps.run_api.outcome == 'failure'
@@ -108,8 +119,8 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.check_homepage.outcome }}" = "success" ] && \
-             [ "${{ steps.check_skills_index.outcome || 'success' }}" = "success" ] && \
-             [ "${{ steps.check_skill_bundle.outcome || 'success' }}" = "success" ]; then
+             [ "${{ steps.check_skills_index.outcome }}" != "failure" ] && \
+             [ "${{ steps.check_skill_bundle.outcome }}" != "failure" ]; then
             echo "## Post-deploy web regression" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "Status: passed" >> "$GITHUB_STEP_SUMMARY"
@@ -120,39 +131,53 @@ jobs:
             echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Comment on merged PR when web regression fails
+      - name: Publish web regression check
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.payload.workflow_run.head_sha;
+            const success =
+              "${{ steps.check_homepage.outcome }}" === "success" &&
+              "${{ steps.check_skills_index.outcome }}" !== "failure" &&
+              "${{ steps.check_skill_bundle.outcome }}" !== "failure";
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "Post Deploy Regression / Web",
+              head_sha: sha,
+              status: "completed",
+              conclusion: success ? "success" : "failure",
+              details_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              output: {
+                title: success ? "Post-deploy web regression passed" : "Post-deploy web regression failed",
+                summary: success
+                  ? "Web smoke regression passed after deploy."
+                  : "Web smoke regression failed after deploy. Open the workflow run for the failing smoke step."
+              }
+            });
+
+      - name: Create issue for web regression failure
         if: steps.check_homepage.outcome == 'failure' || steps.check_skills_index.outcome == 'failure' || steps.check_skill_bundle.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
             const sha = context.payload.workflow_run.head_sha;
-            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            const shortSha = sha.slice(0, 7);
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              commit_sha: sha,
+              title: `[Post Deploy Regression][Web] failure on ${shortSha}`,
+              body: [
+                "Post-deploy web regression failed on `main`.",
+                "",
+                `Commit: \`${sha}\``,
+                `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                "",
+                "Check the `web-regression` job log for the failing smoke step."
+              ].join("\n"),
+              labels: ["bug"]
             });
-            if (!prs.data.length) {
-              core.info(`No PR associated with commit ${sha}.`);
-              return;
-            }
-
-            const body = [
-              "Post-deploy web regression failed after merge.",
-              "",
-              `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              `Commit: \`${sha.slice(0, 7)}\``,
-              "",
-              "Check the `web-regression` job log for the failing smoke step."
-            ].join("\n");
-
-            for (const pr of prs.data) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                body,
-              });
-            }
 
       - name: Fail workflow on web regression failure
         if: steps.check_homepage.outcome == 'failure' || steps.check_skills_index.outcome == 'failure' || steps.check_skill_bundle.outcome == 'failure'
